@@ -1551,7 +1551,7 @@
 
       '<div class="form-actions">'+
         '<span class="hint">'+(isLockedEdit ? 'Esta RDO está com status "'+esc(STATUS_LABEL[rdo.status]||rdo.status)+'" — salvar aqui mantém esse status, só atualiza o conteúdo.' : 'Rascunho fica visível só como pendente para você continuar depois.')+'</span>'+
-        (editing ? '<button type="button" class="btn danger" id="btnDeleteRdo">Excluir</button>' : '') +
+        (editing && !isLockedEdit ? '<button type="button" class="btn danger" id="btnDeleteRdo">Excluir</button>' : '') +
         (isLockedEdit
           ? '<button type="submit" class="btn primary" id="btnSaveEdit">Salvar alterações</button>'
           : '<button type="submit" class="btn ghost" id="btnSaveDraft">Salvar rascunho</button>'+
@@ -1620,7 +1620,7 @@
       });
     });
 
-    if(editing){
+    if(editing && !isLockedEdit){
       document.getElementById('btnDeleteRdo').addEventListener('click', function(){
         confirmModal({ title:'Excluir RDO', msg:'Este rascunho será excluído permanentemente. Deseja continuar?', okLabel:'Excluir', danger:true })
           .then(function(ok){
