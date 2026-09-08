@@ -1684,6 +1684,19 @@
   }
 
   /* ---------------- PDF export ---------------- */
+  var DIAS_SEMANA = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+  function diaDaSemana(iso){
+    if(!iso) return '—';
+    var p = iso.split('-'); if(p.length!==3) return '—';
+    var d = new Date(+p[0], +p[1]-1, +p[2]);
+    return DIAS_SEMANA[d.getDay()];
+  }
+  function reportNumberFor(r){
+    var mesmaObra = state.rdos.filter(function(x){ return x.obraId===r.obraId; }).slice();
+    mesmaObra.sort(function(a,b){ return (a.data||'').localeCompare(b.data||'') || (new Date(a.createdAt)-new Date(b.createdAt)); });
+    var idx = mesmaObra.findIndex(function(x){ return x.id===r.id; });
+    return idx>=0 ? (idx+1) : mesmaObra.length+1;
+  }
   function exportRdoPdf(r){
     if(!window.jspdf || !window.jspdf.jsPDF){
       toast('Gerador de PDF indisponível neste momento.','error');
@@ -1693,92 +1706,186 @@
     var doc = new jsPDF({ unit:'pt', format:'a4' });
     var pageW = doc.internal.pageSize.getWidth();
     var pageH = doc.internal.pageSize.getHeight();
-    var marginX = 46, y = 50;
-    var yellow = [238,197,18], ink=[35,35,32], steel=[110,112,120];
+    var marginX = 42, y = 40;
+    var ink=[30,30,28], steel=[110,112,120], line_=[210,208,198], soft=[246,245,241];
 
-    function ensureSpace(h){ if(y + h > pageH - 50){ doc.addPage(); y = 50; } }
-    function heading(text){
-      ensureSpace(26);
-      doc.setFillColor(yellow[0],yellow[1],yellow[2]);
-      doc.rect(marginX, y-12, 4, 16, 'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(ink[0],ink[1],ink[2]);
-      doc.text(text, marginX+12, y);
-      y += 16;
+    function ensureSpace(h){ if(y + h > pageH - 48){ doc.addPage(); y = 40; return true; } return false; }
+    function sectionBar(text, count){
+      ensureSpace(24);
+      doc.setFillColor(ink[0],ink[1],ink[2]);
+      doc.rect(marginX, y, pageW-marginX*2, 20, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(255,255,255);
+      var label = text + (count!=null ? ' ('+count+')' : '');
+      doc.text(label, marginX+8, y+14);
+      y += 20+10;
     }
-    function line(label, value){
-      ensureSpace(15);
-      doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(steel[0],steel[1],steel[2]);
-      doc.text(String(label).toUpperCase(), marginX, y);
-      doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(ink[0],ink[1],ink[2]);
-      doc.text(String(value||'—'), marginX+130, y, {maxWidth: pageW-marginX*2-130});
-      y += 15;
-    }
-    function table(headers, rows, widths){
-      if(!rows.length){ return; }
-      ensureSpace(18);
+    function infoGrid(cells){
+      /* cells: [{label,value,w(fraction 0-1)}] laid out on one row */
+      var h = 32;
+      ensureSpace(h+6);
+      var totalW = pageW - marginX*2;
       var x = marginX;
-      doc.setFont('helvetica','bold'); doc.setFontSize(9);
-      doc.setDrawColor(220,218,208);
-      headers.forEach(function(h,i){ doc.text(String(h), x, y); x += widths[i]; });
-      y += 5; doc.line(marginX, y, marginX+widths.reduce(function(a,b){return a+b;},0), y); y += 12;
-      doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+      doc.setDrawColor(line_[0],line_[1],line_[2]); doc.setLineWidth(0.8);
+      cells.forEach(function(c){
+        var w = totalW * c.w;
+        doc.setFillColor(soft[0],soft[1],soft[2]);
+        doc.rect(x, y, w, h, 'FD');
+        doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(steel[0],steel[1],steel[2]);
+        doc.text(String(c.label).toUpperCase(), x+8, y+13);
+        doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(ink[0],ink[1],ink[2]);
+        doc.text(String(c.value||'—'), x+8, y+25, {maxWidth: w-14});
+        x += w;
+      });
+      y += h+10;
+    }
+    function tileGrid(items, cols){
+      if(!items.length) return;
+      cols = cols || 4;
+      var gap = 8, totalW = pageW-marginX*2;
+      var tw = (totalW - gap*(cols-1))/cols, th = 34;
+      items.forEach(function(it, idx){
+        var col = idx % cols;
+        if(col===0){
+          if(ensureSpace(th+gap)){ /* new page: nothing extra needed */ }
+        }
+        var x = marginX + col*(tw+gap);
+        doc.setDrawColor(line_[0],line_[1],line_[2]); doc.setLineWidth(0.8);
+        doc.setFillColor(soft[0],soft[1],soft[2]);
+        doc.rect(x, y, tw, th, 'FD');
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.8); doc.setTextColor(steel[0],steel[1],steel[2]);
+        doc.text(String(it.label), x+7, y+13, {maxWidth: tw-12});
+        doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(ink[0],ink[1],ink[2]);
+        doc.text(String(it.value), x+7, y+27);
+        if(col===cols-1 || idx===items.length-1){ y += th+gap; }
+      });
+      y += 2;
+    }
+    function wrapTable(headers, widths, rows){
+      if(!rows.length) return;
+      ensureSpace(20);
+      var x = marginX;
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(steel[0],steel[1],steel[2]);
+      headers.forEach(function(h,i){ doc.text(String(h).toUpperCase(), x, y); x += widths[i]; });
+      y += 6; doc.setDrawColor(ink[0],ink[1],ink[2]); doc.setLineWidth(1);
+      doc.line(marginX, y, marginX+widths.reduce(function(a,b){return a+b;},0), y); y += 12;
+      doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(ink[0],ink[1],ink[2]);
       rows.forEach(function(row){
-        ensureSpace(14);
+        var wrapped = row.map(function(cell,i){ return doc.splitTextToSize(String(cell==null||cell===''?'—':cell), widths[i]-8); });
+        var nLines = Math.max.apply(null, wrapped.map(function(w){ return w.length; }));
+        var rh = nLines*12 + 6;
+        ensureSpace(rh);
         var x2 = marginX;
-        row.forEach(function(cell,i){ doc.text(String(cell==null||cell===''?'—':cell), x2, y, {maxWidth: widths[i]-6}); x2 += widths[i]; });
-        y += 14;
+        wrapped.forEach(function(wLines,i){
+          doc.text(wLines, x2, y);
+          x2 += widths[i];
+        });
+        y += rh;
+        doc.setDrawColor(line_[0],line_[1],line_[2]); doc.setLineWidth(0.6);
+        doc.line(marginX, y-4, marginX+widths.reduce(function(a,b){return a+b;},0), y-4);
       });
       y += 6;
     }
 
-    try{ doc.addImage(LOGO_DATA, 'PNG', marginX, y-30, 96, 36); }catch(e){}
-    doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(ink[0],ink[1],ink[2]);
-    doc.text('RELATÓRIO DIÁRIO DE OBRA', marginX+108, y-10);
-    y += 20;
-    doc.setDrawColor(35,35,32); doc.setLineWidth(1.2); doc.line(marginX, y, pageW-marginX, y); y += 22;
+    /* ---- Header: logo + title bar ---- */
+    try{ doc.addImage(LOGO_DATA, 'PNG', marginX, y, 92, 34); }catch(e){}
+    doc.setFillColor(ink[0],ink[1],ink[2]);
+    doc.rect(marginX+104, y, pageW-marginX*2-104, 34, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(255,255,255);
+    doc.text('RELATÓRIO DIÁRIO DE OBRA (RDO)', marginX+104+12, y+21);
+    y += 34+16;
 
-    heading('Identificação'); y += 4;
-    line('Obra', r.obraNome); line('Data', fmtDate(r.data)); line('Clima', r.clima);
-    line('Impraticável', r.impraticavel?'Sim':'Não'); line('Responsável', r.responsavel); y += 6;
+    /* ---- Info grid ---- */
+    infoGrid([
+      {label:'Relatório nº', value:String(reportNumberFor(r)).padStart(3,'0'), w:0.34},
+      {label:'Data', value:fmtDate(r.data), w:0.33},
+      {label:'Dia da semana', value:diaDaSemana(r.data), w:0.33}
+    ]);
+    infoGrid([
+      {label:'Obra', value:r.obraNome, w:0.66},
+      {label:'Responsável', value:r.responsavel, w:0.34}
+    ]);
+    infoGrid([
+      {label:'Clima / condição do tempo', value:r.clima, w:0.66},
+      {label:'Impraticável', value:r.impraticavel?'Sim':'Não', w:0.34}
+    ]);
 
     if(r.impraticavel){
       ensureSpace(26);
       doc.setFillColor(198,67,63);
-      doc.rect(marginX, y-13, pageW-marginX*2, 20, 'F');
+      doc.rect(marginX, y-6, pageW-marginX*2, 20, 'F');
       doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(255,255,255);
-      doc.text('ATENÇÃO: DIA TOTAL OU PARCIALMENTE IMPRATICÁVEL PARA TRABALHO', marginX+8, y+1);
+      doc.text('ATENÇÃO: DIA TOTAL OU PARCIALMENTE IMPRATICÁVEL PARA TRABALHO', marginX+8, y+8);
       doc.setTextColor(ink[0],ink[1],ink[2]);
-      y += 20;
+      y += 24;
     }
 
-    if((r.maoDeObra||[]).length){ heading('Mão de obra'); table(['Função','Qtd.'], r.maoDeObra.map(function(x){return [x.funcao,x.qtd];}), [360,90]); }
-    if((r.equipamentos||[]).length){ heading('Equipamentos'); table(['Equipamento','Qtd.','Horas'], r.equipamentos.map(function(x){return [x.nome,x.qtd,x.horas];}), [280,80,90]); }
-    if((r.materiais||[]).length){ heading('Materiais'); table(['Material','Qtd.','Unidade'], r.materiais.map(function(x){return [x.nome,x.qtd,x.unidade];}), [280,80,90]); }
-    if((r.atividades||[]).length){ heading('Atividades executadas'); table(['Descrição','Tipo'], r.atividades.map(function(x){return [x.descricao,x.tipo];}), [330,120]); }
-    if((r.ocorrencias||[]).length){ heading('Ocorrências'); table(['Descrição','Tipo','Horas paradas'], r.ocorrencias.map(function(x){return [x.descricao,x.tipo,x.horasParadas];}), [280,110,60]); }
+    var mo = r.maoDeObra||[];
+    if(mo.length){
+      var totalMo = mo.reduce(function(a,x){ return a + (parseFloat(x.qtd)||0); },0);
+      sectionBar('Mão de obra', totalMo);
+      var moTiles = mo.map(function(x){ return {label:x.funcao, value:x.qtd}; });
+      moTiles.push({label:'Total', value:totalMo});
+      tileGrid(moTiles, 4);
+    }
 
+    var eq = r.equipamentos||[];
+    if(eq.length){
+      var totalEq = eq.reduce(function(a,x){ return a + (parseFloat(x.qtd)||0); },0);
+      sectionBar('Equipamentos', totalEq);
+      var eqTiles = eq.map(function(x){ return {label:x.nome, value:x.qtd}; });
+      eqTiles.push({label:'Total', value:totalEq});
+      tileGrid(eqTiles, 4);
+    }
+
+    var mat = r.materiais||[];
+    if(mat.length){
+      sectionBar('Materiais', mat.length);
+      wrapTable(['Material','Qtd.','Unidade'], [pageW-marginX*2-160, 80, 80], mat.map(function(x){ return [x.nome,x.qtd,x.unidade]; }));
+    }
+
+    var at = r.atividades||[];
+    if(at.length){
+      sectionBar('Atividades', at.length);
+      wrapTable(['Descrição','Tipo'], [pageW-marginX*2-150, 150], at.map(function(x){ return [x.descricao,x.tipo]; }));
+    }
+
+    var oc = r.ocorrencias||[];
+    sectionBar('Ocorrências', oc.length);
+    if(oc.length){
+      wrapTable(['Descrição','Tipo','Horas paradas'], [pageW-marginX*2-260, 170, 90], oc.map(function(x){ return [x.descricao,x.tipo,x.horasParadas]; }));
+    }
+
+    sectionBar('Comentários', r.observacoes ? 1 : 0);
     if(r.observacoes){
-      heading('Observações');
-      doc.setFont('helvetica','normal'); doc.setFontSize(10);
+      doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(ink[0],ink[1],ink[2]);
       var lines = doc.splitTextToSize(r.observacoes, pageW-marginX*2);
       lines.forEach(function(ln){ ensureSpace(13); doc.text(ln, marginX, y); y+=13; });
       y += 4;
     }
 
-    heading('Assinatura e aprovação (registro digital)');
-    line('Assinado por', r.assinatura ? r.assinatura.nome : '—');
-    line('Em', r.assinatura ? new Date(r.assinatura.timestamp).toLocaleString('pt-BR') : '—');
+    /* ---- Registro digital (assinatura eletrônica e aprovação) ---- */
+    sectionBar('Registro digital');
+    infoGrid([
+      {label:'Assinado por', value:r.assinatura ? r.assinatura.nome : '—', w:0.5},
+      {label:'Em', value:r.assinatura ? new Date(r.assinatura.timestamp).toLocaleString('pt-BR') : '—', w:0.5}
+    ]);
     if(r.aprovacao){
-      line('Decisão', r.aprovacao.status==='aprovado'?'Aprovado':'Rejeitado');
-      line('Por', r.aprovacao.nome);
-      line('Em', new Date(r.aprovacao.timestamp).toLocaleString('pt-BR'));
-      if(r.aprovacao.comentario) line('Comentário', r.aprovacao.comentario);
+      infoGrid([
+        {label:'Decisão', value:r.aprovacao.status==='aprovado'?'Aprovado':'Rejeitado', w:0.34},
+        {label:'Por', value:r.aprovacao.nome, w:0.33},
+        {label:'Em', value:new Date(r.aprovacao.timestamp).toLocaleString('pt-BR'), w:0.33}
+      ]);
+      if(r.aprovacao.comentario){
+        doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(steel[0],steel[1],steel[2]);
+        var cLines = doc.splitTextToSize('"'+r.aprovacao.comentario+'"', pageW-marginX*2);
+        cLines.forEach(function(ln){ ensureSpace(12); doc.text(ln, marginX, y); y+=12; });
+        y += 4;
+      }
     }
-    y += 10;
 
-    /* Bloco de assinaturas físicas — cliente à esquerda, responsável à direita */
+    /* ---- Bloco de assinaturas físicas — cliente à esquerda, responsável à direita ---- */
     ensureSpace(96);
-    heading('Assinaturas');
+    sectionBar('Assinaturas');
     y += 34;
     var sigGap = 30;
     var sigColW = (pageW - marginX*2 - sigGap) / 2;
@@ -1786,7 +1893,7 @@
     var respX = marginX + sigColW + sigGap;
     var sigLineY = y;
 
-    doc.setDrawColor(35,35,32); doc.setLineWidth(1);
+    doc.setDrawColor(ink[0],ink[1],ink[2]); doc.setLineWidth(1);
     doc.line(clienteX, sigLineY, clienteX + sigColW, sigLineY);
     doc.line(respX, sigLineY, respX + sigColW, sigLineY);
 
@@ -1796,14 +1903,14 @@
     y = sigLineY + 26;
 
     if((r.fotos||[]).length){
-      doc.addPage(); y = 50;
-      heading('Registro fotográfico');
-      var cols = 2, gap = 14, iw = (pageW-marginX*2-gap)/cols, ih = iw*0.72;
-      var rowStartY = y+10;
+      doc.addPage(); y = 40;
+      sectionBar('Fotos', r.fotos.length);
+      var cols = 3, gap = 10, iw = (pageW-marginX*2-gap*(cols-1))/cols, ih = iw*0.75;
+      var rowStartY = y;
       r.fotos.forEach(function(f, idx){
         var col = idx % cols;
         if(col===0 && idx>0){ rowStartY += ih+gap; }
-        if(rowStartY + ih > pageH-50){ doc.addPage(); y=50; rowStartY = y+10; }
+        if(rowStartY + ih > pageH-48){ doc.addPage(); y=40; rowStartY = y; }
         var px = marginX + col*(iw+gap);
         try{ doc.addImage(f, 'JPEG', px, rowStartY, iw, ih); }catch(e){}
       });
