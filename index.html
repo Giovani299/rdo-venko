@@ -210,6 +210,21 @@
   .add-row-btn{margin-top:8px;}
   .subtable-wrap{overflow-x:auto;}
 
+  p.hint{color:var(--steel);font-size:12.5px;margin:-4px 0 8px;}
+  .checklist-wrap{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;margin-top:6px;overflow:hidden;}
+  .checklist-item{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:9px 10px;border-bottom:1px solid var(--line);font-size:13.5px;background:var(--surface);}
+  .checklist-item:last-child{border-bottom:none;}
+  .checklist-item input[type=checkbox]{width:16px;height:16px;flex:none;}
+  .checklist-item .checklist-label{flex:1 1 160px;font-weight:600;}
+  .checklist-extra{display:flex;gap:8px;flex:1 1 260px;}
+  .checklist-extra input{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:6px 7px;width:100%;}
+  .checklist-custom{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
+  .checklist-custom-row{display:flex;gap:8px;align-items:center;}
+  .checklist-custom-row input{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:6px 7px;}
+  .checklist-custom-row input[data-customkey]{flex:1 1 40%;}
+  .checklist-custom-row input[data-customextra]{flex:1 1 120px;}
+  .add-other-btn{margin-top:8px;}
+
   .photo-input-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
   .photo-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;}
   .photo-thumb{position:relative;width:96px;height:96px;border-radius:8px;overflow:hidden;border:1px solid var(--line);}
@@ -576,6 +591,7 @@
   var CLIMA_OPTS = ['Ensolarado','Parcialmente nublado','Nublado','Chuvoso','Chuva forte'];
   var ATIV_TIPOS = ['Terraplenagem','Fundação','Estrutura','Alvenaria','Elétrica','Hidráulica','Acabamento','Cobertura','Outro'];
   var FUNCAO_OPTS = ['Encanador','Servente','Operador de Máquina','Encarregado de Obra','Pedreiro','Encarregado de Obra Júnior','Gerente de Operação','Encarregado de Manutenção'];
+  var MATERIAL_OPTS = ['Cimento CP-II','Areia média','Areia fina','Brita 1','Brita 2','Bloco cerâmico','Bloco de concreto','Tijolo baiano','Aço CA-50','Argamassa colante','Concreto usinado','Tinta acrílica','Fio elétrico','Tubo PVC','Cal hidratada'];
   var OCC_TIPOS = ['Segurança','Qualidade','Paralisação','Fiscalização','Outro'];
   var CARGO_OPTS = ['Administrador','Gerente de Operação','Engenheiro(a) de Obras','Encarregado de Obra','Encarregado de Obra Júnior','Encarregado de Manutenção','Técnico de Segurança','Operador de Máquina','Pedreiro','Servente','Encanador','Cliente','Outro'];
   var STATUS_LABEL = { rascunho:'Rascunho', enviado:'Aguardando aprovação', aprovado:'Aprovado', rejeitado:'Rejeitado' };
@@ -1248,6 +1264,101 @@
     bindRows();
   }
 
+  /* ---------------- checklist-based sub-table (mão de obra, equipamentos, materiais, atividades) ---------------- */
+  // Renders a fixed list of options as checkboxes; checking one reveals inline extra
+  // fields (qty, horas, unidade, descrição...). Items not present in the predefined
+  // list ("Outro") are kept as free-text rows below the checklist.
+  function checklistTable(containerId, options, keyField, extraCols, rows, otherLabel){
+    function findRow(val){ return rows.find(function(r){ return r[keyField]===val; }); }
+    var itemsHtml = options.map(function(opt){
+      var r = findRow(opt);
+      var checked = !!r;
+      return '<label class="checklist-item">'+
+        '<input type="checkbox" data-chk="'+esc(opt)+'"'+(checked?' checked':'')+'>'+
+        '<span class="checklist-label">'+esc(opt)+'</span>'+
+        '<span class="checklist-extra" style="'+(checked?'':'display:none')+'">'+
+          extraCols.map(function(c){
+            var val = (r && r[c.key]!=null) ? r[c.key] : '';
+            return '<input type="'+(c.type||'text')+'" data-extra="'+c.key+'" placeholder="'+esc(c.placeholder||'')+'" value="'+esc(val)+'"'+(c.type==='number'?' min="0" step="any"':'')+'>';
+          }).join('')+
+        '</span>'+
+      '</label>';
+    }).join('');
+    var customRows = rows.filter(function(r){ return r[keyField] && options.indexOf(r[keyField])===-1; });
+    var customHtml = customRows.map(function(r){
+      return '<div class="checklist-custom-row">'+
+        '<input type="text" data-customkey value="'+esc(r[keyField])+'" placeholder="'+esc(otherLabel||'Outro')+'">'+
+        extraCols.map(function(c){
+          var val = r[c.key]!=null ? r[c.key] : '';
+          return '<input type="'+(c.type||'text')+'" data-customextra="'+c.key+'" value="'+esc(val)+'" placeholder="'+esc(c.placeholder||'')+'"'+(c.type==='number'?' min="0" step="any"':'')+'>';
+        }).join('')+
+        '<button type="button" class="row-x" title="Remover">✕</button>'+
+      '</div>';
+    }).join('');
+    return '<div class="checklist-wrap" id="'+containerId+'_wrap">'+itemsHtml+'</div>'+
+      '<div class="checklist-custom" id="'+containerId+'_custom">'+customHtml+'</div>'+
+      '<button type="button" class="btn ghost sm add-other-btn" data-addother="'+containerId+'">+ '+esc(otherLabel||'Outro')+'</button>';
+  }
+  function wireChecklistTable(containerId, keyField, extraCols, setRows, otherLabel){
+    var wrapEl = document.getElementById(containerId+'_wrap');
+    var customEl = document.getElementById(containerId+'_custom');
+    var addBtn = document.querySelector('[data-addother="'+containerId+'"]');
+
+    function rebuildFromDom(){
+      var rows = [];
+      wrapEl.querySelectorAll('.checklist-item').forEach(function(item){
+        var chk = item.querySelector('[data-chk]');
+        if(!chk.checked) return;
+        var row = {}; row[keyField] = chk.getAttribute('data-chk');
+        extraCols.forEach(function(c){
+          var inp = item.querySelector('[data-extra="'+c.key+'"]');
+          var v = inp ? inp.value : '';
+          row[c.key] = (c.type==='number') ? (v===''?'':parseFloat(v)) : v;
+        });
+        rows.push(row);
+      });
+      customEl.querySelectorAll('.checklist-custom-row').forEach(function(rowEl){
+        var keyInp = rowEl.querySelector('[data-customkey]');
+        var keyVal = keyInp.value.trim();
+        if(!keyVal) return;
+        var row = {}; row[keyField] = keyVal;
+        extraCols.forEach(function(c){
+          var inp = rowEl.querySelector('[data-customextra="'+c.key+'"]');
+          var v = inp ? inp.value : '';
+          row[c.key] = (c.type==='number') ? (v===''?'':parseFloat(v)) : v;
+        });
+        rows.push(row);
+      });
+      setRows(rows);
+    }
+
+    function bindCustomRow(rowEl){
+      rowEl.querySelectorAll('input').forEach(function(inp){ inp.addEventListener('input', rebuildFromDom); });
+      rowEl.querySelector('.row-x').addEventListener('click', function(){ rowEl.remove(); rebuildFromDom(); });
+    }
+
+    wrapEl.querySelectorAll('[data-chk]').forEach(function(chk){
+      chk.addEventListener('change', function(){
+        chk.closest('.checklist-item').querySelector('.checklist-extra').style.display = chk.checked ? '' : 'none';
+        rebuildFromDom();
+      });
+    });
+    wrapEl.querySelectorAll('.checklist-extra input').forEach(function(inp){
+      inp.addEventListener('input', rebuildFromDom);
+    });
+    customEl.querySelectorAll('.checklist-custom-row').forEach(bindCustomRow);
+    addBtn.addEventListener('click', function(){
+      var div = document.createElement('div');
+      div.className = 'checklist-custom-row';
+      div.innerHTML = '<input type="text" data-customkey value="" placeholder="'+esc(otherLabel||'Outro')+'">'+
+        extraCols.map(function(c){ return '<input type="'+(c.type||'text')+'" data-customextra="'+c.key+'" value="" placeholder="'+esc(c.placeholder||'')+'"'+(c.type==='number'?' min="0" step="any"':'')+'>'; }).join('')+
+        '<button type="button" class="row-x" title="Remover">✕</button>';
+      customEl.appendChild(div);
+      bindCustomRow(div);
+      div.querySelector('[data-customkey]').focus();
+    });
+  }
+
   /* ---------------- photo handling ---------------- */
   function resizeImageFile(file, maxDim, quality){
     return new Promise(function(resolve, reject){
@@ -1296,8 +1407,8 @@
   function blankRdo(){
     return {
       obraId:'', data: todayISO(), clima: CLIMA_OPTS[0], impraticavel:false,
-      maoDeObra:[{funcao:FUNCAO_OPTS[0],qtd:''}], equipamentos:[{nome:'',qtd:'',horas:''}],
-      materiais:[{nome:'',qtd:'',unidade:''}], atividades:[{descricao:'',tipo:ATIV_TIPOS[0]}],
+      maoDeObra:[], equipamentos:[],
+      materiais:[], atividades:[],
       ocorrencias:[], observacoes:'', responsavel: state.currentUser ? state.currentUser.nome : '', status:'rascunho'
     };
   }
@@ -1322,22 +1433,26 @@
 
       '<div class="card">'+
         '<h2><span class="idx">2</span>Mão de obra</h2>'+
-        dynTable('mo', [{key:'funcao',label:'Função',type:'select',options:FUNCAO_OPTS,width:'55%'},{key:'qtd',label:'Quantidade',type:'number',width:'25%'}], rdo.maoDeObra) +
+        '<p class="hint">Marque as funções presentes na obra hoje e informe a quantidade.</p>'+
+        checklistTable('mo', FUNCAO_OPTS, 'funcao', [{key:'qtd',type:'number',placeholder:'Quantidade'}], rdo.maoDeObra, 'Outra função') +
       '</div>'+
 
       '<div class="card">'+
         '<h2><span class="idx">3</span>Equipamentos</h2>'+
-        dynTable('eq', [{key:'nome',label:'Equipamento',type:'combo',options:state.equipamentos.map(function(x){return x.nome;}),width:'50%'},{key:'qtd',label:'Qtd.',type:'number',width:'20%'},{key:'horas',label:'Horas trabalhadas',type:'number',width:'20%'}], rdo.equipamentos) +
+        '<p class="hint">Marque os equipamentos cadastrados que foram usados hoje.</p>'+
+        checklistTable('eq', state.equipamentos.map(function(x){return x.nome;}), 'nome', [{key:'qtd',type:'number',placeholder:'Qtd.'},{key:'horas',type:'number',placeholder:'Horas trabalhadas'}], rdo.equipamentos, 'Outro equipamento') +
       '</div>'+
 
       '<div class="card">'+
         '<h2><span class="idx">4</span>Materiais</h2>'+
-        dynTable('mat', [{key:'nome',label:'Material',width:'50%'},{key:'qtd',label:'Qtd.',type:'number',width:'20%'},{key:'unidade',label:'Unidade',width:'20%'}], rdo.materiais) +
+        '<p class="hint">Marque os materiais usados hoje e informe quantidade e unidade.</p>'+
+        checklistTable('mat', MATERIAL_OPTS, 'nome', [{key:'qtd',type:'number',placeholder:'Qtd.'},{key:'unidade',type:'text',placeholder:'Unidade'}], rdo.materiais, 'Outro material') +
       '</div>'+
 
       '<div class="card">'+
         '<h2><span class="idx">5</span>Atividades executadas</h2>'+
-        dynTable('at', [{key:'descricao',label:'Descrição',width:'60%'},{key:'tipo',label:'Tipo',type:'select',options:ATIV_TIPOS,width:'30%'}], rdo.atividades) +
+        '<p class="hint">Marque os tipos de atividade executados hoje e detalhe na descrição.</p>'+
+        checklistTable('at', ATIV_TIPOS, 'tipo', [{key:'descricao',type:'text',placeholder:'Descrição (opcional)'}], rdo.atividades, 'Outra atividade') +
       '</div>'+
 
       '<div class="card">'+
@@ -1377,10 +1492,10 @@
     populateObraSelect();
     document.getElementById('rdoObra').value = rdo.obraId||'';
 
-    wireDynTable('mo', [{key:'funcao',type:'select',options:FUNCAO_OPTS},{key:'qtd',type:'number'}], function(){ return rdo.maoDeObra; }, function(v){ rdo.maoDeObra=v; });
-    wireDynTable('eq', [{key:'nome'},{key:'qtd',type:'number'},{key:'horas',type:'number'}], function(){ return rdo.equipamentos; }, function(v){ rdo.equipamentos=v; });
-    wireDynTable('mat', [{key:'nome'},{key:'qtd',type:'number'},{key:'unidade'}], function(){ return rdo.materiais; }, function(v){ rdo.materiais=v; });
-    wireDynTable('at', [{key:'descricao'},{key:'tipo',type:'select',options:ATIV_TIPOS}], function(){ return rdo.atividades; }, function(v){ rdo.atividades=v; });
+    wireChecklistTable('mo', 'funcao', [{key:'qtd',type:'number'}], function(v){ rdo.maoDeObra=v; }, 'Outra função');
+    wireChecklistTable('eq', 'nome', [{key:'qtd',type:'number'},{key:'horas',type:'number'}], function(v){ rdo.equipamentos=v; }, 'Outro equipamento');
+    wireChecklistTable('mat', 'nome', [{key:'qtd',type:'number'},{key:'unidade',type:'text'}], function(v){ rdo.materiais=v; }, 'Outro material');
+    wireChecklistTable('at', 'tipo', [{key:'descricao',type:'text'}], function(v){ rdo.atividades=v; }, 'Outra atividade');
     wireDynTable('oc', [{key:'descricao'},{key:'tipo',type:'select',options:OCC_TIPOS},{key:'horasParadas',type:'number'}], function(){ return rdo.ocorrencias; }, function(v){ rdo.ocorrencias=v; });
 
     renderPhotoUI();
@@ -1435,7 +1550,7 @@
         mao_de_obra: rdo.maoDeObra.filter(function(r){ return r.funcao; }),
         equipamentos: rdo.equipamentos.filter(function(r){ return r.nome; }),
         materiais: rdo.materiais.filter(function(r){ return r.nome; }),
-        atividades: rdo.atividades.filter(function(r){ return r.descricao; }),
+        atividades: rdo.atividades.filter(function(r){ return r.tipo; }),
         ocorrencias: rdo.ocorrencias.filter(function(r){ return r.descricao; }),
         observacoes: document.getElementById('rdoObs').value,
         fotos: state.photos.map(function(p){ return p.dataUrl; }),
