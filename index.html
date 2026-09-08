@@ -2474,47 +2474,14 @@
 
     window.html2canvas(target, { scale:2, useCORS:true, backgroundColor:'#ffffff' }).then(function(canvas){
       var jsPDF = window.jspdf.jsPDF;
-      var doc = new jsPDF({ unit:'pt', format:'a4' });
-      var pdfW = doc.internal.pageSize.getWidth();
-      var pdfH = doc.internal.pageSize.getHeight();
-      var imgW = pdfW;
-      var pxPerPt = canvas.width / imgW; // canvas pixels per pdf point, at this render scale
-
-      // Never let a page break fall in the middle of a section: only cut at the
-      // top edge of one of the target's direct-child blocks (each sectionWrap()).
-      var targetRect = target.getBoundingClientRect();
-      var ratioY = canvas.height / target.offsetHeight;
-      var breakPoints = Array.prototype.map.call(target.children, function(ch){
-        return (ch.getBoundingClientRect().top - targetRect.top) * ratioY;
-      }).filter(function(p){ return p > 0; });
-      breakPoints.push(canvas.height);
-      breakPoints.sort(function(a,b){ return a-b; });
-
-      var pageHeightPx = pdfH * pxPerPt;
-      var cursor = 0, pageIndex = 0;
-      while(cursor < canvas.height - 1){
-        var maxEnd = cursor + pageHeightPx;
-        var end = null;
-        for(var i=0;i<breakPoints.length;i++){
-          var c = breakPoints[i];
-          if(c > cursor + 1 && c <= maxEnd) end = c;
-        }
-        if(end === null){
-          // a single section is taller than one page (e.g. many photos) — hard cut
-          end = Math.min(maxEnd, canvas.height);
-        }
-        var sliceH = Math.round(end - cursor);
-        var pageCanvas = document.createElement('canvas');
-        pageCanvas.width = canvas.width;
-        pageCanvas.height = sliceH;
-        pageCanvas.getContext('2d').drawImage(canvas, 0, cursor, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-        var sliceData = pageCanvas.toDataURL('image/jpeg', 0.95);
-        var sliceHpt = sliceH / pxPerPt;
-        if(pageIndex>0) doc.addPage();
-        doc.addImage(sliceData, 'JPEG', 0, 0, imgW, sliceHpt);
-        cursor = end;
-        pageIndex++;
-      }
+      // Single continuous page sized to fit the whole report — nothing is ever
+      // cut or split across a page break: the PDF page itself is exactly as
+      // tall as the content (like a long single-page receipt).
+      var imgW = 595.28; // A4 width in pt, kept for a familiar reading width
+      var imgH = canvas.height * imgW / canvas.width;
+      var doc = new jsPDF({ unit:'pt', format:[imgW, imgH] });
+      var imgData = canvas.toDataURL('image/jpeg', 0.95);
+      doc.addImage(imgData, 'JPEG', 0, 0, imgW, imgH);
 
       var fname = 'RDO_Venko_'+(r.obraNome||'obra').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+r.data+'.pdf';
       doc.save(fname);
