@@ -1,0 +1,1709 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RDO Venko</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<style>
+  :root{
+    --venko-yellow:#EEC512;
+    --venko-yellow-hi:#F7DE4E;
+    --venko-yellow-deep:#B98E00;
+    --ink:#232320;
+    --ink-soft:#55564F;
+    --steel:#71737C;
+    --paper:#FAF9F4;
+    --surface:#FFFFFF;
+    --surface-2:#F3F1E9;
+    --line:#E3E1D5;
+    --line-soft:#EDEBE0;
+    --focus:#2B6CB0;
+    --status-draft:#7C7E86;
+    --status-draft-bg:#EBEAE6;
+    --status-sent:#2B6CB0;
+    --status-sent-bg:#E4EEF9;
+    --status-approved:#2E8F4E;
+    --status-approved-bg:#E4F3E9;
+    --status-rejected:#C6433F;
+    --status-rejected-bg:#FBE7E6;
+    --status-stopped:#C97317;
+    --status-stopped-bg:#FBEEDD;
+    --shadow-sm:0 1px 2px rgba(35,35,32,.07);
+    --shadow-md:0 6px 20px rgba(35,35,32,.10);
+    --radius:10px;
+  }
+  /* Tema único claro — fixo, independente do modo escuro do sistema/navegador. */
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    font-size:14px;
+    line-height:1.45;
+  }
+  h1,h2,h3,.display{
+    font-family:'Big Shoulders Display','Arial Narrow',sans-serif;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.02em;
+    text-wrap:balance;
+    color:var(--ink);
+    margin:0;
+  }
+  button{font-family:inherit;}
+  input,select,textarea{font-family:inherit;font-size:14px;color:var(--ink);}
+  ::selection{background:var(--venko-yellow);color:#232320;}
+  a{color:var(--focus);}
+  :focus-visible{outline:2px solid var(--focus);outline-offset:2px;}
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.01ms !important;transition-duration:.01ms !important;}
+  }
+
+  #app{min-height:100vh;display:flex;flex-direction:column;background:var(--paper);}
+
+  /* ---------- Topbar ---------- */
+  .topbar{
+    display:flex;align-items:center;gap:20px;
+    padding:10px 22px;
+    background:var(--surface);
+    border-bottom:2px solid var(--ink);
+    position:sticky;top:0;z-index:40;
+    flex-wrap:wrap;
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-logo{height:30px;width:auto;display:block;border-radius:3px;}
+  .brand-tag{
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--steel);font-weight:600;border-left:1px solid var(--line);padding-left:12px;
+  }
+  .tabs{display:flex;gap:4px;margin-left:8px;flex:1;flex-wrap:wrap;}
+  .tab-btn{
+    border:1px solid transparent;background:transparent;color:var(--ink-soft);
+    padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:700;
+    font-size:13px;letter-spacing:.01em;transition:background .12s,color .12s;
+  }
+  .tab-btn:hover{background:var(--surface-2);color:var(--ink);}
+  .tab-btn.active{background:var(--ink);color:var(--venko-yellow-hi);}
+
+  main{flex:1;padding:26px 22px 60px;max-width:1180px;margin:0 auto;width:100%;}
+  .view{display:none;}
+  .view.active{display:block;}
+
+  /* ---------- Page head ---------- */
+  .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap;}
+  .page-head h1{font-size:30px;}
+  .page-head p{margin:4px 0 0;color:var(--steel);font-size:13px;}
+
+  /* ---------- KPI tiles ---------- */
+  .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;}
+  .kpi{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;box-shadow:var(--shadow-sm);
+  }
+  .kpi .n{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:34px;line-height:1;font-variant-numeric:tabular-nums;}
+  .kpi .l{font-size:11.5px;color:var(--steel);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-top:6px;}
+  .kpi.accent{border-color:var(--venko-yellow-deep);background:linear-gradient(180deg,var(--surface),var(--surface) 60%,color-mix(in srgb, var(--venko-yellow) 12%, var(--surface)));}
+  .kpi.warn .n{color:var(--status-stopped);}
+  .kpi.pend .n{color:var(--status-sent);}
+
+  /* ---------- Filter bar ---------- */
+  .filters{
+    display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px;margin-bottom:16px;box-shadow:var(--shadow-sm);
+  }
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field label{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--steel);font-weight:700;}
+  .field input,.field select{
+    border:1px solid var(--line);background:var(--paper);color:var(--ink);
+    padding:8px 9px;border-radius:7px;min-width:120px;
+  }
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--focus);}
+  .field.grow{flex:1;min-width:180px;}
+  .field.grow input{width:100%;}
+  .btn{
+    border:1px solid var(--ink);background:var(--ink);color:var(--venko-yellow-hi);
+    padding:9px 16px;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;
+    display:inline-flex;align-items:center;gap:8px;white-space:nowrap;
+  }
+  .btn:hover{background:#000;}
+  .btn.primary{background:var(--venko-yellow);border-color:var(--venko-yellow-deep);color:#232320;}
+  .btn.primary:hover{background:var(--venko-yellow-hi);}
+  .btn.ghost{background:transparent;color:var(--ink);border-color:var(--line);}
+  .btn.ghost:hover{background:var(--surface-2);}
+  .btn.danger{background:transparent;color:var(--status-rejected);border-color:var(--status-rejected);}
+  .btn.danger:hover{background:var(--status-rejected-bg);}
+  .btn.sm{padding:6px 11px;font-size:12px;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+
+  /* ---------- Table (RDO list) ---------- */
+  .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow-sm);}
+  table.rdo-list{width:100%;border-collapse:collapse;min-width:820px;}
+  table.rdo-list th{
+    text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--steel);
+    padding:11px 14px;border-bottom:1px solid var(--line);font-weight:700;background:var(--surface-2);
+  }
+  table.rdo-list td{padding:11px 14px;border-bottom:1px solid var(--line-soft);font-size:13.5px;vertical-align:middle;}
+  table.rdo-list tbody tr{cursor:pointer;transition:background .1s;}
+  table.rdo-list tbody tr:hover{background:var(--surface-2);}
+  table.rdo-list tbody tr:last-child td{border-bottom:none;}
+  .mono-num{font-variant-numeric:tabular-nums;}
+  .empty-row td{text-align:center;color:var(--steel);padding:34px 14px;font-size:13.5px;}
+
+  .chip{
+    display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;
+    font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+  }
+  .chip.draft{color:var(--status-draft);background:var(--status-draft-bg);}
+  .chip.sent{color:var(--status-sent);background:var(--status-sent-bg);}
+  .chip.approved{color:var(--status-approved);background:var(--status-approved-bg);}
+  .chip.rejected{color:var(--status-rejected);background:var(--status-rejected-bg);}
+  .tag-stop{color:var(--status-stopped);font-weight:700;font-size:11.5px;}
+  .tag-example{
+    font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;color:var(--venko-yellow-deep);
+    border:1px solid var(--venko-yellow-deep);border-radius:5px;padding:1px 5px;margin-left:6px;
+  }
+
+  /* ---------- Forms / cards ---------- */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow-sm);margin-bottom:16px;}
+  .card h2{font-size:17px;margin-bottom:12px;display:flex;align-items:center;gap:10px;}
+  .card h2 .idx{
+    display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;
+    background:var(--venko-yellow);color:#232320;font-size:12px;font-family:'Big Shoulders Display',sans-serif;font-weight:800;
+  }
+  .grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+  @media (max-width:760px){.grid2,.grid3,.grid4,.kpi-row{grid-template-columns:1fr 1fr;} }
+  @media (max-width:520px){.grid2,.grid3,.grid4,.kpi-row{grid-template-columns:1fr;} }
+  @media (max-width:680px){
+    .topbar{flex-direction:column;align-items:stretch;gap:10px;padding:12px 16px;}
+    .brand{justify-content:space-between;}
+    .tabs{margin-left:0;flex:none;width:100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px;}
+    .tab-btn{flex:0 0 auto;}
+    .user-box{margin-left:0;padding-left:0;border-left:none;border-top:1px solid var(--line);padding-top:10px;width:100%;justify-content:space-between;}
+  }
+  .field.full{grid-column:1/-1;}
+  .field textarea{
+    border:1px solid var(--line);background:var(--paper);color:var(--ink);padding:9px;border-radius:7px;
+    resize:vertical;min-height:64px;width:100%;
+  }
+  .field input[type=text],.field input[type=date],.field input[type=number]{width:100%;}
+  .checkline{display:flex;align-items:center;gap:8px;font-size:13px;}
+  .checkline input{width:16px;height:16px;}
+
+  .subtable{width:100%;border-collapse:collapse;margin-top:4px;}
+  .subtable th{
+    text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--steel);
+    padding:6px 8px;border-bottom:1px solid var(--line);font-weight:700;
+  }
+  .subtable td{padding:5px 8px;vertical-align:middle;}
+  .subtable input,.subtable select{width:100%;border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:6px 7px;}
+  .row-x{background:transparent;border:none;color:var(--status-rejected);cursor:pointer;font-size:16px;line-height:1;padding:4px 6px;}
+  .row-x:hover{background:var(--status-rejected-bg);border-radius:6px;}
+  .add-row-btn{margin-top:8px;}
+  .subtable-wrap{overflow-x:auto;}
+
+  .photo-input-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .photo-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;}
+  .photo-thumb{position:relative;width:96px;height:96px;border-radius:8px;overflow:hidden;border:1px solid var(--line);}
+  .photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .photo-thumb button{
+    position:absolute;top:3px;right:3px;background:rgba(20,20,18,.72);color:#fff;border:none;
+    width:20px;height:20px;border-radius:5px;cursor:pointer;font-size:12px;line-height:1;
+  }
+  .photo-note{font-size:11.5px;color:var(--steel);margin-top:6px;}
+  .photo-note.warn{color:var(--status-stopped);font-weight:600;}
+
+  .form-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:6px;flex-wrap:wrap;}
+  .form-actions .hint{margin-right:auto;color:var(--steel);font-size:12px;align-self:center;}
+
+  /* ---------- Detail view ---------- */
+  .detail-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:16px;}
+  .detail-title h1{font-size:26px;}
+  .detail-title .sub{color:var(--steel);font-size:13px;margin-top:4px;}
+  .detail-actions{display:flex;gap:8px;flex-wrap:wrap;}
+  .kv{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+  @media (max-width:760px){.kv{grid-template-columns:1fr 1fr;}}
+  .kv .item .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--steel);font-weight:700;}
+  .kv .item .v{font-size:15px;margin-top:2px;font-weight:600;}
+  .readtable{width:100%;border-collapse:collapse;}
+  .readtable th{text-align:left;font-size:10.5px;text-transform:uppercase;color:var(--steel);letter-spacing:.05em;padding:7px 8px;border-bottom:1px solid var(--line);}
+  .readtable td{padding:7px 8px;border-bottom:1px solid var(--line-soft);font-size:13.5px;}
+  .occ-stop{color:var(--status-stopped);font-weight:700;}
+  .gallery{display:flex;flex-wrap:wrap;gap:10px;}
+  .gallery img{width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in;}
+  .approve-box{display:flex;flex-direction:column;gap:10px;}
+  .approve-box textarea{border:1px solid var(--line);background:var(--paper);border-radius:7px;padding:9px;min-height:60px;}
+  .approve-actions{display:flex;gap:8px;}
+  .empty-hint{color:var(--steel);font-size:13px;font-style:italic;}
+
+  /* ---------- Obras view ---------- */
+  .obra-card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;box-shadow:var(--shadow-sm);display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:10px;flex-wrap:wrap;
+  }
+  .obra-card .info b{font-size:15px;}
+  .obra-card .info .meta{color:var(--steel);font-size:12.5px;margin-top:3px;}
+  .obra-actions{display:flex;gap:8px;align-items:center;}
+
+  /* ---------- Modal / Toast ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(20,19,15,.5);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
+  .modal{background:var(--surface);border-radius:12px;box-shadow:var(--shadow-md);max-width:420px;width:100%;padding:22px;border:1px solid var(--line);}
+  .modal h3{font-size:18px;margin-bottom:8px;}
+  .modal p{color:var(--ink-soft);font-size:13.5px;margin:0 0 16px;}
+  .modal .row{display:flex;justify-content:flex-end;gap:10px;}
+  .lightbox{position:fixed;inset:0;background:rgba(10,10,9,.86);display:flex;align-items:center;justify-content:center;z-index:110;padding:24px;cursor:zoom-out;}
+  .lightbox img{max-width:100%;max-height:100%;border-radius:6px;}
+
+  #toast-region{position:fixed;bottom:18px;right:18px;display:flex;flex-direction:column;gap:8px;z-index:200;}
+  .toast{
+    background:var(--ink);color:var(--paper);padding:11px 16px;border-radius:8px;font-size:13px;
+    box-shadow:var(--shadow-md);max-width:320px;border-left:4px solid var(--venko-yellow);
+  }
+  .toast.error{border-left-color:var(--status-rejected);}
+  .toast.ok{border-left-color:var(--status-approved);}
+
+  .db-banner{
+    display:flex;align-items:center;gap:10px;background:var(--status-stopped-bg);color:var(--status-stopped);
+    border:1px solid var(--status-stopped);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;font-weight:600;
+  }
+  .footer-note{text-align:center;color:var(--steel);font-size:11.5px;padding:18px 0 6px;}
+
+  /* ---------------- login ---------------- */
+  #loginScreen{
+    position:fixed;inset:0;background:var(--ink);display:flex;align-items:center;justify-content:center;
+    padding:24px;z-index:200;
+  }
+  .login-card{
+    background:var(--surface);border-radius:14px;box-shadow:var(--shadow-md);max-width:380px;width:100%;
+    padding:34px 30px 28px;
+  }
+  .login-card .login-logo{height:38px;width:auto;display:block;margin:0 auto 18px;}
+  .login-card h1{font-size:22px;text-align:center;}
+  .login-card p.login-sub{
+    color:var(--steel);font-size:12.5px;margin:4px 0 22px;text-align:center;text-transform:none;
+    letter-spacing:0;font-family:'Inter',system-ui,sans-serif;font-weight:500;
+  }
+  .login-card .field{margin-bottom:14px;}
+  .login-card .field input{width:100%;}
+  .login-error{color:var(--status-rejected);font-size:12.5px;font-weight:600;margin:-4px 0 14px;min-height:16px;}
+  .login-card .btn{width:100%;justify-content:center;margin-top:4px;}
+
+  /* ---------------- user box / users admin ---------------- */
+  .user-box{display:flex;align-items:center;gap:10px;margin-left:14px;padding-left:14px;border-left:1px solid var(--line);}
+  .user-box .who{font-size:12px;line-height:1.3;}
+  .user-box .who b{display:block;font-size:13px;}
+  .user-box .who span{color:var(--steel);}
+  .tag-admin{
+    display:inline-block;margin-left:7px;padding:2px 7px;border-radius:20px;background:var(--venko-yellow-hi);
+    color:#232320;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;vertical-align:middle;
+  }
+</style>
+</head>
+<body>
+<div id="loginScreen">
+  <div class="login-card">
+    <img class="login-logo" id="loginLogo" alt="Venko">
+    <h1>RDO Venko</h1>
+    <p class="login-sub">Acesso restrito à equipe Venko</p>
+    <form id="loginForm">
+      <div class="field"><label>Usuário</label><input type="text" id="loginUser" placeholder="nome.venko" autocomplete="username" required></div>
+      <div class="field"><label>Senha</label><input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" required></div>
+      <div class="login-error" id="loginError"></div>
+      <button type="submit" class="btn primary">Entrar</button>
+    </form>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-logo" id="brandLogo" alt="Venko">
+      <span class="brand-tag">RDO · Relatório Diário de Obra</span>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab-btn active" data-view="dashboard">Painel</button>
+      <button class="tab-btn" data-view="novo">Nova RDO</button>
+      <button class="tab-btn" data-view="obras">Obras</button>
+      <button class="tab-btn" data-view="equipamentos">Equipamentos</button>
+      <button class="tab-btn" data-view="users" id="tabUsers" style="display:none">Usuários</button>
+    </nav>
+    <div class="user-box" id="userBox"></div>
+  </header>
+
+  <main id="main">
+    <section id="view-dashboard" class="view active">
+      <div class="page-head">
+        <div>
+          <h1>Painel de obras</h1>
+          <p>Acompanhamento dos Relatórios Diários de Obra da Venko.</p>
+        </div>
+        <button class="btn primary" data-goto="novo">+ Nova RDO</button>
+      </div>
+      <div id="dbBanner"></div>
+      <div class="kpi-row" id="kpiRow"></div>
+      <div class="filters" id="filterBar"></div>
+      <div class="table-wrap">
+        <table class="rdo-list">
+          <thead>
+            <tr>
+              <th>Data</th><th>Obra</th><th>Responsável</th><th>Clima</th><th>Ocorrências</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="rdoTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="view-novo" class="view">
+      <div class="page-head">
+        <div>
+          <h1 id="novoTitle">Nova RDO</h1>
+          <p>Preencha o relatório diário — dados salvos automaticamente para todos da Venko assim que enviados.</p>
+        </div>
+        <button class="btn ghost" data-goto="dashboard">← Voltar ao painel</button>
+      </div>
+      <form id="rdoForm"></form>
+    </section>
+
+    <section id="view-obras" class="view">
+      <div class="page-head">
+        <div>
+          <h1>Obras</h1>
+          <p>Cadastro dos canteiros acompanhados pela Venko.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h2><span class="idx">+</span>Cadastrar obra</h2>
+        <form id="obraForm">
+          <div class="grid4">
+            <div class="field"><label>Nome da obra</label><input type="text" id="obraNome" required></div>
+            <div class="field"><label>Endereço</label><input type="text" id="obraEndereco"></div>
+            <div class="field"><label>Responsável técnico</label><input type="text" id="obraResp"></div>
+            <div class="field"><label>Início</label><input type="date" id="obraInicio"></div>
+          </div>
+          <div class="form-actions"><button type="submit" class="btn primary">Salvar obra</button></div>
+        </form>
+      </div>
+      <div id="obraList"></div>
+    </section>
+
+    <section id="view-equipamentos" class="view">
+      <div class="page-head">
+        <div>
+          <h1>Equipamentos</h1>
+          <p>Cadastro de máquinas e equipamentos usados nas obras da Venko — selecione a partir daqui ao preencher uma RDO.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h2><span class="idx">+</span>Cadastrar equipamento</h2>
+        <form id="equipamentoForm">
+          <div class="grid4">
+            <div class="field" style="grid-column:1/3"><label>Nome do equipamento</label><input type="text" id="equipamentoNome" placeholder="Ex: Betoneira 400L" required></div>
+          </div>
+          <div class="form-actions"><button type="submit" class="btn primary">Salvar equipamento</button></div>
+        </form>
+      </div>
+      <div id="equipamentoList"></div>
+    </section>
+
+    <section id="view-detail" class="view">
+      <div class="page-head">
+        <button class="btn ghost" data-goto="dashboard">← Voltar ao painel</button>
+      </div>
+      <div id="detailContent"></div>
+    </section>
+
+    <section id="view-users" class="view">
+      <div class="page-head">
+        <div>
+          <h1>Usuários</h1>
+          <p>Gerencie quem tem acesso ao sistema RDO Venko.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h2><span class="idx">+</span><span id="userFormTitle">Cadastrar usuário</span></h2>
+        <form id="userForm">
+          <div class="grid4">
+            <div class="field"><label>Usuário (login)</label><input type="text" id="userLogin" placeholder="nome.venko" required></div>
+            <div class="field" id="userPassField"><label>Senha inicial</label><input type="password" id="userPass" placeholder="mínimo 6 caracteres" minlength="6" required></div>
+            <div class="field"><label>Nome completo</label><input type="text" id="userNome" required></div>
+            <div class="field"><label>Função</label><select id="userCargo"></select></div>
+          </div>
+          <div class="checkline" style="margin-top:10px;"><input type="checkbox" id="userIsAdmin"><label for="userIsAdmin">Administrador (pode gerenciar usuários)</label></div>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" id="userCancelEdit" style="display:none">Cancelar edição</button>
+            <button type="submit" class="btn primary" id="userSubmitBtn">Cadastrar usuário</button>
+          </div>
+        </form>
+      </div>
+      <div id="userList"></div>
+    </section>
+  </main>
+
+  <div class="footer-note">RDO Venko — uso interno.</div>
+  <div id="toast-region"></div>
+  <div id="modal-root"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var supabaseClient = (CONFIG_OK && window.supabase) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+  var LOGO_DATA = "data:image/png;base64,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";
+
+  /* ---------------- utils ---------------- */
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function todayISO(){ var d=new Date(); return d.toISOString().slice(0,10); }
+  function fmtDate(iso){
+    if(!iso) return '—';
+    var p = iso.split('-'); if(p.length!==3) return iso;
+    return p[2]+'/'+p[1]+'/'+p[0];
+  }
+  function monthKey(iso){ return iso ? iso.slice(0,7) : ''; }
+  function normalizeLogin(v){ return String(v||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
+  function toAuthEmail(login){ return normalizeLogin(login) + '@' + LOGIN_DOMAIN; }
+
+  document.getElementById('brandLogo').src = LOGO_DATA;
+  document.getElementById('loginLogo').src = LOGO_DATA;
+
+  function toast(msg, kind){
+    var region = document.getElementById('toast-region');
+    var el = document.createElement('div');
+    el.className = 'toast' + (kind ? ' '+kind : '');
+    el.textContent = msg;
+    region.appendChild(el);
+    setTimeout(function(){ el.style.transition='opacity .3s'; el.style.opacity='0';
+      setTimeout(function(){ el.remove(); }, 300);
+    }, 3800);
+  }
+
+  function confirmModal(opts){
+    return new Promise(function(resolve){
+      var root = document.getElementById('modal-root');
+      var wrap = document.createElement('div');
+      wrap.className = 'overlay';
+      wrap.innerHTML =
+        '<div class="modal">'+
+          '<h3>'+esc(opts.title||'Confirmar')+'</h3>'+
+          '<p>'+esc(opts.msg||'')+'</p>'+
+          '<div class="row">'+
+            '<button class="btn ghost" data-act="cancel">Cancelar</button>'+
+            '<button class="btn '+(opts.danger?'danger':'primary')+'" data-act="ok">'+esc(opts.okLabel||'Confirmar')+'</button>'+
+          '</div>'+
+        '</div>';
+      root.appendChild(wrap);
+      wrap.addEventListener('click', function(e){
+        if(e.target === wrap){ wrap.remove(); resolve(false); return; }
+        var act = e.target.getAttribute('data-act');
+        if(act==='cancel'){ wrap.remove(); resolve(false); }
+        if(act==='ok'){ wrap.remove(); resolve(true); }
+      });
+    });
+  }
+
+  function openLightbox(src){
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div');
+    wrap.className = 'lightbox';
+    wrap.innerHTML = '<img src="'+src+'">';
+    wrap.addEventListener('click', function(){ wrap.remove(); });
+    root.appendChild(wrap);
+  }
+
+  function openChangePasswordModal(){
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div');
+    wrap.className = 'overlay';
+    wrap.innerHTML =
+      '<div class="modal">'+
+        '<h3>Trocar minha senha</h3>'+
+        '<div class="field" style="margin-bottom:10px;"><label>Nova senha</label><input type="password" id="newPass1" minlength="6"></div>'+
+        '<div class="field" style="margin-bottom:14px;"><label>Confirmar nova senha</label><input type="password" id="newPass2" minlength="6"></div>'+
+        '<div class="login-error" id="pwError" style="margin:0 0 10px;"></div>'+
+        '<div class="row">'+
+          '<button class="btn ghost" data-act="cancel">Cancelar</button>'+
+          '<button class="btn primary" data-act="ok">Salvar nova senha</button>'+
+        '</div>'+
+      '</div>';
+    root.appendChild(wrap);
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap){ wrap.remove(); return; }
+      var act = e.target.getAttribute('data-act');
+      if(act==='cancel'){ wrap.remove(); return; }
+      if(act==='ok'){
+        var p1 = document.getElementById('newPass1').value;
+        var p2 = document.getElementById('newPass2').value;
+        var errEl = document.getElementById('pwError');
+        if(p1.length<6){ errEl.textContent='A senha precisa ter pelo menos 6 caracteres.'; return; }
+        if(p1!==p2){ errEl.textContent='As senhas não coincidem.'; return; }
+        supabaseClient.auth.updateUser({ password: p1 }).then(function(res){
+          if(res.error){ errEl.textContent = 'Erro: '+res.error.message; return; }
+          wrap.remove();
+          toast('Senha atualizada.','ok');
+        });
+      }
+    });
+  }
+
+  /* ---------------- state ---------------- */
+  var state = {
+    view: 'dashboard',
+    obras: [],
+    equipamentos: [],
+    rdos: [],
+    profiles: [],
+    currentUser: null,
+    filters: { obraId:'', dataIni:'', dataFim:'', responsavel:'', status:'', tipo:'', busca:'' },
+    editId: null,
+    detailId: null,
+    photos: []           // {dataUrl}
+  };
+
+  var CLIMA_OPTS = ['Ensolarado','Parcialmente nublado','Nublado','Chuvoso','Chuva forte'];
+  var ATIV_TIPOS = ['Terraplenagem','Fundação','Estrutura','Alvenaria','Elétrica','Hidráulica','Acabamento','Cobertura','Outro'];
+  var FUNCAO_OPTS = ['Encanador','Servente','Operador de Máquina','Encarregado de Obra','Pedreiro','Encarregado de Obra Júnior','Gerente de Operação','Encarregado de Manutenção'];
+  var OCC_TIPOS = ['Segurança','Qualidade','Paralisação','Fiscalização','Outro'];
+  var CARGO_OPTS = ['Administrador','Gerente de Operação','Engenheiro(a) de Obras','Encarregado de Obra','Encarregado de Obra Júnior','Encarregado de Manutenção','Técnico de Segurança','Operador de Máquina','Pedreiro','Servente','Encanador','Cliente','Outro'];
+  var STATUS_LABEL = { rascunho:'Rascunho', enviado:'Aguardando aprovação', aprovado:'Aprovado', rejeitado:'Rejeitado' };
+
+  /* ---------------- navigation ---------------- */
+  function goto(view){
+    state.view = view;
+    document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('active'); });
+    document.getElementById('view-'+view).classList.add('active');
+    document.querySelectorAll('.tab-btn').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-view')===view);
+    });
+    if(view==='novo' && state.editId===null){ renderRdoForm(null); }
+    renderAll();
+    window.scrollTo({top:0, behavior:'instant'});
+  }
+  document.getElementById('tabs').addEventListener('click', function(e){
+    var btn = e.target.closest('.tab-btn'); if(!btn) return;
+    var view = btn.getAttribute('data-view');
+    if(view==='users' && !(state.currentUser && state.currentUser.is_admin)) return;
+    state.editId = null; state.photos = [];
+    goto(view);
+  });
+  document.addEventListener('click', function(e){
+    var g = e.target.closest('[data-goto]'); if(!g) return;
+    if(g.getAttribute('data-goto')==='novo'){ state.editId=null; state.photos=[]; }
+    goto(g.getAttribute('data-goto'));
+  });
+
+  /* ---------------- example seed (first run only) ---------------- */
+  function seedExamplesIfEmpty(){
+    supabaseClient.from('equipamentos').select('id', {count:'exact', head:true}).then(function(res){
+      if(res.error || (res.count && res.count>0)) return;
+      supabaseClient.from('equipamentos').insert([
+        {nome:'Betoneira 400L'}, {nome:'Grua'}, {nome:'Andaime'}, {nome:'Compactador de solo'}
+      ]).then(function(){ loadEquipamentos(); });
+    }).catch(function(){});
+    supabaseClient.from('obras').select('id', {count:'exact', head:true}).then(function(res){
+      if(res.error || (res.count && res.count>0)) return;
+      supabaseClient.from('obras').insert({
+        nome:'Obra Exemplo — Edifício Aurora', endereco:'Av. das Palmeiras, 480 — Curitiba/PR',
+        responsavel_tecnico:'Eng. Camila Duarte', data_inicio:'2026-03-10', status:'ativa', exemplo:true
+      }).select().single().then(function(res2){
+        if(res2.error || !res2.data) return;
+        supabaseClient.from('rdos').insert({
+          obra_id: res2.data.id, obra_nome: res2.data.nome,
+          data: todayISO(), clima:'Parcialmente nublado', impraticavel:false,
+          mao_de_obra:[{funcao:'Pedreiro',qtd:6},{funcao:'Servente',qtd:8}],
+          equipamentos:[{nome:'Betoneira 400L',qtd:1,horas:6},{nome:'Grua',qtd:1,horas:8}],
+          materiais:[{nome:'Cimento CP-II',qtd:40,unidade:'saco'},{nome:'Bloco cerâmico',qtd:1200,unidade:'un'}],
+          atividades:[{descricao:'Alvenaria de vedação — 3º pavimento', tipo:'Alvenaria'},{descricao:'Passagem de eletrodutos', tipo:'Elétrica'}],
+          ocorrencias:[{descricao:'Chuva rápida no período da tarde, sem impacto relevante', tipo:'Outro', horasParadas:0}],
+          observacoes:'Ritmo de obra dentro do planejado. Equipe completa.',
+          fotos:[], responsavel:'Eng. Camila Duarte', status:'aprovado',
+          assinatura:{ nome:'Eng. Camila Duarte', timestamp: Date.now() },
+          aprovacao:{ nome:'Rafael Nogueira (Venko)', timestamp: Date.now(), status:'aprovado', comentario:'Registro conferido, sem pendências.' },
+          exemplo:true
+        }).then(function(){ loadObras(); loadRdos(); });
+      });
+    }).catch(function(){});
+  }
+
+  /* ---------------- data loading (Postgres + Realtime) ---------------- */
+  function mapObraRow(row){
+    return { id:row.id, nome:row.nome, endereco:row.endereco, responsavelTecnico:row.responsavel_tecnico, dataInicio:row.data_inicio, status:row.status, exemplo:row.exemplo, createdAt:row.created_at };
+  }
+  function mapEquipamentoRow(row){
+    return { id:row.id, nome:row.nome, createdAt:row.created_at };
+  }
+  function mapRdoRow(row){
+    return {
+      id: row.id, obraId: row.obra_id, obraNome: row.obra_nome, data: row.data, clima: row.clima,
+      impraticavel: row.impraticavel, maoDeObra: row.mao_de_obra||[], equipamentos: row.equipamentos||[],
+      materiais: row.materiais||[], atividades: row.atividades||[], ocorrencias: row.ocorrencias||[],
+      observacoes: row.observacoes, fotos: row.fotos||[], responsavel: row.responsavel, status: row.status,
+      assinatura: row.assinatura, aprovacao: row.aprovacao, exemplo: row.exemplo,
+      createdAt: row.created_at, updatedAt: row.updated_at
+    };
+  }
+  function loadObras(){
+    return supabaseClient.from('obras').select('*').then(function(res){
+      if(res.error){ toast('Não foi possível carregar as obras.','error'); return; }
+      state.obras = (res.data||[]).map(mapObraRow);
+      state.obras.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+      renderAll();
+    });
+  }
+  function loadEquipamentos(){
+    return supabaseClient.from('equipamentos').select('*').then(function(res){
+      if(res.error){ toast('Não foi possível carregar os equipamentos.','error'); return; }
+      state.equipamentos = (res.data||[]).map(mapEquipamentoRow);
+      state.equipamentos.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+      renderAll();
+    });
+  }
+  function loadRdos(){
+    return supabaseClient.from('rdos').select('*').then(function(res){
+      if(res.error){ toast('Não foi possível carregar as RDOs.','error'); return; }
+      state.rdos = (res.data||[]).map(mapRdoRow);
+      state.rdos.sort(function(a,b){ return (b.data||'').localeCompare(a.data||'') || (new Date(b.createdAt)-new Date(a.createdAt)); });
+      renderAll();
+    });
+  }
+  function loadProfiles(){
+    return supabaseClient.from('profiles').select('*').then(function(res){
+      if(res.error){ toast('Não foi possível carregar usuários.','error'); return; }
+      state.profiles = (res.data||[]).sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+      if(state.currentUser){
+        var fresh = state.profiles.find(function(p){ return p.id===state.currentUser.id; });
+        if(fresh){
+          state.currentUser = fresh;
+          updateUserBox();
+          document.getElementById('tabUsers').style.display = fresh.is_admin ? '' : 'none';
+        }
+      }
+      if(state.view==='users'){ renderUserList(); }
+    });
+  }
+  var realtimeSubscribed = false;
+  function subscribeRealtime(){
+    if(realtimeSubscribed) return;
+    realtimeSubscribed = true;
+    supabaseClient.channel('rdo-venko-changes')
+      .on('postgres_changes', {event:'*', schema:'public', table:'obras'}, function(){ loadObras(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'equipamentos'}, function(){ loadEquipamentos(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'rdos'}, function(){ loadRdos(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'profiles'}, function(){ loadProfiles(); })
+      .subscribe();
+  }
+
+  /* ---------------- auth ---------------- */
+  function renderConfigBanner(){
+    var errEl = document.getElementById('loginError');
+    errEl.innerHTML = 'Configuração pendente: abra o arquivo <b>config.js</b> e preencha <b>SUPABASE_URL</b> e <b>SUPABASE_ANON_KEY</b> (veja o DEPLOY.md).';
+    var btn = document.querySelector('#loginForm button[type=submit]');
+    if(btn) btn.disabled = true;
+  }
+
+  function loadProfileAndEnter(userId){
+    return supabaseClient.from('profiles').select('*').eq('id', userId).maybeSingle().then(function(res){
+      if(res.error || !res.data){
+        toast('Sua conta ainda não tem um perfil configurado neste sistema. Peça para um administrador te cadastrar em Usuários.','error');
+        return supabaseClient.auth.signOut();
+      }
+      setCurrentUser(res.data);
+      seedExamplesIfEmpty();
+      loadObras(); loadEquipamentos(); loadRdos(); loadProfiles();
+      subscribeRealtime();
+      toast('Bem-vindo, '+(res.data.nome||'').split(' ')[0]+'!','ok');
+    });
+  }
+
+  function setCurrentUser(profile){
+    state.currentUser = profile;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = '';
+    document.getElementById('tabUsers').style.display = profile.is_admin ? '' : 'none';
+    updateUserBox();
+  }
+
+  function updateUserBox(){
+    var box = document.getElementById('userBox');
+    if(!box) return;
+    var u = state.currentUser;
+    if(!u){ box.innerHTML=''; return; }
+    box.innerHTML = '<div class="who"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+'</b><span>'+esc(u.cargo||u.login)+'</span></div>'+
+      '<button type="button" class="btn ghost sm" id="btnChangePass">Trocar senha</button>'+
+      '<button type="button" class="btn ghost sm" id="btnLogout">Sair</button>';
+    document.getElementById('btnChangePass').addEventListener('click', openChangePasswordModal);
+    document.getElementById('btnLogout').addEventListener('click', logout);
+  }
+
+  function logout(){
+    supabaseClient.auth.signOut().then(function(){
+      state.currentUser = null;
+      state.editId = null; state.photos = [];
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('loginScreen').style.display = 'flex';
+      document.getElementById('loginForm').reset();
+      document.getElementById('loginError').textContent = '';
+      goto('dashboard');
+    });
+  }
+
+  document.getElementById('loginForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    if(!CONFIG_OK){ return; }
+    var errEl = document.getElementById('loginError');
+    errEl.textContent = '';
+    var loginVal = normalizeLogin(document.getElementById('loginUser').value);
+    var passVal = document.getElementById('loginPass').value;
+    if(!loginVal || !passVal) return;
+    var btn = document.querySelector('#loginForm button[type=submit]');
+    btn.disabled = true; var oldLabel = btn.textContent; btn.textContent = 'Entrando…';
+    supabaseClient.auth.signInWithPassword({ email: toAuthEmail(loginVal), password: passVal })
+      .then(function(res){
+        if(res.error){ errEl.textContent = 'Usuário ou senha incorretos.'; return; }
+        return loadProfileAndEnter(res.data.user.id);
+      })
+      .catch(function(){ errEl.textContent = 'Não foi possível conectar agora. Tente novamente em instantes.'; })
+      .then(function(){ btn.disabled = false; btn.textContent = oldLabel; });
+  });
+
+  function bootAuth(){
+    if(!CONFIG_OK){ renderConfigBanner(); return; }
+    supabaseClient.auth.getSession().then(function(res){
+      var session = res.data && res.data.session;
+      if(session && session.user){ loadProfileAndEnter(session.user.id); }
+    });
+    supabaseClient.auth.onAuthStateChange(function(event){
+      if(event==='SIGNED_OUT'){
+        state.currentUser = null;
+        document.getElementById('app').style.display = 'none';
+        document.getElementById('loginScreen').style.display = 'flex';
+      }
+    });
+  }
+
+  /* ---------------- users admin (perfis) ---------------- */
+  var editingUserId = null;
+  function populateCargoSelect(){
+    var sel = document.getElementById('userCargo');
+    if(!sel) return;
+    sel.innerHTML = CARGO_OPTS.map(function(c){ return '<option value="'+esc(c)+'">'+esc(c)+'</option>'; }).join('');
+  }
+  populateCargoSelect();
+
+  function cancelUserEdit(){
+    editingUserId = null;
+    document.getElementById('userForm').reset();
+    document.getElementById('userLogin').disabled = false;
+    document.getElementById('userPassField').style.display = '';
+    document.getElementById('userPass').required = true;
+    populateCargoSelect();
+    document.getElementById('userFormTitle').textContent = 'Cadastrar usuário';
+    document.getElementById('userSubmitBtn').textContent = 'Cadastrar usuário';
+    document.getElementById('userCancelEdit').style.display = 'none';
+  }
+  document.getElementById('userCancelEdit').addEventListener('click', cancelUserEdit);
+
+  document.getElementById('userForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    var login = normalizeLogin(document.getElementById('userLogin').value);
+    var nome = document.getElementById('userNome').value.trim();
+    var cargo = document.getElementById('userCargo').value;
+    var isAdmin = document.getElementById('userIsAdmin').checked;
+    if(!login || !nome){ toast('Preencha usuário e nome.','error'); return; }
+
+    if(editingUserId){
+      supabaseClient.from('profiles').update({ nome:nome, cargo:cargo, is_admin:isAdmin }).eq('id', editingUserId)
+        .then(function(res){
+          if(res.error){ toast('Erro ao salvar usuário: '+res.error.message,'error'); return; }
+          toast('Usuário atualizado.','ok');
+          cancelUserEdit();
+          loadProfiles();
+        });
+      return;
+    }
+
+    var senha = document.getElementById('userPass').value;
+    if(senha.length < 6){ toast('A senha inicial precisa ter pelo menos 6 caracteres.','error'); return; }
+    var dupe = state.profiles.find(function(p){ return normalizeLogin(p.login)===login; });
+    if(dupe){ toast('Já existe um usuário com esse login.','error'); return; }
+
+    // Cliente descartável: cria o novo login sem derrubar a sessão do admin atual.
+    var tempClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession:false, autoRefreshToken:false, storageKey:'sb-temp-admin-create-'+Date.now() }
+    });
+    tempClient.auth.signUp({ email: toAuthEmail(login), password: senha }).then(function(res){
+      if(res.error){ toast('Erro ao criar usuário: '+res.error.message,'error'); return Promise.reject(res.error); }
+      if(!res.data.session){
+        toast('Conta criada, mas sem sessão ativa — verifique se "Confirm email" está DESLIGADO em Authentication > Providers > Email no Supabase.','error');
+        return Promise.reject(new Error('sem sessão'));
+      }
+      var newId = res.data.user.id;
+      return tempClient.from('profiles').insert({ id:newId, login:login, nome:nome, cargo:cargo, is_admin:false }).then(function(res2){
+        if(res2.error){ toast('Usuário criado, mas houve erro ao salvar o perfil: '+res2.error.message,'error'); return Promise.reject(res2.error); }
+        if(isAdmin){ return supabaseClient.from('profiles').update({is_admin:true}).eq('id', newId); }
+      });
+    }).then(function(){
+      toast('Usuário cadastrado.','ok');
+      cancelUserEdit();
+      loadProfiles();
+    }).catch(function(){ /* erro já mostrado acima */ });
+  });
+
+  function renderUserList(){
+    var list = document.getElementById('userList');
+    if(!list) return;
+    if(state.profiles.length===0){ list.innerHTML = '<p class="empty-hint">Nenhum usuário cadastrado ainda.</p>'; return; }
+    list.innerHTML = state.profiles.map(function(u){
+      var isSelf = state.currentUser && state.currentUser.id===u.id;
+      return '<div class="obra-card" data-id="'+u.id+'">'+
+        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+'</b>'+
+          '<div class="meta">'+esc(u.login)+' · '+esc(u.cargo||'—')+'</div>'+
+        '</div>'+
+        '<div class="obra-actions">'+
+          '<button class="btn ghost sm" data-edit="'+u.id+'">Editar</button>'+
+          '<button class="btn danger sm" data-del="'+u.id+'"'+(isSelf?' disabled title="Você não pode remover seu próprio acesso"':'')+'>Remover acesso</button>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    list.querySelectorAll('[data-edit]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-edit');
+        var u = state.profiles.find(function(x){ return x.id===id; });
+        if(!u) return;
+        editingUserId = id;
+        document.getElementById('userLogin').value = u.login;
+        document.getElementById('userLogin').disabled = true;
+        document.getElementById('userPassField').style.display = 'none';
+        document.getElementById('userPass').required = false;
+        document.getElementById('userNome').value = u.nome;
+        populateCargoSelect();
+        document.getElementById('userCargo').value = (CARGO_OPTS.indexOf(u.cargo)>-1) ? u.cargo : CARGO_OPTS[0];
+        document.getElementById('userIsAdmin').checked = !!u.is_admin;
+        document.getElementById('userFormTitle').textContent = 'Editar usuário — '+u.nome;
+        document.getElementById('userSubmitBtn').textContent = 'Salvar alterações';
+        document.getElementById('userCancelEdit').style.display = '';
+        window.scrollTo({top:0, behavior:'smooth'});
+      });
+    });
+    list.querySelectorAll('[data-del]').forEach(function(b){
+      b.addEventListener('click', function(){
+        if(b.disabled) return;
+        var id = b.getAttribute('data-del');
+        var u = state.profiles.find(function(x){ return x.id===id; });
+        confirmModal({
+          title:'Remover acesso',
+          msg:'Isso remove o acesso de '+(u?u.nome:'este usuário')+' ao sistema RDO Venko. O login em si continua existindo no Supabase — para apagar de vez, use o painel do Supabase (Authentication > Users). Deseja continuar?',
+          okLabel:'Remover acesso', danger:true
+        }).then(function(ok){
+          if(!ok) return;
+          supabaseClient.from('profiles').delete().eq('id', id).then(function(res){
+            if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
+            toast('Acesso removido.','ok');
+            if(editingUserId===id) cancelUserEdit();
+            loadProfiles();
+          });
+        });
+      });
+    });
+  }
+
+  /* ---------------- computed / render: dashboard ---------------- */
+  function renderAll(){
+    if(state.view==='dashboard'){ renderKpis(); renderFilters(); renderRdoTable(); }
+    if(state.view==='obras'){ renderObraList(); }
+    if(state.view==='equipamentos'){ renderEquipamentoList(); }
+    if(state.view==='novo'){ populateObraSelect(); }
+    if(state.view==='detail' && state.detailId){ renderDetail(state.detailId); }
+    if(state.view==='users'){ renderUserList(); }
+  }
+
+  function renderKpis(){
+    var mkey = todayISO().slice(0,7);
+    var obrasAtivas = state.obras.filter(function(o){ return o.status==='ativa'; }).length;
+    var rdosMes = state.rdos.filter(function(r){ return monthKey(r.data)===mkey; }).length;
+    var pendentes = state.rdos.filter(function(r){ return r.status==='enviado'; }).length;
+    var diasParados = 0;
+    state.rdos.filter(function(r){ return monthKey(r.data)===mkey; }).forEach(function(r){
+      var stopped = (r.ocorrencias||[]).some(function(o){ return o.tipo==='Paralisação'; });
+      if(stopped) diasParados++;
+    });
+    document.getElementById('kpiRow').innerHTML =
+      kpiTile(obrasAtivas,'Obras ativas','accent') +
+      kpiTile(rdosMes,'RDOs este mês','') +
+      kpiTile(pendentes,'Aguardando aprovação','pend') +
+      kpiTile(diasParados,'Dias com paralisação (mês)','warn');
+  }
+  function kpiTile(n,label,extra){
+    return '<div class="kpi '+extra+'"><div class="n">'+n+'</div><div class="l">'+esc(label)+'</div></div>';
+  }
+
+  function renderFilters(){
+    var f = state.filters;
+    var obraOpts = '<option value="">Todas as obras</option>' + state.obras.map(function(o){
+      return '<option value="'+o.id+'"'+(f.obraId===o.id?' selected':'')+'>'+esc(o.nome)+'</option>';
+    }).join('');
+    var statusOpts = '<option value="">Qualquer status</option>' + Object.keys(STATUS_LABEL).map(function(k){
+      return '<option value="'+k+'"'+(f.status===k?' selected':'')+'>'+STATUS_LABEL[k]+'</option>';
+    }).join('');
+    var tipoOpts = '<option value="">Qualquer atividade</option>' + ATIV_TIPOS.map(function(t){
+      return '<option value="'+t+'"'+(f.tipo===t?' selected':'')+'>'+t+'</option>';
+    }).join('');
+    document.getElementById('filterBar').innerHTML =
+      '<div class="field"><label>Obra</label><select id="fObra">'+obraOpts+'</select></div>'+
+      '<div class="field"><label>De</label><input type="date" id="fDe" value="'+esc(f.dataIni)+'"></div>'+
+      '<div class="field"><label>Até</label><input type="date" id="fAte" value="'+esc(f.dataFim)+'"></div>'+
+      '<div class="field"><label>Responsável</label><input type="text" id="fResp" placeholder="nome" value="'+esc(f.responsavel)+'"></div>'+
+      '<div class="field"><label>Status</label><select id="fStatus">'+statusOpts+'</select></div>'+
+      '<div class="field"><label>Atividade</label><select id="fTipo">'+tipoOpts+'</select></div>'+
+      '<div class="field grow"><label>Buscar</label><input type="text" id="fBusca" placeholder="texto nas observações, atividades..." value="'+esc(f.busca)+'"></div>'+
+      '<button class="btn ghost sm" id="fClear" type="button">Limpar filtros</button>';
+
+    document.getElementById('fObra').addEventListener('change', function(e){ f.obraId=e.target.value; renderRdoTable(); });
+    document.getElementById('fDe').addEventListener('change', function(e){ f.dataIni=e.target.value; renderRdoTable(); });
+    document.getElementById('fAte').addEventListener('change', function(e){ f.dataFim=e.target.value; renderRdoTable(); });
+    document.getElementById('fResp').addEventListener('input', function(e){ f.responsavel=e.target.value; renderRdoTable(); });
+    document.getElementById('fStatus').addEventListener('change', function(e){ f.status=e.target.value; renderRdoTable(); });
+    document.getElementById('fTipo').addEventListener('change', function(e){ f.tipo=e.target.value; renderRdoTable(); });
+    document.getElementById('fBusca').addEventListener('input', function(e){ f.busca=e.target.value; renderRdoTable(); });
+    document.getElementById('fClear').addEventListener('click', function(){
+      state.filters = { obraId:'', dataIni:'', dataFim:'', responsavel:'', status:'', tipo:'', busca:'' };
+      renderFilters(); renderRdoTable();
+    });
+  }
+
+  function filteredRdos(){
+    var f = state.filters;
+    return state.rdos.filter(function(r){
+      if(f.obraId && r.obraId!==f.obraId) return false;
+      if(f.dataIni && r.data < f.dataIni) return false;
+      if(f.dataFim && r.data > f.dataFim) return false;
+      if(f.responsavel && (r.responsavel||'').toLowerCase().indexOf(f.responsavel.toLowerCase())===-1) return false;
+      if(f.status && r.status!==f.status) return false;
+      if(f.tipo && !(r.atividades||[]).some(function(a){ return a.tipo===f.tipo; })) return false;
+      if(f.busca){
+        var hay = [r.observacoes, r.obraNome].concat(
+          (r.atividades||[]).map(function(a){return a.descricao;}),
+          (r.ocorrencias||[]).map(function(o){return o.descricao;})
+        ).join(' ').toLowerCase();
+        if(hay.indexOf(f.busca.toLowerCase())===-1) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderRdoTable(){
+    var rows = filteredRdos();
+    var body = document.getElementById('rdoTableBody');
+    if(rows.length===0){
+      body.innerHTML = '<tr class="empty-row"><td colspan="6">Nenhuma RDO encontrada para esses filtros.</td></tr>';
+      return;
+    }
+    body.innerHTML = rows.map(function(r){
+      var stopCount = (r.ocorrencias||[]).filter(function(o){ return o.tipo==='Paralisação'; }).length;
+      var occText = stopCount>0 ? '<span class="tag-stop">⛔ '+stopCount+' paralisação(ões)</span>' : ((r.ocorrencias||[]).length ? (r.ocorrencias.length+' registrada(s)') : '—');
+      return '<tr data-id="'+r.id+'">'+
+        '<td class="mono-num">'+fmtDate(r.data)+'</td>'+
+        '<td>'+esc(r.obraNome)+(r.exemplo?'<span class="tag-example">exemplo</span>':'')+'</td>'+
+        '<td>'+esc(r.responsavel||'—')+'</td>'+
+        '<td>'+esc(r.clima||'—')+'</td>'+
+        '<td>'+occText+'</td>'+
+        '<td>'+statusChip(r.status)+'</td>'+
+      '</tr>';
+    }).join('');
+    body.querySelectorAll('tr[data-id]').forEach(function(tr){
+      tr.addEventListener('click', function(){
+        state.detailId = tr.getAttribute('data-id');
+        goto('detail');
+      });
+    });
+  }
+
+  function statusChip(status){
+    var cls = { rascunho:'draft', enviado:'sent', aprovado:'approved', rejeitado:'rejected' }[status] || 'draft';
+    return '<span class="chip '+cls+'">'+ (STATUS_LABEL[status]||status) +'</span>';
+  }
+
+  /* ---------------- obras view ---------------- */
+  document.getElementById('obraForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    var nome = document.getElementById('obraNome').value.trim();
+    if(!nome){ toast('Informe o nome da obra.','error'); return; }
+    supabaseClient.from('obras').insert({
+      nome: nome,
+      endereco: document.getElementById('obraEndereco').value.trim(),
+      responsavel_tecnico: document.getElementById('obraResp').value.trim(),
+      data_inicio: document.getElementById('obraInicio').value || null,
+      status: 'ativa'
+    }).then(function(res){
+      if(res.error){ toast('Erro ao salvar obra: '+res.error.message,'error'); return; }
+      toast('Obra cadastrada.','ok');
+      e.target.reset();
+      loadObras();
+    });
+  });
+
+  function renderObraList(){
+    var list = document.getElementById('obraList');
+    if(state.obras.length===0){
+      list.innerHTML = '<p class="empty-hint">Nenhuma obra cadastrada ainda.</p>';
+      return;
+    }
+    list.innerHTML = state.obras.map(function(o){
+      var rdoCount = state.rdos.filter(function(r){ return r.obraId===o.id; }).length;
+      return '<div class="obra-card" data-id="'+o.id+'">'+
+        '<div class="info"><b>'+esc(o.nome)+(o.exemplo?'<span class="tag-example">exemplo</span>':'')+'</b>'+
+          '<div class="meta">'+esc(o.endereco||'Endereço não informado')+' · Resp.: '+esc(o.responsavelTecnico||'—')+' · '+rdoCount+' RDO(s)</div>'+
+        '</div>'+
+        '<div class="obra-actions">'+
+          '<span class="chip '+(o.status==='ativa'?'approved':'draft')+'">'+(o.status==='ativa'?'Ativa':'Concluída')+'</span>'+
+          '<button class="btn ghost sm" data-toggle="'+o.id+'">'+(o.status==='ativa'?'Marcar concluída':'Reativar')+'</button>'+
+          '<button class="btn danger sm" data-del="'+o.id+'">Excluir</button>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    list.querySelectorAll('[data-toggle]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-toggle');
+        var o = state.obras.find(function(x){ return x.id===id; });
+        supabaseClient.from('obras').update({ status: o.status==='ativa'?'concluida':'ativa' }).eq('id', id)
+          .then(function(res){ if(res.error){ toast('Erro: '+res.error.message,'error'); return; } loadObras(); });
+      });
+    });
+    list.querySelectorAll('[data-del]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-del');
+        confirmModal({ title:'Excluir obra', msg:'Isso remove a obra do cadastro. RDOs já registradas para ela permanecem no histórico. Deseja continuar?', okLabel:'Excluir', danger:true })
+          .then(function(ok){
+            if(!ok) return;
+            supabaseClient.from('obras').delete().eq('id', id).then(function(res){
+              if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
+              toast('Obra removida.','ok'); loadObras();
+            });
+          });
+      });
+    });
+  }
+
+  function populateObraSelect(){
+    var sel = document.getElementById('rdoObra');
+    if(!sel) return;
+    var current = sel.value;
+    sel.innerHTML = '<option value="">Selecione a obra…</option>' + state.obras.map(function(o){
+      return '<option value="'+o.id+'">'+esc(o.nome)+'</option>';
+    }).join('');
+    if(current) sel.value = current;
+  }
+
+  /* ---------------- equipamentos view (cadastro) ---------------- */
+  document.getElementById('equipamentoForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    var nome = document.getElementById('equipamentoNome').value.trim();
+    if(!nome){ toast('Informe o nome do equipamento.','error'); return; }
+    supabaseClient.from('equipamentos').insert({ nome: nome }).then(function(res){
+      if(res.error){ toast('Erro ao salvar equipamento: '+res.error.message,'error'); return; }
+      toast('Equipamento cadastrado.','ok');
+      e.target.reset();
+      loadEquipamentos();
+    });
+  });
+
+  function renderEquipamentoList(){
+    var list = document.getElementById('equipamentoList');
+    if(state.equipamentos.length===0){
+      list.innerHTML = '<p class="empty-hint">Nenhum equipamento cadastrado ainda.</p>';
+      return;
+    }
+    list.innerHTML = state.equipamentos.map(function(eq){
+      var usoCount = state.rdos.filter(function(r){ return (r.equipamentos||[]).some(function(x){ return x.nome===eq.nome; }); }).length;
+      return '<div class="obra-card" data-id="'+eq.id+'">'+
+        '<div class="info"><b>'+esc(eq.nome)+'</b>'+
+          '<div class="meta">Usado em '+usoCount+' RDO(s)</div>'+
+        '</div>'+
+        '<div class="obra-actions">'+
+          '<button class="btn danger sm" data-del-eq="'+eq.id+'">Excluir</button>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    list.querySelectorAll('[data-del-eq]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-del-eq');
+        confirmModal({ title:'Excluir equipamento', msg:'Isso remove o equipamento do cadastro. RDOs já registradas continuam com o nome salvo no histórico. Deseja continuar?', okLabel:'Excluir', danger:true })
+          .then(function(ok){
+            if(!ok) return;
+            supabaseClient.from('equipamentos').delete().eq('id', id).then(function(res){
+              if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
+              toast('Equipamento removido.','ok'); loadEquipamentos();
+            });
+          });
+      });
+    });
+  }
+
+  /* ---------------- dynamic sub-tables (mão de obra, equip, materiais, atividades, ocorrências) ---------------- */
+  function dynTable(containerId, columns, rows, opts){
+    opts = opts || {};
+    var html = '<div class="subtable-wrap"><table class="subtable" id="'+containerId+'_tbl"><thead><tr>'+
+      columns.map(function(c){ return '<th'+(c.width?' style="width:'+c.width+'"':'')+'>'+esc(c.label)+'</th>'; }).join('') +
+      '<th style="width:34px"></th></tr></thead><tbody id="'+containerId+'_body">'+
+      rows.map(function(r,i){ return dynRowHtml(containerId, columns, r, i); }).join('') +
+      '</tbody></table></div>'+
+      '<button type="button" class="btn ghost sm add-row-btn" data-add="'+containerId+'">+ Adicionar linha</button>';
+    return html;
+  }
+  function dynRowHtml(containerId, columns, r, i){
+    r = r || {};
+    return '<tr data-i="'+i+'">' + columns.map(function(c){
+      var val = r[c.key]!=null ? r[c.key] : '';
+      if(c.type==='select'){
+        return '<td><select data-field="'+c.key+'">' + c.options.map(function(o){
+          return '<option value="'+esc(o)+'"'+(val===o?' selected':'')+'>'+esc(o)+'</option>';
+        }).join('') + '</select></td>';
+      }
+      if(c.type==='combo'){
+        var isCustom = val!=='' && c.options.indexOf(val)===-1;
+        var selVal = isCustom ? '__custom__' : val;
+        return '<td class="combo-cell">'+
+          '<select data-combo="'+c.key+'">'+
+            '<option value=""'+(selVal===''?' selected':'')+'>Selecione…</option>'+
+            c.options.map(function(o){ return '<option value="'+esc(o)+'"'+(selVal===o?' selected':'')+'>'+esc(o)+'</option>'; }).join('')+
+            '<option value="__custom__"'+(selVal==='__custom__'?' selected':'')+'>Outro (digitar)…</option>'+
+          '</select>'+
+          '<input type="text" data-field="'+c.key+'" value="'+esc(isCustom?val:'')+'" placeholder="Nome do equipamento" style="margin-top:4px'+(selVal==='__custom__'?'':';display:none')+'">'+
+        '</td>';
+      }
+      var inputType = c.type||'text';
+      return '<td><input type="'+inputType+'" data-field="'+c.key+'" value="'+esc(val)+'"'+(inputType==='number'?' min="0" step="any"':'')+'></td>';
+    }).join('') + '<td><button type="button" class="row-x" data-rm="'+i+'" title="Remover">✕</button></td></tr>';
+  }
+  function wireDynTable(containerId, columns, getRows, setRows){
+    var tblBody = document.getElementById(containerId+'_body');
+    function refresh(){
+      var rows = getRows();
+      tblBody.innerHTML = rows.map(function(r,i){ return dynRowHtml(containerId, columns, r, i); }).join('');
+      bindRows();
+    }
+    function bindRows(){
+      tblBody.querySelectorAll('input,select').forEach(function(inp){
+        inp.addEventListener('input', function(){
+          var tr = inp.closest('tr');
+          var i = parseInt(tr.getAttribute('data-i'),10);
+          var rows = getRows();
+          var field = inp.getAttribute('data-field');
+          rows[i][field] = inp.type==='number' ? (inp.value===''?'':parseFloat(inp.value)) : inp.value;
+          setRows(rows);
+        });
+      });
+      tblBody.querySelectorAll('[data-combo]').forEach(function(sel){
+        sel.addEventListener('change', function(){
+          var tr = sel.closest('tr');
+          var i = parseInt(tr.getAttribute('data-i'),10);
+          var field = sel.getAttribute('data-combo');
+          var input = tr.querySelector('input[data-field="'+field+'"]');
+          var rows = getRows();
+          if(sel.value === '__custom__'){
+            input.style.display = '';
+            input.value = '';
+            rows[i][field] = '';
+            setRows(rows);
+            input.focus();
+          } else {
+            input.style.display = 'none';
+            input.value = '';
+            rows[i][field] = sel.value;
+            setRows(rows);
+          }
+        });
+      });
+      tblBody.querySelectorAll('[data-rm]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var i = parseInt(btn.getAttribute('data-rm'),10);
+          var rows = getRows();
+          rows.splice(i,1);
+          setRows(rows);
+          refresh();
+        });
+      });
+    }
+    var addBtn = document.querySelector('[data-add="'+containerId+'"]');
+    addBtn.addEventListener('click', function(){
+      var rows = getRows();
+      var blank = {}; columns.forEach(function(c){ blank[c.key] = c.type==='select' ? c.options[0] : ''; });
+      rows.push(blank);
+      setRows(rows);
+      refresh();
+    });
+    bindRows();
+  }
+
+  /* ---------------- photo handling ---------------- */
+  function resizeImageFile(file, maxDim, quality){
+    return new Promise(function(resolve, reject){
+      var reader = new FileReader();
+      reader.onerror = function(){ reject(new Error('read_failed')); };
+      reader.onload = function(){
+        var img = new Image();
+        img.onerror = function(){ reject(new Error('decode_failed')); };
+        img.onload = function(){
+          var w = img.width, h = img.height;
+          var scale = Math.min(1, maxDim / Math.max(w,h));
+          var cw = Math.round(w*scale), ch = Math.round(h*scale);
+          var canvas = document.createElement('canvas');
+          canvas.width = cw; canvas.height = ch;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, cw, ch);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  function totalPhotosKB(){
+    return Math.round(state.photos.reduce(function(sum,p){ return sum + p.dataUrl.length*0.75; },0)/1024);
+  }
+  function renderPhotoUI(){
+    var grid = document.getElementById('photoGrid');
+    var note = document.getElementById('photoNote');
+    if(!grid) return;
+    grid.innerHTML = state.photos.map(function(p,i){
+      return '<div class="photo-thumb"><img src="'+p.dataUrl+'"><button type="button" data-rmphoto="'+i+'">✕</button></div>';
+    }).join('');
+    grid.querySelectorAll('[data-rmphoto]').forEach(function(b){
+      b.addEventListener('click', function(){
+        state.photos.splice(parseInt(b.getAttribute('data-rmphoto'),10),1);
+        renderPhotoUI();
+      });
+    });
+    var kb = totalPhotosKB();
+    note.className = 'photo-note';
+    note.textContent = state.photos.length + ' foto(s) anexada(s) · ~' + kb + ' KB';
+  }
+
+  /* ---------------- RDO form (create / edit) ---------------- */
+  function blankRdo(){
+    return {
+      obraId:'', data: todayISO(), clima: CLIMA_OPTS[0], impraticavel:false,
+      maoDeObra:[{funcao:FUNCAO_OPTS[0],qtd:''}], equipamentos:[{nome:'',qtd:'',horas:''}],
+      materiais:[{nome:'',qtd:'',unidade:''}], atividades:[{descricao:'',tipo:ATIV_TIPOS[0]}],
+      ocorrencias:[], observacoes:'', responsavel: state.currentUser ? state.currentUser.nome : '', status:'rascunho'
+    };
+  }
+
+  function renderRdoForm(rdoOrNull){
+    var editing = !!rdoOrNull;
+    var rdo = rdoOrNull ? JSON.parse(JSON.stringify(rdoOrNull)) : blankRdo();
+    state.photos = editing ? (rdo.fotos||[]).map(function(u){ return {dataUrl:u}; }) : [];
+    document.getElementById('novoTitle').textContent = editing ? 'Editar RDO — '+fmtDate(rdo.data) : 'Nova RDO';
+
+    var form = document.getElementById('rdoForm');
+    form.innerHTML =
+      '<div class="card">'+
+        '<h2><span class="idx">1</span>Identificação</h2>'+
+        '<div class="grid4">'+
+          '<div class="field full" style="grid-column:1/3"><label>Obra</label><select id="rdoObra" required></select></div>'+
+          '<div class="field"><label>Data</label><input type="date" id="rdoData" value="'+esc(rdo.data)+'" required></div>'+
+          '<div class="field"><label>Clima predominante</label><select id="rdoClima">'+CLIMA_OPTS.map(function(c){return '<option'+(c===rdo.clima?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>'+
+        '</div>'+
+        '<div class="checkline" style="margin-top:10px;"><input type="checkbox" id="rdoImpraticavel" '+(rdo.impraticavel?'checked':'')+'><label for="rdoImpraticavel">Dia total ou parcialmente impraticável para trabalho</label></div>'+
+      '</div>'+
+
+      '<div class="card">'+
+        '<h2><span class="idx">2</span>Mão de obra</h2>'+
+        dynTable('mo', [{key:'funcao',label:'Função',type:'select',options:FUNCAO_OPTS,width:'55%'},{key:'qtd',label:'Quantidade',type:'number',width:'25%'}], rdo.maoDeObra) +
+      '</div>'+
+
+      '<div class="card">'+
+        '<h2><span class="idx">3</span>Equipamentos</h2>'+
+        dynTable('eq', [{key:'nome',label:'Equipamento',type:'combo',options:state.equipamentos.map(function(x){return x.nome;}),width:'50%'},{key:'qtd',label:'Qtd.',type:'number',width:'20%'},{key:'horas',label:'Horas trabalhadas',type:'number',width:'20%'}], rdo.equipamentos) +
+      '</div>'+
+
+      '<div class="card">'+
+        '<h2><span class="idx">4</span>Materiais</h2>'+
+        dynTable('mat', [{key:'nome',label:'Material',width:'50%'},{key:'qtd',label:'Qtd.',type:'number',width:'20%'},{key:'unidade',label:'Unidade',width:'20%'}], rdo.materiais) +
+      '</div>'+
+
+      '<div class="card">'+
+        '<h2><span class="idx">5</span>Atividades executadas</h2>'+
+        dynTable('at', [{key:'descricao',label:'Descrição',width:'60%'},{key:'tipo',label:'Tipo',type:'select',options:ATIV_TIPOS,width:'30%'}], rdo.atividades) +
+      '</div>'+
+
+      '<div class="card">'+
+        '<h2><span class="idx">6</span>Ocorrências</h2>'+
+        dynTable('oc', [{key:'descricao',label:'Descrição',width:'46%'},{key:'tipo',label:'Tipo',type:'select',options:OCC_TIPOS,width:'22%'},{key:'horasParadas',label:'Horas paradas',type:'number',width:'22%'}], rdo.ocorrencias) +
+      '</div>'+
+
+      '<div class="card">'+
+        '<h2><span class="idx">7</span>Observações gerais</h2>'+
+        '<div class="field full"><textarea id="rdoObs" placeholder="Anotações livres sobre o dia de trabalho...">'+esc(rdo.observacoes)+'</textarea></div>'+
+      '</div>'+
+
+      '<div class="card">'+
+        '<h2><span class="idx">8</span>Fotos</h2>'+
+        '<div class="photo-input-row">'+
+          '<input type="file" id="rdoFotos" accept="image/*" multiple>'+
+        '</div>'+
+        '<div class="photo-grid" id="photoGrid"></div>'+
+        '<div class="photo-note" id="photoNote"></div>'+
+      '</div>'+
+
+      '<div class="card">'+
+        '<h2><span class="idx">9</span>Responsável e assinatura</h2>'+
+        '<div class="grid2">'+
+          '<div class="field"><label>Preenchido por</label><input type="text" id="rdoResponsavel" value="'+esc(rdo.responsavel||'')+'" required></div>'+
+        '</div>'+
+        '<div class="checkline" style="margin-top:12px;"><input type="checkbox" id="rdoDeclaracao"><label for="rdoDeclaracao">Confirmo que as informações acima refletem fielmente o que ocorreu na obra nesta data.</label></div>'+
+      '</div>'+
+
+      '<div class="form-actions">'+
+        '<span class="hint">Rascunho fica visível só como pendente para você continuar depois.</span>'+
+        (editing ? '<button type="button" class="btn danger" id="btnDeleteRdo">Excluir</button>' : '') +
+        '<button type="submit" class="btn ghost" id="btnSaveDraft">Salvar rascunho</button>'+
+        '<button type="submit" class="btn primary" id="btnSubmitRdo">Enviar para aprovação</button>'+
+      '</div>';
+
+    populateObraSelect();
+    document.getElementById('rdoObra').value = rdo.obraId||'';
+
+    wireDynTable('mo', [{key:'funcao',type:'select',options:FUNCAO_OPTS},{key:'qtd',type:'number'}], function(){ return rdo.maoDeObra; }, function(v){ rdo.maoDeObra=v; });
+    wireDynTable('eq', [{key:'nome'},{key:'qtd',type:'number'},{key:'horas',type:'number'}], function(){ return rdo.equipamentos; }, function(v){ rdo.equipamentos=v; });
+    wireDynTable('mat', [{key:'nome'},{key:'qtd',type:'number'},{key:'unidade'}], function(){ return rdo.materiais; }, function(v){ rdo.materiais=v; });
+    wireDynTable('at', [{key:'descricao'},{key:'tipo',type:'select',options:ATIV_TIPOS}], function(){ return rdo.atividades; }, function(v){ rdo.atividades=v; });
+    wireDynTable('oc', [{key:'descricao'},{key:'tipo',type:'select',options:OCC_TIPOS},{key:'horasParadas',type:'number'}], function(){ return rdo.ocorrencias; }, function(v){ rdo.ocorrencias=v; });
+
+    renderPhotoUI();
+    document.getElementById('rdoFotos').addEventListener('change', function(e){
+      var files = Array.prototype.slice.call(e.target.files||[]);
+      if(state.photos.length + files.length > 6){
+        toast('Máximo de 6 fotos por RDO.','error');
+      }
+      files = files.slice(0, Math.max(0, 6-state.photos.length));
+      Promise.all(files.map(function(f){ return resizeImageFile(f, 900, 0.55).then(function(du){ return {dataUrl:du}; }); }))
+        .then(function(newPhotos){
+          state.photos = state.photos.concat(newPhotos);
+          renderPhotoUI();
+        })
+        .catch(function(){ toast('Não foi possível processar uma das imagens.','error'); });
+      e.target.value = '';
+    });
+
+    if(editing){
+      document.getElementById('btnDeleteRdo').addEventListener('click', function(){
+        confirmModal({ title:'Excluir RDO', msg:'Este rascunho será excluído permanentemente. Deseja continuar?', okLabel:'Excluir', danger:true })
+          .then(function(ok){
+            if(!ok) return;
+            supabaseClient.from('rdos').delete().eq('id', rdo.id).then(function(res){
+              if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
+              toast('Rascunho excluído.','ok'); state.editId=null;
+              loadRdos().then(function(){ goto('dashboard'); });
+            });
+          });
+      });
+    }
+
+    form.onsubmit = function(e){
+      e.preventDefault();
+      var submitter = e.submitter || document.activeElement;
+      var wantsSend = submitter && submitter.id==='btnSubmitRdo';
+
+      var obraId = document.getElementById('rdoObra').value;
+      if(!obraId){ toast('Selecione a obra.','error'); return; }
+      var obra = state.obras.find(function(o){ return o.id===obraId; });
+      var responsavel = document.getElementById('rdoResponsavel').value.trim();
+      if(!responsavel){ toast('Informe quem está preenchendo a RDO.','error'); return; }
+      if(wantsSend && !document.getElementById('rdoDeclaracao').checked){
+        toast('Confirme a declaração para enviar a RDO para aprovação.','error'); return;
+      }
+
+      var payload = {
+        obra_id: obraId, obra_nome: obra ? obra.nome : rdo.obraNome,
+        data: document.getElementById('rdoData').value,
+        clima: document.getElementById('rdoClima').value,
+        impraticavel: document.getElementById('rdoImpraticavel').checked,
+        mao_de_obra: rdo.maoDeObra.filter(function(r){ return r.funcao; }),
+        equipamentos: rdo.equipamentos.filter(function(r){ return r.nome; }),
+        materiais: rdo.materiais.filter(function(r){ return r.nome; }),
+        atividades: rdo.atividades.filter(function(r){ return r.descricao; }),
+        ocorrencias: rdo.ocorrencias.filter(function(r){ return r.descricao; }),
+        observacoes: document.getElementById('rdoObs').value,
+        fotos: state.photos.map(function(p){ return p.dataUrl; }),
+        responsavel: responsavel,
+        status: wantsSend ? 'enviado' : 'rascunho',
+        updated_at: new Date().toISOString()
+      };
+      if(wantsSend){
+        payload.assinatura = { nome: responsavel, timestamp: Date.now() };
+      }
+
+      var approxKB = Math.round(JSON.stringify(payload).length/1024);
+      if(approxKB > 8000){
+        toast('Este RDO está muito grande ('+approxKB+' KB) — remova uma ou mais fotos e tente novamente.','error');
+        return;
+      }
+
+      var promise = editing
+        ? supabaseClient.from('rdos').update(payload).eq('id', rdo.id).select().single()
+        : supabaseClient.from('rdos').insert(Object.assign({exemplo:false}, payload)).select().single();
+
+      promise.then(function(res){
+        if(res.error){ toast('Erro ao salvar: '+res.error.message,'error'); return; }
+        toast(wantsSend ? 'RDO enviada para aprovação.' : 'Rascunho salvo.', 'ok');
+        var newId = res.data ? res.data.id : rdo.id;
+        state.editId = null; state.photos = [];
+        loadRdos().then(function(){
+          if(wantsSend){ state.detailId = newId; goto('detail'); }
+          else{ goto('dashboard'); }
+        });
+      });
+    };
+  }
+
+  /* ---------------- detail view ---------------- */
+  function renderDetail(id){
+    var r = state.rdos.find(function(x){ return x.id===id; });
+    var el = document.getElementById('detailContent');
+    if(!r){ el.innerHTML = '<p class="empty-hint">RDO não encontrada.</p>'; return; }
+
+    var stopCount = (r.ocorrencias||[]).filter(function(o){ return o.tipo==='Paralisação'; }).length;
+
+    el.innerHTML =
+      '<div class="detail-head">'+
+        '<div class="detail-title"><h1>'+esc(r.obraNome)+(r.exemplo?'<span class="tag-example">exemplo</span>':'')+'</h1>'+
+          '<div class="sub">'+fmtDate(r.data)+' · Preenchido por '+esc(r.responsavel||'—')+' '+statusChip(r.status)+'</div></div>'+
+        '<div class="detail-actions">'+
+          (r.status==='rascunho' ? '<button class="btn ghost sm" id="btnEditRdo">Editar</button>' : '') +
+          '<button class="btn ghost sm" id="btnExportPdf">⬇ Exportar PDF</button>'+
+        '</div>'+
+      '</div>'+
+
+      '<div class="card">'+
+        '<h2><span class="idx">i</span>Resumo</h2>'+
+        '<div class="kv">'+
+          kvItem('Clima', r.clima) + kvItem('Impraticável', r.impraticavel?'Sim':'Não', r.impraticavel) +
+          kvItem('Mão de obra', (r.maoDeObra||[]).reduce(function(s,x){return s+(parseFloat(x.qtd)||0);},0)+' pessoa(s)') +
+          kvItem('Ocorrências', (r.ocorrencias||[]).length + (stopCount? ' · '+stopCount+' paralisação(ões)':'')) +
+        '</div>'+
+      '</div>'+
+
+      readSection('Mão de obra', ['Função','Quantidade'], (r.maoDeObra||[]).map(function(x){return [x.funcao,x.qtd];})) +
+      readSection('Equipamentos', ['Equipamento','Qtd.','Horas'], (r.equipamentos||[]).map(function(x){return [x.nome,x.qtd,x.horas];})) +
+      readSection('Materiais', ['Material','Qtd.','Unidade'], (r.materiais||[]).map(function(x){return [x.nome,x.qtd,x.unidade];})) +
+      readSection('Atividades executadas', ['Descrição','Tipo'], (r.atividades||[]).map(function(x){return [x.descricao,x.tipo];})) +
+      readSection('Ocorrências', ['Descrição','Tipo','Horas paradas'], (r.ocorrencias||[]).map(function(x){return [x.descricao, x.tipo==='Paralisação'?'<span class="occ-stop">'+x.tipo+'</span>':x.tipo, x.horasParadas||'—'];}), true) +
+
+      (r.observacoes ? '<div class="card"><h2><span class="idx">i</span>Observações</h2><p>'+esc(r.observacoes).replace(/\n/g,'<br>')+'</p></div>' : '') +
+
+      ((r.fotos&&r.fotos.length) ? '<div class="card"><h2><span class="idx">i</span>Fotos</h2><div class="gallery" id="detailGallery">'+
+        r.fotos.map(function(f){ return '<img src="'+f+'">'; }).join('') + '</div></div>' : '') +
+
+      '<div class="card">'+
+        '<h2><span class="idx">✓</span>Assinatura e aprovação</h2>'+
+        '<div class="kv">'+
+          kvItem('Assinado por', r.assinatura ? r.assinatura.nome : '—') +
+          kvItem('Em', r.assinatura ? new Date(r.assinatura.timestamp).toLocaleString('pt-BR') : '—') +
+        '</div>'+
+        (r.aprovacao ? ('<div class="kv" style="margin-top:14px;">'+
+            kvItem('Decisão', r.aprovacao.status==='aprovado'?'Aprovado':'Rejeitado') +
+            kvItem('Por', r.aprovacao.nome) +
+            kvItem('Em', new Date(r.aprovacao.timestamp).toLocaleString('pt-BR')) +
+          '</div>'+
+          (r.aprovacao.comentario ? '<p style="margin-top:10px;color:var(--ink-soft);font-size:13px;">"'+esc(r.aprovacao.comentario)+'"</p>' : '')
+        ) : (r.status==='enviado' ? approveBox() : '<p class="empty-hint">Envie a RDO para aprovação para habilitar esta etapa.</p>')) +
+      '</div>';
+
+    document.querySelectorAll('#detailGallery img').forEach(function(img){
+      img.addEventListener('click', function(){ openLightbox(img.src); });
+    });
+    var editBtn = document.getElementById('btnEditRdo');
+    if(editBtn) editBtn.addEventListener('click', function(){ state.editId=r.id; goto('novo'); renderRdoForm(r); });
+    document.getElementById('btnExportPdf').addEventListener('click', function(){ exportRdoPdf(r); });
+
+    if(r.status==='enviado' && !r.aprovacao){
+      document.getElementById('btnAprovar').addEventListener('click', function(){ decideRdo(r,'aprovado'); });
+      document.getElementById('btnRejeitar').addEventListener('click', function(){ decideRdo(r,'rejeitado'); });
+    }
+  }
+  function kvItem(l,v,warn){ return '<div class="item"><div class="l">'+esc(l)+'</div><div class="v"'+(warn?' style="color:var(--status-rejected)"':'')+'>'+esc(v)+'</div></div>'; }
+  function readSection(title, headers, rows, allowHtml){
+    if(!rows.length) return '';
+    return '<div class="card"><h2><span class="idx">·</span>'+esc(title)+'</h2>'+
+      '<div class="subtable-wrap"><table class="readtable"><thead><tr>'+headers.map(function(h){return '<th>'+esc(h)+'</th>';}).join('')+'</tr></thead><tbody>'+
+      rows.map(function(row){ return '<tr>'+row.map(function(c){ return '<td>'+(allowHtml?c:esc(c))+'</td>'; }).join('')+'</tr>'; }).join('')+
+      '</tbody></table></div></div>';
+  }
+  function approveBox(){
+    var prefill = state.currentUser ? esc(state.currentUser.nome) : '';
+    return '<div class="approve-box" style="margin-top:14px;">'+
+      '<div class="field"><label>Seu nome</label><input type="text" id="approveName" value="'+prefill+'" placeholder="quem está decidindo"></div>'+
+      '<textarea id="approveComment" placeholder="Comentário (opcional)"></textarea>'+
+      '<div class="approve-actions">'+
+        '<button class="btn primary" id="btnAprovar" type="button">Aprovar</button>'+
+        '<button class="btn danger" id="btnRejeitar" type="button">Rejeitar</button>'+
+      '</div></div>';
+  }
+  function decideRdo(r, decision){
+    var nome = (document.getElementById('approveName')||{}).value || '';
+    if(!nome.trim()){ toast('Informe seu nome para registrar a decisão.','error'); return; }
+    var comentario = (document.getElementById('approveComment')||{}).value || '';
+    supabaseClient.from('rdos').update({
+      status: decision,
+      aprovacao: { nome: nome.trim(), timestamp: Date.now(), status: decision, comentario: comentario },
+      updated_at: new Date().toISOString()
+    }).eq('id', r.id).then(function(res){
+      if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
+      toast(decision==='aprovado' ? 'RDO aprovada.' : 'RDO rejeitada.', decision==='aprovado'?'ok':'error');
+      loadRdos();
+    });
+  }
+
+  /* ---------------- PDF export ---------------- */
+  function exportRdoPdf(r){
+    if(!window.jspdf || !window.jspdf.jsPDF){
+      toast('Gerador de PDF indisponível neste momento.','error');
+      return;
+    }
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({ unit:'pt', format:'a4' });
+    var pageW = doc.internal.pageSize.getWidth();
+    var pageH = doc.internal.pageSize.getHeight();
+    var marginX = 46, y = 50;
+    var yellow = [238,197,18], ink=[35,35,32], steel=[110,112,120];
+
+    function ensureSpace(h){ if(y + h > pageH - 50){ doc.addPage(); y = 50; } }
+    function heading(text){
+      ensureSpace(26);
+      doc.setFillColor(yellow[0],yellow[1],yellow[2]);
+      doc.rect(marginX, y-12, 4, 16, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(ink[0],ink[1],ink[2]);
+      doc.text(text, marginX+12, y);
+      y += 16;
+    }
+    function line(label, value){
+      ensureSpace(15);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(steel[0],steel[1],steel[2]);
+      doc.text(String(label).toUpperCase(), marginX, y);
+      doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(ink[0],ink[1],ink[2]);
+      doc.text(String(value||'—'), marginX+130, y, {maxWidth: pageW-marginX*2-130});
+      y += 15;
+    }
+    function table(headers, rows, widths){
+      if(!rows.length){ return; }
+      ensureSpace(18);
+      var x = marginX;
+      doc.setFont('helvetica','bold'); doc.setFontSize(9);
+      doc.setDrawColor(220,218,208);
+      headers.forEach(function(h,i){ doc.text(String(h), x, y); x += widths[i]; });
+      y += 5; doc.line(marginX, y, marginX+widths.reduce(function(a,b){return a+b;},0), y); y += 12;
+      doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+      rows.forEach(function(row){
+        ensureSpace(14);
+        var x2 = marginX;
+        row.forEach(function(cell,i){ doc.text(String(cell==null||cell===''?'—':cell), x2, y, {maxWidth: widths[i]-6}); x2 += widths[i]; });
+        y += 14;
+      });
+      y += 6;
+    }
+
+    try{ doc.addImage(LOGO_DATA, 'PNG', marginX, y-30, 96, 36); }catch(e){}
+    doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(ink[0],ink[1],ink[2]);
+    doc.text('RELATÓRIO DIÁRIO DE OBRA', marginX+108, y-10);
+    y += 20;
+    doc.setDrawColor(35,35,32); doc.setLineWidth(1.2); doc.line(marginX, y, pageW-marginX, y); y += 22;
+
+    heading('Identificação'); y += 4;
+    line('Obra', r.obraNome); line('Data', fmtDate(r.data)); line('Clima', r.clima);
+    line('Impraticável', r.impraticavel?'Sim':'Não'); line('Responsável', r.responsavel); y += 6;
+
+    if(r.impraticavel){
+      ensureSpace(26);
+      doc.setFillColor(198,67,63);
+      doc.rect(marginX, y-13, pageW-marginX*2, 20, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(255,255,255);
+      doc.text('ATENÇÃO: DIA TOTAL OU PARCIALMENTE IMPRATICÁVEL PARA TRABALHO', marginX+8, y+1);
+      doc.setTextColor(ink[0],ink[1],ink[2]);
+      y += 20;
+    }
+
+    if((r.maoDeObra||[]).length){ heading('Mão de obra'); table(['Função','Qtd.'], r.maoDeObra.map(function(x){return [x.funcao,x.qtd];}), [360,90]); }
+    if((r.equipamentos||[]).length){ heading('Equipamentos'); table(['Equipamento','Qtd.','Horas'], r.equipamentos.map(function(x){return [x.nome,x.qtd,x.horas];}), [280,80,90]); }
+    if((r.materiais||[]).length){ heading('Materiais'); table(['Material','Qtd.','Unidade'], r.materiais.map(function(x){return [x.nome,x.qtd,x.unidade];}), [280,80,90]); }
+    if((r.atividades||[]).length){ heading('Atividades executadas'); table(['Descrição','Tipo'], r.atividades.map(function(x){return [x.descricao,x.tipo];}), [330,120]); }
+    if((r.ocorrencias||[]).length){ heading('Ocorrências'); table(['Descrição','Tipo','Horas paradas'], r.ocorrencias.map(function(x){return [x.descricao,x.tipo,x.horasParadas];}), [280,110,60]); }
+
+    if(r.observacoes){
+      heading('Observações');
+      doc.setFont('helvetica','normal'); doc.setFontSize(10);
+      var lines = doc.splitTextToSize(r.observacoes, pageW-marginX*2);
+      lines.forEach(function(ln){ ensureSpace(13); doc.text(ln, marginX, y); y+=13; });
+      y += 4;
+    }
+
+    heading('Assinatura e aprovação (registro digital)');
+    line('Assinado por', r.assinatura ? r.assinatura.nome : '—');
+    line('Em', r.assinatura ? new Date(r.assinatura.timestamp).toLocaleString('pt-BR') : '—');
+    if(r.aprovacao){
+      line('Decisão', r.aprovacao.status==='aprovado'?'Aprovado':'Rejeitado');
+      line('Por', r.aprovacao.nome);
+      line('Em', new Date(r.aprovacao.timestamp).toLocaleString('pt-BR'));
+      if(r.aprovacao.comentario) line('Comentário', r.aprovacao.comentario);
+    }
+    y += 10;
+
+    /* Bloco de assinaturas físicas — cliente à esquerda, responsável à direita */
+    ensureSpace(96);
+    heading('Assinaturas');
+    y += 34;
+    var sigGap = 30;
+    var sigColW = (pageW - marginX*2 - sigGap) / 2;
+    var clienteX = marginX;
+    var respX = marginX + sigColW + sigGap;
+    var sigLineY = y;
+
+    doc.setDrawColor(35,35,32); doc.setLineWidth(1);
+    doc.line(clienteX, sigLineY, clienteX + sigColW, sigLineY);
+    doc.line(respX, sigLineY, respX + sigColW, sigLineY);
+
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(ink[0],ink[1],ink[2]);
+    doc.text('CLIENTE', clienteX, sigLineY + 14);
+    doc.text('RESPONSÁVEL NA OBRA', respX, sigLineY + 14);
+    y = sigLineY + 26;
+
+    if((r.fotos||[]).length){
+      doc.addPage(); y = 50;
+      heading('Registro fotográfico');
+      var cols = 2, gap = 14, iw = (pageW-marginX*2-gap)/cols, ih = iw*0.72;
+      var rowStartY = y+10;
+      r.fotos.forEach(function(f, idx){
+        var col = idx % cols;
+        if(col===0 && idx>0){ rowStartY += ih+gap; }
+        if(rowStartY + ih > pageH-50){ doc.addPage(); y=50; rowStartY = y+10; }
+        var px = marginX + col*(iw+gap);
+        try{ doc.addImage(f, 'JPEG', px, rowStartY, iw, ih); }catch(e){}
+      });
+    }
+
+    var fname = 'RDO_Venko_'+(r.obraNome||'obra').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+r.data+'.pdf';
+    doc.save(fname);
+    toast('PDF exportado.','ok');
+  }
+
+  /* ---------------- boot ---------------- */
+  bootAuth();
+  renderRdoForm(null);
+  goto('dashboard');
+})();
+</script>
+</body>
+</html>

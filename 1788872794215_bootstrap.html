@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RDO Venko — Configuração inicial</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Inter:wght@400;500;600;700;800&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<style>
+  :root{
+    --venko-yellow:#EEC512; --venko-yellow-hi:#F7DE4E; --venko-yellow-deep:#B98E00;
+    --ink:#232320; --ink-soft:#55564F; --steel:#71737C;
+    --paper:#FAF9F4; --surface:#FFFFFF; --line:#E3E1D5;
+    --status-rejected:#C6433F; --status-rejected-bg:#FBE7E6;
+    --status-approved:#2E8F4E; --status-approved-bg:#E4F3E9;
+    --shadow-md:0 6px 20px rgba(35,35,32,.10);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--ink); color:var(--ink); font-family:'Inter',system-ui,sans-serif; font-size:14px;
+    min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  h1,h2{ font-family:'Big Shoulders Display','Arial Narrow',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.02em; color:var(--ink); margin:0; }
+  .card{ background:var(--surface); border-radius:14px; box-shadow:var(--shadow-md); max-width:420px; width:100%; padding:34px 30px 28px; }
+  .card img{ height:38px; width:auto; display:block; margin:0 auto 18px; }
+  .card h1{ font-size:21px; text-align:center; }
+  .card p.sub{ color:var(--steel); font-size:12.5px; margin:6px 0 22px; text-align:center; font-weight:500; }
+  .field{ display:flex; flex-direction:column; gap:5px; margin-bottom:14px; }
+  .field label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--steel); font-weight:700; }
+  .field input{ border:1px solid var(--line); background:var(--paper); color:var(--ink); padding:9px 10px; border-radius:7px; font-size:14px; width:100%; }
+  .btn{ border:1px solid var(--ink); background:var(--venko-yellow); border-color:var(--venko-yellow-deep); color:#232320;
+    padding:10px 16px; border-radius:8px; cursor:pointer; font-weight:700; font-size:13.5px; width:100%; margin-top:4px; }
+  .btn:hover{ background:var(--venko-yellow-hi); }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; }
+  .msg{ font-size:12.5px; font-weight:600; margin:-4px 0 14px; min-height:16px; }
+  .msg.error{ color:var(--status-rejected); }
+  .msg.ok{ color:var(--status-approved); }
+  .note{ margin-top:18px; padding-top:16px; border-top:1px solid var(--line); font-size:12px; color:var(--steel); line-height:1.5; }
+  .hidden{ display:none; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <img src="data:image/png;base64,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" alt="Venko">
+    <h1>Configuração inicial</h1>
+    <p class="sub">Cria a primeira conta de administrador do sistema RDO Venko. Só funciona uma vez — enquanto não existir nenhum usuário cadastrado.</p>
+
+    <div id="configWarning" class="msg error hidden">Configuração pendente: preencha SUPABASE_URL e SUPABASE_ANON_KEY em config.js antes de usar esta página.</div>
+
+    <form id="bootForm">
+      <div class="field"><label>Usuário (login)</label><input type="text" id="bLogin" placeholder="giovani.venko" required></div>
+      <div class="field"><label>Senha</label><input type="password" id="bPass" placeholder="mínimo 6 caracteres" minlength="6" required></div>
+      <div class="field"><label>Nome completo</label><input type="text" id="bNome" required></div>
+      <div id="bootMsg" class="msg"></div>
+      <button type="submit" class="btn" id="bootBtn">Criar administrador</button>
+    </form>
+
+    <div class="note">
+      Depois de criar sua conta, entre normalmente pelo <b>index.html</b> do sistema. Por segurança, apague este arquivo (<b>bootstrap.html</b>) do repositório assim que terminar — ele só serve pra esse primeiro cadastro e não tem mais utilidade depois disso.
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      "use strict";
+      var CONFIG_OK_LOCAL = (typeof CONFIG_OK !== 'undefined') && CONFIG_OK;
+      if(!CONFIG_OK_LOCAL){
+        document.getElementById('configWarning').classList.remove('hidden');
+        document.getElementById('bootBtn').disabled = true;
+        return;
+      }
+      var client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      function normalizeLogin(v){ return String(v||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
+
+      document.getElementById('bootForm').addEventListener('submit', function(e){
+        e.preventDefault();
+        var msgEl = document.getElementById('bootMsg');
+        msgEl.textContent = ''; msgEl.className = 'msg';
+        var login = normalizeLogin(document.getElementById('bLogin').value);
+        var senha = document.getElementById('bPass').value;
+        var nome = document.getElementById('bNome').value.trim();
+        if(!login || !nome){ msgEl.textContent = 'Preencha usuário e nome.'; msgEl.className = 'msg error'; return; }
+        if(senha.length < 6){ msgEl.textContent = 'A senha precisa ter pelo menos 6 caracteres.'; msgEl.className = 'msg error'; return; }
+
+        var btn = document.getElementById('bootBtn');
+        btn.disabled = true; btn.textContent = 'Criando…';
+        var email = login + '@' + LOGIN_DOMAIN;
+
+        client.auth.signUp({ email: email, password: senha }).then(function(res){
+          if(res.error){ return Promise.reject(new Error(res.error.message)); }
+          if(!res.data.session){
+            return Promise.reject(new Error('Conta criada, mas sem sessão ativa — verifique se "Confirm email" está DESLIGADO em Authentication > Providers > Email no Supabase, e tente de novo com um login diferente.'));
+          }
+          return client.from('profiles').insert({ id: res.data.user.id, login: login, nome: nome, cargo: 'Administrador', is_admin: true });
+        }).then(function(res2){
+          if(res2 && res2.error){
+            return Promise.reject(new Error('Não foi possível criar como administrador — provavelmente já existe um administrador configurado neste sistema. Entre pelo index.html com uma conta existente, ou peça para um admin te cadastrar em Usuários. (Detalhe: '+res2.error.message+')'));
+          }
+          msgEl.textContent = 'Administrador criado! Agora abra o index.html e entre com esse login e senha.';
+          msgEl.className = 'msg ok';
+          document.getElementById('bootForm').reset();
+        }).catch(function(err){
+          msgEl.textContent = err.message || 'Erro ao criar administrador.';
+          msgEl.className = 'msg error';
+        }).then(function(){
+          btn.disabled = false; btn.textContent = 'Criar administrador';
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
