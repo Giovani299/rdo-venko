@@ -237,6 +237,23 @@
   .photo-note{font-size:11.5px;color:var(--steel);margin-top:6px;}
   .photo-note.warn{color:var(--status-stopped);font-weight:600;}
 
+  .video-input-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .video-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;}
+  .video-thumb{position:relative;width:168px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:#000;}
+  .video-thumb video{width:168px;height:100px;object-fit:cover;display:block;background:#000;}
+  .video-thumb .video-name{
+    font-size:10.5px;color:var(--steel);padding:4px 6px;background:var(--surface);white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;
+  }
+  .video-thumb button{
+    position:absolute;top:3px;right:3px;background:rgba(20,20,18,.72);color:#fff;border:none;
+    width:20px;height:20px;border-radius:5px;cursor:pointer;font-size:12px;line-height:1;
+  }
+  .video-note{font-size:11.5px;color:var(--steel);margin-top:6px;}
+  .video-gallery{display:flex;flex-wrap:wrap;gap:10px;}
+  .video-gallery .video-thumb{width:220px;}
+  .video-gallery video{width:220px;height:130px;}
+
   .form-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:6px;flex-wrap:wrap;}
   .form-actions .hint{margin-right:auto;color:var(--steel);font-size:12px;align-self:center;}
 
@@ -586,7 +603,8 @@
     filters: { obraId:'', dataIni:'', dataFim:'', responsavel:'', status:'', tipo:'', busca:'' },
     editId: null,
     detailId: null,
-    photos: []           // {dataUrl}
+    photos: [],          // {dataUrl}
+    videos: []           // {url, path, name, uploading}
   };
 
   var CLIMA_OPTS = ['Ensolarado','Parcialmente nublado','Nublado','Chuvoso','Chuva forte'];
@@ -613,12 +631,12 @@
     var btn = e.target.closest('.tab-btn'); if(!btn) return;
     var view = btn.getAttribute('data-view');
     if(view==='users' && !(state.currentUser && state.currentUser.is_admin)) return;
-    state.editId = null; state.photos = [];
+    state.editId = null; state.photos = []; state.videos = [];
     goto(view);
   });
   document.addEventListener('click', function(e){
     var g = e.target.closest('[data-goto]'); if(!g) return;
-    if(g.getAttribute('data-goto')==='novo'){ state.editId=null; state.photos=[]; }
+    if(g.getAttribute('data-goto')==='novo'){ state.editId=null; state.photos=[]; state.videos=[]; }
     goto(g.getAttribute('data-goto'));
   });
 
@@ -768,7 +786,7 @@
   function logout(){
     supabaseClient.auth.signOut().then(function(){
       state.currentUser = null;
-      state.editId = null; state.photos = [];
+      state.editId = null; state.photos = []; state.videos = [];
       document.getElementById('app').style.display = 'none';
       document.getElementById('loginScreen').style.display = 'flex';
       document.getElementById('loginForm').reset();
@@ -1404,6 +1422,42 @@
     note.textContent = state.photos.length + ' foto(s) anexada(s) · ~' + kb + ' KB';
   }
 
+  /* ---------------- video handling ---------------- */
+  var VIDEO_MAX_COUNT = 3;
+  var VIDEO_MAX_MB = 150;
+  function uploadVideoFile(file){
+    var safeName = file.name.replace(/[^a-zA-Z0-9_.-]/g,'_');
+    var path = (state.currentUser ? state.currentUser.id : 'anon') + '/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '_' + safeName;
+    return supabaseClient.storage.from('rdo-videos').upload(path, file, { cacheControl:'3600', upsert:false })
+      .then(function(res){
+        if(res.error) throw res.error;
+        var pub = supabaseClient.storage.from('rdo-videos').getPublicUrl(path);
+        return { url: pub.data.publicUrl, path: path, name: file.name };
+      });
+  }
+  function renderVideoUI(){
+    var grid = document.getElementById('videoGrid');
+    var note = document.getElementById('videoNote');
+    if(!grid) return;
+    grid.innerHTML = state.videos.map(function(v,i){
+      return '<div class="video-thumb">'+
+        (v.uploading ? '<div style="width:168px;height:100px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;">Enviando…</div>' : '<video src="'+v.url+'" controls preload="metadata"></video>') +
+        '<div class="video-name">'+esc(v.name||'')+'</div>'+
+        (v.uploading ? '' : '<button type="button" data-rmvideo="'+i+'">✕</button>') +
+      '</div>';
+    }).join('');
+    grid.querySelectorAll('[data-rmvideo]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var idx = parseInt(b.getAttribute('data-rmvideo'),10);
+        var v = state.videos[idx];
+        state.videos.splice(idx,1);
+        renderVideoUI();
+        if(v && v.path){ supabaseClient.storage.from('rdo-videos').remove([v.path]); }
+      });
+    });
+    note.textContent = state.videos.length + ' vídeo(s) anexado(s) (máx. '+VIDEO_MAX_COUNT+', até '+VIDEO_MAX_MB+'MB cada)';
+  }
+
   /* ---------------- RDO form (create / edit) ---------------- */
   function blankRdo(){
     return {
@@ -1417,7 +1471,9 @@
   function renderRdoForm(rdoOrNull){
     var editing = !!rdoOrNull;
     var rdo = rdoOrNull ? JSON.parse(JSON.stringify(rdoOrNull)) : blankRdo();
+    var isLockedEdit = editing && rdo.status !== 'rascunho';
     state.photos = editing ? (rdo.fotos||[]).map(function(u){ return {dataUrl:u}; }) : [];
+    state.videos = editing ? (rdo.videos||[]).map(function(v){ return (typeof v==='string') ? {url:v,name:''} : v; }) : [];
     document.getElementById('novoTitle').textContent = editing ? 'Editar RDO — '+fmtDate(rdo.data) : 'Nova RDO';
 
     var form = document.getElementById('rdoForm');
@@ -1476,18 +1532,30 @@
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">9</span>Responsável e assinatura</h2>'+
+        '<h2><span class="idx">9</span>Vídeos</h2>'+
+        '<p class="hint">Anexe vídeos curtos da obra (máx. '+VIDEO_MAX_COUNT+', até '+VIDEO_MAX_MB+'MB cada).</p>'+
+        '<div class="video-input-row">'+
+          '<input type="file" id="rdoVideos" accept="video/*" multiple>'+
+        '</div>'+
+        '<div class="video-grid" id="videoGrid"></div>'+
+        '<div class="video-note" id="videoNote"></div>'+
+      '</div>'+
+
+      '<div class="card">'+
+        '<h2><span class="idx">10</span>Responsável e assinatura</h2>'+
         '<div class="grid2">'+
           '<div class="field"><label>Preenchido por</label><input type="text" id="rdoResponsavel" value="'+esc(rdo.responsavel||'')+'" required></div>'+
         '</div>'+
-        '<div class="checkline" style="margin-top:12px;"><input type="checkbox" id="rdoDeclaracao"><label for="rdoDeclaracao">Confirmo que as informações acima refletem fielmente o que ocorreu na obra nesta data.</label></div>'+
+        (isLockedEdit ? '' : '<div class="checkline" style="margin-top:12px;"><input type="checkbox" id="rdoDeclaracao"><label for="rdoDeclaracao">Confirmo que as informações acima refletem fielmente o que ocorreu na obra nesta data.</label></div>') +
       '</div>'+
 
       '<div class="form-actions">'+
-        '<span class="hint">Rascunho fica visível só como pendente para você continuar depois.</span>'+
+        '<span class="hint">'+(isLockedEdit ? 'Esta RDO está com status "'+esc(STATUS_LABEL[rdo.status]||rdo.status)+'" — salvar aqui mantém esse status, só atualiza o conteúdo.' : 'Rascunho fica visível só como pendente para você continuar depois.')+'</span>'+
         (editing ? '<button type="button" class="btn danger" id="btnDeleteRdo">Excluir</button>' : '') +
-        '<button type="submit" class="btn ghost" id="btnSaveDraft">Salvar rascunho</button>'+
-        '<button type="submit" class="btn primary" id="btnSubmitRdo">Enviar para aprovação</button>'+
+        (isLockedEdit
+          ? '<button type="submit" class="btn primary" id="btnSaveEdit">Salvar alterações</button>'
+          : '<button type="submit" class="btn ghost" id="btnSaveDraft">Salvar rascunho</button>'+
+            '<button type="submit" class="btn primary" id="btnSubmitRdo">Enviar para aprovação</button>') +
       '</div>';
 
     populateObraSelect();
@@ -1515,6 +1583,43 @@
       e.target.value = '';
     });
 
+    renderVideoUI();
+    document.getElementById('rdoVideos').addEventListener('change', function(e){
+      var files = Array.prototype.slice.call(e.target.files||[]);
+      if(state.videos.length + files.length > VIDEO_MAX_COUNT){
+        toast('Máximo de '+VIDEO_MAX_COUNT+' vídeos por RDO.','error');
+      }
+      files = files.slice(0, Math.max(0, VIDEO_MAX_COUNT-state.videos.length));
+      var maxBytes = VIDEO_MAX_MB*1024*1024;
+      var tooBig = files.filter(function(f){ return f.size > maxBytes; });
+      files = files.filter(function(f){ return f.size <= maxBytes; });
+      if(tooBig.length){
+        toast('Vídeo(s) muito grande(s) (máx. '+VIDEO_MAX_MB+'MB): '+tooBig.map(function(f){return f.name;}).join(', '),'error');
+      }
+      e.target.value = '';
+      if(!files.length) return;
+
+      var placeholders = files.map(function(f){ return {name:f.name, uploading:true}; });
+      state.videos = state.videos.concat(placeholders);
+      renderVideoUI();
+
+      Promise.all(files.map(function(f){
+        return uploadVideoFile(f).catch(function(err){
+          toast('Falha ao enviar vídeo "'+f.name+'": '+(err && err.message ? err.message : err),'error');
+          return null;
+        });
+      })).then(function(results){
+        placeholders.forEach(function(ph){
+          var idx = state.videos.indexOf(ph);
+          if(idx===-1) return;
+          var result = results[placeholders.indexOf(ph)];
+          if(result){ state.videos[idx] = result; }
+          else{ state.videos.splice(idx,1); }
+        });
+        renderVideoUI();
+      });
+    });
+
     if(editing){
       document.getElementById('btnDeleteRdo').addEventListener('click', function(){
         confirmModal({ title:'Excluir RDO', msg:'Este rascunho será excluído permanentemente. Deseja continuar?', okLabel:'Excluir', danger:true })
@@ -1539,8 +1644,11 @@
       var obra = state.obras.find(function(o){ return o.id===obraId; });
       var responsavel = document.getElementById('rdoResponsavel').value.trim();
       if(!responsavel){ toast('Informe quem está preenchendo a RDO.','error'); return; }
-      if(wantsSend && !document.getElementById('rdoDeclaracao').checked){
+      if(wantsSend && !isLockedEdit && !document.getElementById('rdoDeclaracao').checked){
         toast('Confirme a declaração para enviar a RDO para aprovação.','error'); return;
+      }
+      if(state.videos.some(function(v){ return v.uploading; })){
+        toast('Aguarde o envio dos vídeos terminar antes de salvar.','error'); return;
       }
 
       var payload = {
@@ -1555,11 +1663,12 @@
         ocorrencias: rdo.ocorrencias.filter(function(r){ return r.descricao; }),
         observacoes: document.getElementById('rdoObs').value,
         fotos: state.photos.map(function(p){ return p.dataUrl; }),
+        videos: state.videos.map(function(v){ return {url:v.url, name:v.name||''}; }),
         responsavel: responsavel,
-        status: wantsSend ? 'enviado' : 'rascunho',
+        status: isLockedEdit ? rdo.status : (wantsSend ? 'enviado' : 'rascunho'),
         updated_at: new Date().toISOString()
       };
-      if(wantsSend){
+      if(wantsSend && !isLockedEdit){
         payload.assinatura = { nome: responsavel, timestamp: Date.now() };
       }
 
@@ -1575,11 +1684,11 @@
 
       promise.then(function(res){
         if(res.error){ toast('Erro ao salvar: '+res.error.message,'error'); return; }
-        toast(wantsSend ? 'RDO enviada para aprovação.' : 'Rascunho salvo.', 'ok');
+        toast(isLockedEdit ? 'Alterações salvas.' : (wantsSend ? 'RDO enviada para aprovação.' : 'Rascunho salvo.'), 'ok');
         var newId = res.data ? res.data.id : rdo.id;
-        state.editId = null; state.photos = [];
+        state.editId = null; state.photos = []; state.videos = [];
         loadRdos().then(function(){
-          if(wantsSend){ state.detailId = newId; goto('detail'); }
+          if(wantsSend || isLockedEdit){ state.detailId = newId; goto('detail'); }
           else{ goto('dashboard'); }
         });
       });
@@ -1599,7 +1708,7 @@
         '<div class="detail-title"><h1>'+esc(r.obraNome)+(r.exemplo?'<span class="tag-example">exemplo</span>':'')+'</h1>'+
           '<div class="sub">'+fmtDate(r.data)+' · Preenchido por '+esc(r.responsavel||'—')+' '+statusChip(r.status)+'</div></div>'+
         '<div class="detail-actions">'+
-          (r.status==='rascunho' ? '<button class="btn ghost sm" id="btnEditRdo">Editar</button>' : '') +
+          '<button class="btn ghost sm" id="btnEditRdo">Editar</button>' +
           '<button class="btn ghost sm" id="btnExportPdf">⬇ Exportar PDF</button>'+
         '</div>'+
       '</div>'+
@@ -1623,6 +1732,13 @@
 
       ((r.fotos&&r.fotos.length) ? '<div class="card"><h2><span class="idx">i</span>Fotos</h2><div class="gallery" id="detailGallery">'+
         r.fotos.map(function(f){ return '<img src="'+f+'">'; }).join('') + '</div></div>' : '') +
+
+      ((r.videos&&r.videos.length) ? '<div class="card"><h2><span class="idx">i</span>Vídeos</h2><div class="video-gallery">'+
+        r.videos.map(function(v){
+          var vv = (typeof v==='string') ? {url:v,name:''} : v;
+          return '<div class="video-thumb"><video src="'+vv.url+'" controls preload="metadata"></video>'+
+            (vv.name ? '<div class="video-name">'+esc(vv.name)+'</div>' : '') + '</div>';
+        }).join('') + '</div></div>' : '') +
 
       '<div class="card">'+
         '<h2><span class="idx">✓</span>Assinatura e aprovação</h2>'+
@@ -1763,6 +1879,7 @@
     var at = r.atividades||[];
     var oc = r.ocorrencias||[];
     var fotos = r.fotos||[];
+    var videosList = (r.videos||[]).map(function(v){ return (typeof v==='string') ? {url:v,name:''} : v; });
 
     var condicaoTxt = r.impraticavel ? 'Impraticável' : 'Praticável';
     var condicaoColor = r.impraticavel ? C.red : C.green;
@@ -1821,7 +1938,7 @@
 
         sectionWrap(sectionHead('Fotos', fotos.length) + (fotos.length ? '<div style="display:flex;flex-wrap:wrap;padding:8px;">'+fotos.map(function(f){ return '<img src="'+f+'" style="width:104px;height:80px;object-fit:cover;margin:4px;border:1px solid '+C.border+';">'; }).join('')+'</div>' : '')) +
 
-        sectionWrap(sectionHead('Vídeos', 0)) +
+        sectionWrap(sectionHead('Vídeos', videosList.length) + (videosList.length ? '<div style="padding:8px 10px;">'+videosList.map(function(v){ return '<div style="padding:3px 0;">🎬 '+esc(v.name||'vídeo anexado')+'</div>'; }).join('')+'</div>' : '')) +
         sectionWrap(sectionHead('Anexos', 0)) +
 
       '</div>';
