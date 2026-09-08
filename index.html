@@ -6,6 +6,7 @@
 <title>RDO Venko</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <style>
@@ -1702,223 +1703,160 @@
       toast('Gerador de PDF indisponível neste momento.','error');
       return;
     }
-    var jsPDF = window.jspdf.jsPDF;
-    var doc = new jsPDF({ unit:'pt', format:'a4' });
-    var pageW = doc.internal.pageSize.getWidth();
-    var pageH = doc.internal.pageSize.getHeight();
-    var marginX = 42, y = 40;
-    var ink=[30,30,28], steel=[110,112,120], line_=[210,208,198], soft=[246,245,241];
-
-    function ensureSpace(h){ if(y + h > pageH - 48){ doc.addPage(); y = 40; return true; } return false; }
-    function sectionBar(text, count){
-      ensureSpace(24);
-      doc.setFillColor(ink[0],ink[1],ink[2]);
-      doc.rect(marginX, y, pageW-marginX*2, 20, 'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(255,255,255);
-      var label = text + (count!=null ? ' ('+count+')' : '');
-      doc.text(label, marginX+8, y+14);
-      y += 20+10;
+    if(!window.html2canvas){
+      toast('Gerador de PDF indisponível (html2canvas não carregado).','error');
+      return;
     }
-    function infoGrid(cells){
-      /* cells: [{label,value,w(fraction 0-1)}] laid out on one row */
-      var h = 32;
-      ensureSpace(h+6);
-      var totalW = pageW - marginX*2;
-      var x = marginX;
-      doc.setDrawColor(line_[0],line_[1],line_[2]); doc.setLineWidth(0.8);
-      cells.forEach(function(c){
-        var w = totalW * c.w;
-        doc.setFillColor(soft[0],soft[1],soft[2]);
-        doc.rect(x, y, w, h, 'FD');
-        doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(steel[0],steel[1],steel[2]);
-        doc.text(String(c.label).toUpperCase(), x+8, y+13);
-        doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(ink[0],ink[1],ink[2]);
-        doc.text(String(c.value||'—'), x+8, y+25, {maxWidth: w-14});
-        x += w;
-      });
-      y += h+10;
-    }
-    function tileGrid(items, cols){
-      if(!items.length) return;
-      cols = cols || 4;
-      var gap = 8, totalW = pageW-marginX*2;
-      var tw = (totalW - gap*(cols-1))/cols, th = 34;
-      items.forEach(function(it, idx){
-        var col = idx % cols;
-        if(col===0){
-          if(ensureSpace(th+gap)){ /* new page: nothing extra needed */ }
-        }
-        var x = marginX + col*(tw+gap);
-        doc.setDrawColor(line_[0],line_[1],line_[2]); doc.setLineWidth(0.8);
-        doc.setFillColor(soft[0],soft[1],soft[2]);
-        doc.rect(x, y, tw, th, 'FD');
-        doc.setFont('helvetica','normal'); doc.setFontSize(7.8); doc.setTextColor(steel[0],steel[1],steel[2]);
-        doc.text(String(it.label), x+7, y+13, {maxWidth: tw-12});
-        doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(ink[0],ink[1],ink[2]);
-        doc.text(String(it.value), x+7, y+27);
-        if(col===cols-1 || idx===items.length-1){ y += th+gap; }
-      });
-      y += 2;
-    }
-    function wrapTable(headers, widths, rows){
-      if(!rows.length) return;
-      ensureSpace(20);
-      var x = marginX;
-      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(steel[0],steel[1],steel[2]);
-      headers.forEach(function(h,i){ doc.text(String(h).toUpperCase(), x, y); x += widths[i]; });
-      y += 6; doc.setDrawColor(ink[0],ink[1],ink[2]); doc.setLineWidth(1);
-      doc.line(marginX, y, marginX+widths.reduce(function(a,b){return a+b;},0), y); y += 12;
-      doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(ink[0],ink[1],ink[2]);
-      rows.forEach(function(row){
-        var wrapped = row.map(function(cell,i){ return doc.splitTextToSize(String(cell==null||cell===''?'—':cell), widths[i]-8); });
-        var nLines = Math.max.apply(null, wrapped.map(function(w){ return w.length; }));
-        var rh = nLines*12 + 6;
-        ensureSpace(rh);
-        var x2 = marginX;
-        wrapped.forEach(function(wLines,i){
-          doc.text(wLines, x2, y);
-          x2 += widths[i];
-        });
-        y += rh;
-        doc.setDrawColor(line_[0],line_[1],line_[2]); doc.setLineWidth(0.6);
-        doc.line(marginX, y-4, marginX+widths.reduce(function(a,b){return a+b;},0), y-4);
-      });
-      y += 6;
-    }
+    toast('Gerando PDF…','ok');
 
-    /* ---- Header: logo + title bar ---- */
-    try{ doc.addImage(LOGO_DATA, 'PNG', marginX, y, 92, 34); }catch(e){}
-    doc.setFillColor(ink[0],ink[1],ink[2]);
-    doc.rect(marginX+104, y, pageW-marginX*2-104, 34, 'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(255,255,255);
-    doc.text('RELATÓRIO DIÁRIO DE OBRA (RDO)', marginX+104+12, y+21);
-    y += 34+16;
+    var C = { border:'#d7dbe0', head:'#eef1f4', label:'#2f5d8a', ink:'#1a1a1a', muted:'#6b7280', green:'#1f9d55', red:'#c6433f' };
 
-    /* ---- Info grid ---- */
-    infoGrid([
-      {label:'Relatório nº', value:String(reportNumberFor(r)).padStart(3,'0'), w:0.34},
-      {label:'Data', value:fmtDate(r.data), w:0.33},
-      {label:'Dia da semana', value:diaDaSemana(r.data), w:0.33}
-    ]);
-    infoGrid([
-      {label:'Obra', value:r.obraNome, w:0.66},
-      {label:'Responsável', value:r.responsavel, w:0.34}
-    ]);
-    infoGrid([
-      {label:'Clima / condição do tempo', value:r.clima, w:0.66},
-      {label:'Impraticável', value:r.impraticavel?'Sim':'Não', w:0.34}
-    ]);
-
-    if(r.impraticavel){
-      ensureSpace(26);
-      doc.setFillColor(198,67,63);
-      doc.rect(marginX, y-6, pageW-marginX*2, 20, 'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(255,255,255);
-      doc.text('ATENÇÃO: DIA TOTAL OU PARCIALMENTE IMPRATICÁVEL PARA TRABALHO', marginX+8, y+8);
-      doc.setTextColor(ink[0],ink[1],ink[2]);
-      y += 24;
+    function row(html, extra){ return '<div style="display:flex;'+(extra||'')+'">'+html+'</div>'; }
+    function cell(html, w, extra){ return '<div style="'+(w?('flex:'+w+';'):'flex:1;')+'box-sizing:border-box;padding:7px 10px;'+(extra||'')+'">'+html+'</div>'; }
+    function sectionWrap(inner){ return '<div style="border:1px solid '+C.border+';margin:0 16px 7px;background:#fff;">'+inner+'</div>'; }
+    function sectionHead(label, count){
+      var txt = esc(label) + (count!=null ? ' ('+count+')' : '');
+      return '<div style="padding:7px 10px;font-weight:bold;font-size:12.5px;background:'+C.head+';border-bottom:1px solid '+C.border+';">'+txt+'</div>';
+    }
+    function labelValue(label, value){
+      return '<div><div style="font-weight:bold;font-size:11px;">'+esc(label)+'</div><div style="font-size:12px;margin-top:2px;">'+esc(value||'—')+'</div></div>';
+    }
+    function emptyMsg(){ return '<div style="padding:8px 10px;color:'+C.muted+';">Nenhum registro.</div>'; }
+    function tileGridHtml(items, cols){
+      cols = cols || 6;
+      var w = (100/cols).toFixed(4)+'%';
+      var tiles = items.map(function(it){
+        var bg = it.total ? '#f5f6f8' : '#fff';
+        return '<div style="width:'+w+';box-sizing:border-box;padding:8px 10px;border-right:1px solid '+C.border+';border-bottom:1px solid '+C.border+';background:'+bg+';">'+
+          '<div style="font-size:10.5px;color:'+(it.total?C.ink:C.label)+';font-weight:'+(it.total?'bold':'normal')+';">'+esc(it.label)+'</div>'+
+          '<div style="font-size:15px;font-weight:bold;margin-top:2px;">'+esc(it.value)+'</div>'+
+        '</div>';
+      }).join('');
+      return '<div style="display:flex;flex-wrap:wrap;">'+tiles+'</div>';
+    }
+    function activityRowHtml(desc, tipo, status){
+      return '<div style="display:flex;padding:8px 10px;border-bottom:1px solid #eee;">'+
+        '<div style="flex:1;">'+
+          '<div style="white-space:pre-wrap;">'+esc(desc||'—')+'</div>'+
+          (tipo ? '<div style="font-size:10.5px;color:'+C.muted+';margin-top:2px;">Tipo: '+esc(tipo)+'</div>' : '')+
+        '</div>'+
+        '<div style="width:110px;flex:none;text-align:right;font-weight:bold;color:'+C.muted+';">'+esc(status||'—')+'</div>'+
+      '</div>';
+    }
+    function occurrenceRowHtml(desc, tipo, horas){
+      return '<div style="display:flex;padding:8px 10px;border-bottom:1px solid #eee;">'+
+        '<div style="flex:1;">'+esc(desc||'—')+'</div>'+
+        '<div style="width:110px;flex:none;">'+esc(tipo||'—')+'</div>'+
+        '<div style="width:90px;flex:none;text-align:right;">'+esc((horas!=null&&horas!=='')?horas:'—')+'</div>'+
+      '</div>';
     }
 
     var mo = r.maoDeObra||[];
-    if(mo.length){
-      var totalMo = mo.reduce(function(a,x){ return a + (parseFloat(x.qtd)||0); },0);
-      sectionBar('Mão de obra', totalMo);
-      var moTiles = mo.map(function(x){ return {label:x.funcao, value:x.qtd}; });
-      moTiles.push({label:'Total', value:totalMo});
-      tileGrid(moTiles, 4);
-    }
+    var totalMo = mo.reduce(function(a,x){ return a + (parseFloat(x.qtd)||0); },0);
+    var moTiles = mo.map(function(x){ return {label:x.funcao, value:x.qtd}; });
+    if(mo.length) moTiles.push({label:'Mão de Obra Própria', value:totalMo, total:true});
 
     var eq = r.equipamentos||[];
-    if(eq.length){
-      var totalEq = eq.reduce(function(a,x){ return a + (parseFloat(x.qtd)||0); },0);
-      sectionBar('Equipamentos', totalEq);
-      var eqTiles = eq.map(function(x){ return {label:x.nome, value:x.qtd}; });
-      eqTiles.push({label:'Total', value:totalEq});
-      tileGrid(eqTiles, 4);
-    }
-
-    var mat = r.materiais||[];
-    if(mat.length){
-      sectionBar('Materiais', mat.length);
-      wrapTable(['Material','Qtd.','Unidade'], [pageW-marginX*2-160, 80, 80], mat.map(function(x){ return [x.nome,x.qtd,x.unidade]; }));
-    }
+    var eqTiles = eq.map(function(x){ return {label:x.nome, value:x.qtd}; });
+    var totalEq = eq.reduce(function(a,x){ return a + (parseFloat(x.qtd)||0); },0);
 
     var at = r.atividades||[];
-    if(at.length){
-      sectionBar('Atividades', at.length);
-      wrapTable(['Descrição','Tipo'], [pageW-marginX*2-150, 150], at.map(function(x){ return [x.descricao,x.tipo]; }));
-    }
-
     var oc = r.ocorrencias||[];
-    sectionBar('Ocorrências', oc.length);
-    if(oc.length){
-      wrapTable(['Descrição','Tipo','Horas paradas'], [pageW-marginX*2-260, 170, 90], oc.map(function(x){ return [x.descricao,x.tipo,x.horasParadas]; }));
-    }
+    var fotos = r.fotos||[];
 
-    sectionBar('Comentários', r.observacoes ? 1 : 0);
-    if(r.observacoes){
-      doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(ink[0],ink[1],ink[2]);
-      var lines = doc.splitTextToSize(r.observacoes, pageW-marginX*2);
-      lines.forEach(function(ln){ ensureSpace(13); doc.text(ln, marginX, y); y+=13; });
-      y += 4;
-    }
+    var condicaoTxt = r.impraticavel ? 'Impraticável' : 'Praticável';
+    var condicaoColor = r.impraticavel ? C.red : C.green;
+    var climaTxt = esc(r.clima||'—');
 
-    /* ---- Registro digital (assinatura eletrônica e aprovação) ---- */
-    sectionBar('Registro digital');
-    infoGrid([
-      {label:'Assinado por', value:r.assinatura ? r.assinatura.nome : '—', w:0.5},
-      {label:'Em', value:r.assinatura ? new Date(r.assinatura.timestamp).toLocaleString('pt-BR') : '—', w:0.5}
-    ]);
-    if(r.aprovacao){
-      infoGrid([
-        {label:'Decisão', value:r.aprovacao.status==='aprovado'?'Aprovado':'Rejeitado', w:0.34},
-        {label:'Por', value:r.aprovacao.nome, w:0.33},
-        {label:'Em', value:new Date(r.aprovacao.timestamp).toLocaleString('pt-BR'), w:0.33}
-      ]);
-      if(r.aprovacao.comentario){
-        doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(steel[0],steel[1],steel[2]);
-        var cLines = doc.splitTextToSize('"'+r.aprovacao.comentario+'"', pageW-marginX*2);
-        cLines.forEach(function(ln){ ensureSpace(12); doc.text(ln, marginX, y); y+=12; });
-        y += 4;
+    var html =
+      '<div style="width:800px;background:#fff;color:'+C.ink+';font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.4;padding:18px 0 24px;">' +
+        '<div style="display:flex;align-items:center;justify-content:center;padding:0 0 10px;">' +
+          '<img src="'+LOGO_DATA+'" style="height:32px;">' +
+        '</div>' +
+        '<div style="text-align:center;font-weight:bold;font-size:15px;padding:0 16px 10px;border-bottom:2px solid '+C.ink+';margin:0 16px 10px;">Relatório Diário de Obra (RDO)</div>' +
+
+        sectionWrap(row(
+          cell(labelValue('Relatório nº', String(reportNumberFor(r)).padStart(3,'0')), 1, 'border-right:1px solid '+C.border+';') +
+          cell(labelValue('Data', fmtDate(r.data)), 1, 'border-right:1px solid '+C.border+';') +
+          cell(labelValue('Dia da semana', diaDaSemana(r.data)), 1)
+        )) +
+
+        sectionWrap(row(
+          cell(labelValue('Obra', r.obraNome), 2, 'border-right:1px solid '+C.border+';') +
+          cell(labelValue('Responsável', r.responsavel), 1)
+        )) +
+
+        sectionWrap(
+          '<div style="padding:7px 10px;font-weight:bold;border-bottom:1px solid '+C.border+';">Clima</div>' +
+          row(
+            cell('', '0 0 90px', 'border-right:1px solid '+C.border+';') +
+            cell('<b>Tempo</b>', 1, 'border-right:1px solid '+C.border+';') +
+            cell('<b>Condição</b>', 1),
+            'border-bottom:1px solid '+C.border+';'
+          ) +
+          row(
+            cell('<b>Manhã</b>', '0 0 90px', 'border-right:1px solid '+C.border+';') +
+            cell(climaTxt, 1, 'border-right:1px solid '+C.border+';') +
+            cell('<span style="color:'+condicaoColor+';font-weight:bold;">'+condicaoTxt+'</span>', 1),
+            'border-bottom:1px solid '+C.border+';'
+          ) +
+          row(
+            cell('<b>Tarde</b>', '0 0 90px', 'border-right:1px solid '+C.border+';') +
+            cell(climaTxt, 1, 'border-right:1px solid '+C.border+';') +
+            cell('<span style="color:'+condicaoColor+';font-weight:bold;">'+condicaoTxt+'</span>', 1)
+          )
+        ) +
+
+        sectionWrap(sectionHead('Mão de obra', totalMo) + (moTiles.length ? tileGridHtml(moTiles,6) : emptyMsg())) +
+
+        sectionWrap(sectionHead('Equipamentos', totalEq) + (eqTiles.length ? tileGridHtml(eqTiles,6) : emptyMsg())) +
+
+        sectionWrap(sectionHead('Atividades', at.length) + (at.length ? at.map(function(x){ return activityRowHtml(x.descricao, x.tipo, null); }).join('') : '')) +
+
+        sectionWrap(sectionHead('Ocorrências', oc.length) + (oc.length ? oc.map(function(x){ return occurrenceRowHtml(x.descricao, x.tipo, x.horasParadas); }).join('') : '')) +
+
+        sectionWrap(sectionHead('Checklist', 0)) +
+
+        sectionWrap(sectionHead('Comentários', r.observacoes?1:0) + (r.observacoes ? '<div style="padding:8px 10px;white-space:pre-wrap;">'+esc(r.observacoes)+'</div>' : '')) +
+
+        sectionWrap(sectionHead('Fotos', fotos.length) + (fotos.length ? '<div style="display:flex;flex-wrap:wrap;padding:8px;">'+fotos.map(function(f){ return '<img src="'+f+'" style="width:104px;height:80px;object-fit:cover;margin:4px;border:1px solid '+C.border+';">'; }).join('')+'</div>' : '')) +
+
+        sectionWrap(sectionHead('Vídeos', 0)) +
+        sectionWrap(sectionHead('Anexos', 0)) +
+
+      '</div>';
+
+    var container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    var target = container.firstChild;
+
+    window.html2canvas(target, { scale:2, useCORS:true, backgroundColor:'#ffffff' }).then(function(canvas){
+      var jsPDF = window.jspdf.jsPDF;
+      var doc = new jsPDF({ unit:'pt', format:'a4' });
+      var pdfW = doc.internal.pageSize.getWidth();
+      var pdfH = doc.internal.pageSize.getHeight();
+      var imgW = pdfW;
+      var imgH = canvas.height * imgW / canvas.width;
+      var imgData = canvas.toDataURL('image/jpeg', 0.95);
+      var heightLeft = imgH, position = 0;
+      doc.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+      heightLeft -= pdfH;
+      while(heightLeft > 0){
+        position = heightLeft - imgH;
+        doc.addPage();
+        doc.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+        heightLeft -= pdfH;
       }
-    }
-
-    /* ---- Bloco de assinaturas físicas — cliente à esquerda, responsável à direita ---- */
-    ensureSpace(96);
-    sectionBar('Assinaturas');
-    y += 34;
-    var sigGap = 30;
-    var sigColW = (pageW - marginX*2 - sigGap) / 2;
-    var clienteX = marginX;
-    var respX = marginX + sigColW + sigGap;
-    var sigLineY = y;
-
-    doc.setDrawColor(ink[0],ink[1],ink[2]); doc.setLineWidth(1);
-    doc.line(clienteX, sigLineY, clienteX + sigColW, sigLineY);
-    doc.line(respX, sigLineY, respX + sigColW, sigLineY);
-
-    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(ink[0],ink[1],ink[2]);
-    doc.text('CLIENTE', clienteX, sigLineY + 14);
-    doc.text('RESPONSÁVEL NA OBRA', respX, sigLineY + 14);
-    y = sigLineY + 26;
-
-    if((r.fotos||[]).length){
-      doc.addPage(); y = 40;
-      sectionBar('Fotos', r.fotos.length);
-      var cols = 3, gap = 10, iw = (pageW-marginX*2-gap*(cols-1))/cols, ih = iw*0.75;
-      var rowStartY = y;
-      r.fotos.forEach(function(f, idx){
-        var col = idx % cols;
-        if(col===0 && idx>0){ rowStartY += ih+gap; }
-        if(rowStartY + ih > pageH-48){ doc.addPage(); y=40; rowStartY = y; }
-        var px = marginX + col*(iw+gap);
-        try{ doc.addImage(f, 'JPEG', px, rowStartY, iw, ih); }catch(e){}
-      });
-    }
-
-    var fname = 'RDO_Venko_'+(r.obraNome||'obra').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+r.data+'.pdf';
-    doc.save(fname);
-    toast('PDF exportado.','ok');
+      var fname = 'RDO_Venko_'+(r.obraNome||'obra').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+r.data+'.pdf';
+      doc.save(fname);
+      toast('PDF exportado.','ok');
+      document.body.removeChild(container);
+    }).catch(function(err){
+      toast('Erro ao gerar PDF.','error');
+      try{ document.body.removeChild(container); }catch(e){}
+    });
   }
 
   /* ---------------- boot ---------------- */
