@@ -761,6 +761,7 @@
       equipesDia: row.equipes_dia||[], gestao: row.gestao||{}, producaoEquipes: row.producao_equipes||[], numeroEquipe: row.numero_equipe||[],
       observacoes: row.observacoes, fotos: row.fotos||[], videos: row.videos||[], responsavel: row.responsavel, status: row.status,
       assinatura: row.assinatura, aprovacao: row.aprovacao, exemplo: row.exemplo,
+      assinaturaCliente: row.assinatura_cliente||'', assinaturaVenko: row.assinatura_venko||'',
       createdAt: row.created_at, updatedAt: row.updated_at
     };
   }
@@ -1764,7 +1765,8 @@
       obraId:'', data: todayISO(), clima: CLIMA_OPTS[0], impraticavel:false,
       equipesDia:[], maoDeObra:[], gestao:{adm:'',eng:''}, producaoEquipes:[], numeroEquipe:[], equipamentos:[],
       materiais:[], atividades:[],
-      ocorrencias:[], observacoes:'', responsavel: state.currentUser ? state.currentUser.nome : '', status:'rascunho'
+      ocorrencias:[], observacoes:'', responsavel: state.currentUser ? state.currentUser.nome : '', status:'rascunho',
+      assinaturaCliente:'', assinaturaVenko:''
     };
   }
   function renderEquipeChecklist(selectedNames){
@@ -1991,6 +1993,11 @@
           '<div class="field"><label>Preenchido por</label><input type="text" id="rdoResponsavel" value="'+esc(rdo.responsavel||'')+'" required></div>'+
         '</div>'+
         (isLockedEdit ? '' : '<div class="checkline" style="margin-top:12px;"><input type="checkbox" id="rdoDeclaracao"><label for="rdoDeclaracao">Confirmo que as informações acima refletem fielmente o que ocorreu na obra nesta data.</label></div>') +
+        '<h3 style="margin-top:16px;">Assinaturas</h3>'+
+        '<div class="grid2">'+
+          '<div class="field"><label>Assinatura Cliente</label><input type="text" id="rdoAssinaturaCliente" value="'+esc(rdo.assinaturaCliente||'')+'" placeholder="Nome de quem assina pelo cliente"></div>'+
+          '<div class="field"><label>Assinatura VENKO</label><input type="text" id="rdoAssinaturaVenko" value="'+esc(rdo.assinaturaVenko||'')+'" placeholder="Nome de quem assina pela VENKO"></div>'+
+        '</div>'+
       '</div>'+
 
       '<div class="form-actions">'+
@@ -2118,6 +2125,8 @@
         fotos: state.photos.map(function(p){ return p.dataUrl; }),
         videos: state.videos.map(function(v){ return {url:v.url, name:v.name||''}; }),
         responsavel: responsavel,
+        assinatura_cliente: document.getElementById('rdoAssinaturaCliente').value.trim(),
+        assinatura_venko: document.getElementById('rdoAssinaturaVenko').value.trim(),
         status: isLockedEdit ? rdo.status : (wantsSend ? 'enviado' : 'rascunho'),
         updated_at: new Date().toISOString()
       };
@@ -2221,6 +2230,14 @@
           '</div>'+
           (r.aprovacao.comentario ? '<p style="margin-top:10px;color:var(--ink-soft);font-size:13px;">"'+esc(r.aprovacao.comentario)+'"</p>' : '')
         ) : (r.status==='enviado' ? approveBox() : '<p class="empty-hint">Envie a RDO para aprovação para habilitar esta etapa.</p>')) +
+      '</div>'+
+
+      '<div class="card">'+
+        '<h2><span class="idx">✍</span>Assinaturas</h2>'+
+        '<div class="kv">'+
+          kvItem('Assinatura Cliente', r.assinaturaCliente||'—') +
+          kvItem('Assinatura VENKO', r.assinaturaVenko||'—') +
+        '</div>'+
       '</div>';
 
     document.querySelectorAll('#detailGallery img').forEach(function(img){
@@ -2433,6 +2450,20 @@
         sectionWrap(sectionHead('Vídeos', videosList.length) + (videosList.length ? '<div style="padding:8px 10px;">'+videosList.map(function(v){ return '<div style="padding:3px 0;">🎬 '+esc(v.name||'vídeo anexado')+'</div>'; }).join('')+'</div>' : '')) +
         sectionWrap(sectionHead('Anexos', 0)) +
 
+        sectionWrap(
+          sectionHead('Assinaturas') +
+          '<div style="display:flex;padding:26px 20px 16px;">' +
+            '<div style="flex:1;text-align:center;padding:0 20px;">' +
+              '<div style="border-top:1px solid '+C.ink+';margin-top:34px;padding-top:6px;font-weight:bold;">Assinatura Cliente</div>' +
+              '<div style="font-size:11px;color:'+C.muted+';margin-top:3px;min-height:14px;">'+esc(r.assinaturaCliente||'')+'</div>' +
+            '</div>' +
+            '<div style="flex:1;text-align:center;padding:0 20px;">' +
+              '<div style="border-top:1px solid '+C.ink+';margin-top:34px;padding-top:6px;font-weight:bold;">Assinatura VENKO</div>' +
+              '<div style="font-size:11px;color:'+C.muted+';margin-top:3px;min-height:14px;">'+esc(r.assinaturaVenko||'')+'</div>' +
+            '</div>' +
+          '</div>'
+        ) +
+
       '</div>';
 
     var container = document.createElement('div');
@@ -2447,17 +2478,44 @@
       var pdfW = doc.internal.pageSize.getWidth();
       var pdfH = doc.internal.pageSize.getHeight();
       var imgW = pdfW;
-      var imgH = canvas.height * imgW / canvas.width;
-      var imgData = canvas.toDataURL('image/jpeg', 0.95);
-      var heightLeft = imgH, position = 0;
-      doc.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
-      heightLeft -= pdfH;
-      while(heightLeft > 0){
-        position = heightLeft - imgH;
-        doc.addPage();
-        doc.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
-        heightLeft -= pdfH;
+      var pxPerPt = canvas.width / imgW; // canvas pixels per pdf point, at this render scale
+
+      // Never let a page break fall in the middle of a section: only cut at the
+      // top edge of one of the target's direct-child blocks (each sectionWrap()).
+      var targetRect = target.getBoundingClientRect();
+      var ratioY = canvas.height / target.offsetHeight;
+      var breakPoints = Array.prototype.map.call(target.children, function(ch){
+        return (ch.getBoundingClientRect().top - targetRect.top) * ratioY;
+      }).filter(function(p){ return p > 0; });
+      breakPoints.push(canvas.height);
+      breakPoints.sort(function(a,b){ return a-b; });
+
+      var pageHeightPx = pdfH * pxPerPt;
+      var cursor = 0, pageIndex = 0;
+      while(cursor < canvas.height - 1){
+        var maxEnd = cursor + pageHeightPx;
+        var end = null;
+        for(var i=0;i<breakPoints.length;i++){
+          var c = breakPoints[i];
+          if(c > cursor + 1 && c <= maxEnd) end = c;
+        }
+        if(end === null){
+          // a single section is taller than one page (e.g. many photos) — hard cut
+          end = Math.min(maxEnd, canvas.height);
+        }
+        var sliceH = Math.round(end - cursor);
+        var pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceH;
+        pageCanvas.getContext('2d').drawImage(canvas, 0, cursor, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        var sliceData = pageCanvas.toDataURL('image/jpeg', 0.95);
+        var sliceHpt = sliceH / pxPerPt;
+        if(pageIndex>0) doc.addPage();
+        doc.addImage(sliceData, 'JPEG', 0, 0, imgW, sliceHpt);
+        cursor = end;
+        pageIndex++;
       }
+
       var fname = 'RDO_Venko_'+(r.obraNome||'obra').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+r.data+'.pdf';
       doc.save(fname);
       toast('PDF exportado.','ok');
