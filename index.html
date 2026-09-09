@@ -1340,7 +1340,6 @@
         kpiTile(fmtMoeda(resumo.total), filtroAtivo?'Valor total (filtro aplicado)':'Valor total da obra', 'accent')+
         kpiTile(resumo.totalItens, 'Total de itens', '')+
         kpiTile(resumo.categorias, 'Categorias', '')+
-        kpiTile(resumo.compras, 'Total de compras', '')+
       '</div>'+
       (resumo.maior ? '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr);margin-top:-10px;"><div class="kpi warn"><div class="n">'+fmtMoeda(resumo.maior)+'</div><div class="l">Maior gasto (item)</div></div></div>' : '')+
       '<div class="filters" id="finFilterBar">'+
@@ -3130,9 +3129,8 @@
         {label:'Valor total', value:fmtMoeda(resumo.total), total:true},
         {label:'Total de itens (lançamentos)', value:String(resumo.totalItens)},
         {label:'Categorias', value:String(resumo.categorias)},
-        {label:'Total de compras', value:String(resumo.compras)},
         {label:'Maior gasto (item)', value:fmtMoeda(resumo.maior)}
-      ], 5)
+      ], 4)
     );
 
     var tableHeader =
