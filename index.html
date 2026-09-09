@@ -364,6 +364,23 @@
   table.fin-list td{padding:9px 12px;border-bottom:1px solid var(--line-soft);font-size:13px;vertical-align:middle;}
   table.fin-list td.num{text-align:right;font-variant-numeric:tabular-nums;}
   table.fin-list tbody tr:hover{background:var(--surface-2);}
+  .fin-count-badge{
+    display:inline-block;margin-left:6px;padding:1px 7px;border-radius:20px;background:var(--surface-2);
+    color:var(--steel);font-size:10.5px;font-weight:700;border:1px solid var(--line);vertical-align:middle;
+  }
+  .fin-preview-row{
+    display:flex;justify-content:flex-end;align-items:baseline;gap:8px;padding:12px 2px 0;font-size:13px;color:var(--steel);
+  }
+  .fin-preview-row b{color:var(--ink);font-size:16px;font-variant-numeric:tabular-nums;}
+  .print-only{display:none;}
+  @media print{
+    body *{ visibility:hidden; }
+    #finPrintArea, #finPrintArea *{ visibility:visible; }
+    #finPrintArea{ position:absolute; left:0; top:0; width:100%; padding:16px; }
+    #finPrintArea .card{ box-shadow:none; border:none; padding:0; margin-bottom:14px; }
+    #finPrintArea .hint{ display:none; }
+    .print-only{ display:block !important; margin-bottom:14px; font-size:14px; }
+  }
 </style>
 </head>
 <body>
@@ -622,6 +639,11 @@
     v = Number(v)||0;
     return v.toLocaleString('pt-BR', {minimumFractionDigits:(v%1===0?0:2), maximumFractionDigits:3});
   }
+  function centsRound(v){ return Math.round((Number(v)||0) * 100); }
+  function sumMoeda(list, getter){
+    var totalCents = (list||[]).reduce(function(acc, x){ return acc + centsRound(getter(x)); }, 0);
+    return totalCents / 100;
+  }
   function uniqueSorted(arr){
     var seen = {}; var out = [];
     (arr||[]).forEach(function(v){ if(v==null||v==='') return; if(!seen[v]){ seen[v]=1; out.push(v); } });
@@ -732,7 +754,8 @@
     financeiroObraId: null,
     financeiroItens: [],
     financeiroFilters: { categoria:'', unidade:'', fornecedor:'', compra:'', dataIni:'', dataFim:'', busca:'' },
-    financeiroEditId: null
+    financeiroEditId: null,
+    catalogoItens: []
   };
 
   var CLIMA_OPTS = ['Praticável','Parcialmente praticável','Impraticável'];
@@ -815,6 +838,15 @@
       categoria:row.categoria||'', produtoServico:row.produto_servico, descricao:row.descricao||'',
       unidade:row.unidade, quantidade:Number(row.quantidade), valorUnitario:Number(row.valor_unitario),
       valorTotal:Number(row.valor_total), data:row.data||'', observacoes:row.observacoes||'', exemplo:row.exemplo,
+      catalogoItemId:row.catalogo_item_id||null,
+      createdAt:row.created_at, updatedAt:row.updated_at
+    };
+  }
+  function mapCatalogoItemRow(row){
+    return {
+      id:row.id, categoriaNumero:row.categoria_numero||'', categoriaNome:row.categoria_nome,
+      itemNumero:row.item_numero||'', descricao:row.descricao, unidade:row.unidade,
+      custoUnitario:Number(row.custo_unitario), ativo:row.ativo!==false, ordem:Number(row.ordem)||0,
       createdAt:row.created_at, updatedAt:row.updated_at
     };
   }
@@ -910,6 +942,14 @@
       if(state.view==='users'){ renderUserList(); }
     });
   }
+  function loadCatalogoProdutos(){
+    return supabaseClient.from('produtos_catalogo').select('*').eq('ativo', true).then(function(res){
+      if(res.error){ return; }
+      state.catalogoItens = (res.data||[]).map(mapCatalogoItemRow);
+      state.catalogoItens.sort(function(a,b){ return (a.ordem-b.ordem) || (a.categoriaNome||'').localeCompare(b.categoriaNome||''); });
+      if(state.view==='financeiro-obra' && state.financeiroObraId) renderFinanceiroObra();
+    });
+  }
   function loadFinanceiroItens(obraId){
     return supabaseClient.from('financeiro_itens').select('*').eq('obra_id', obraId).then(function(res){
       if(res.error){ toast('Não foi possível carregar os dados financeiros desta obra.','error'); return; }
@@ -931,6 +971,7 @@
       .on('postgres_changes', {event:'*', schema:'public', table:'rdos'}, function(){ loadRdos(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'profiles'}, function(){ loadProfiles(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'financeiro_itens'}, function(){ if(state.financeiroObraId) loadFinanceiroItens(state.financeiroObraId); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'produtos_catalogo'}, function(){ loadCatalogoProdutos(); })
       .subscribe();
   }
 
@@ -950,7 +991,7 @@
       }
       setCurrentUser(res.data);
       seedExamplesIfEmpty();
-      loadObras(); loadEquipamentos(); loadDepartamentos(); loadEquipes(); loadColaboradores(); loadRdos(); loadProfiles();
+      loadObras(); loadEquipamentos(); loadDepartamentos(); loadEquipes(); loadColaboradores(); loadRdos(); loadProfiles(); loadCatalogoProdutos();
       subscribeRealtime();
       toast('Bem-vindo, '+(res.data.nome||'').split(' ')[0]+'!','ok');
     });
@@ -1212,9 +1253,9 @@
     return JSON.stringify(state.financeiroFilters) !== JSON.stringify(FIN_FILTERS_EMPTY);
   }
   function financeiroResumo(itens){
-    var total = 0, maior = 0; var comprasSet = {}; var categoriasSet = {};
+    var total = sumMoeda(itens, function(it){ return it.valorTotal; });
+    var maior = 0; var comprasSet = {}; var categoriasSet = {};
     itens.forEach(function(it){
-      total += it.valorTotal;
       if(it.valorTotal>maior) maior = it.valorTotal;
       if(it.numeroCompra) comprasSet[it.numeroCompra]=1;
       categoriasSet[it.categoria||'Sem categoria']=1;
@@ -1231,6 +1272,40 @@
     order.sort(function(a,b){ if(a==='Sem categoria') return 1; if(b==='Sem categoria') return -1; return a.localeCompare(b); });
     return order.map(function(k){ return {categoria:k, itens:groups[k]}; });
   }
+  // Consolida lançamentos repetidos do mesmo produto/serviço (mesma unidade e mesmo valor
+  // unitário) somando quantidade e valor total — usado no relatório (tela, impressão e PDF).
+  // O histórico de lançamentos individuais (auditoria) NÃO usa esta função: continua mostrando
+  // cada lançamento separadamente, sem perder nenhum registro.
+  function financeiroConsolidado(itens){
+    var groups = {}; var order = [];
+    itens.forEach(function(it){
+      var catKey = it.categoria || 'Sem categoria';
+      if(!groups[catKey]){ groups[catKey] = {}; order.push(catKey); }
+      var key = [it.produtoServico, it.unidade, Number(it.valorUnitario).toFixed(2)].join('␟');
+      if(!groups[catKey][key]){
+        groups[catKey][key] = { produtoServico: it.produtoServico, unidade: it.unidade, valorUnitario: Number(it.valorUnitario), quantidade:0, valorTotalCents:0, count:0 };
+      }
+      var g = groups[catKey][key];
+      g.quantidade += Number(it.quantidade)||0;
+      g.valorTotalCents += centsRound(it.valorTotal);
+      g.count++;
+    });
+    order.sort(function(a,b){ if(a==='Sem categoria') return 1; if(b==='Sem categoria') return -1; return a.localeCompare(b); });
+    var totalGeralCents = 0;
+    var grupos = order.map(function(catKey){
+      var arr = Object.keys(groups[catKey]).map(function(k){
+        var g = groups[catKey][k];
+        g.valorTotal = g.valorTotalCents/100;
+        totalGeralCents += g.valorTotalCents;
+        delete g.valorTotalCents;
+        return g;
+      });
+      arr.sort(function(a,b){ return (a.produtoServico||'').localeCompare(b.produtoServico||''); });
+      var subtotalCents = arr.reduce(function(s,x){ return s+centsRound(x.valorTotal); },0);
+      return { categoria: catKey, itens: arr, subtotal: subtotalCents/100 };
+    });
+    return { grupos: grupos, total: totalGeralCents/100 };
+  }
 
   function renderFinanceiroObra(){
     var root = document.getElementById('financeiroObraContent');
@@ -1243,6 +1318,7 @@
     var filtrados = financeiroFilteredItens();
     var filtroAtivo = financeiroIsFiltroAtivo();
     var resumo = financeiroResumo(filtroAtivo ? filtrados : todos);
+    var consolidado = financeiroConsolidado(filtrados);
 
     var categorias = uniqueSorted(todos.map(function(it){ return it.categoria||'Sem categoria'; }));
     var unidades = uniqueSorted(todos.map(function(it){ return it.unidade; }));
@@ -1250,14 +1326,18 @@
     var compras = uniqueSorted(todos.map(function(it){ return it.numeroCompra; }));
     function opt(v,cur){ return '<option value="'+esc(v)+'"'+(cur===v?' selected':'')+'>'+esc(v)+'</option>'; }
     var f = state.financeiroFilters;
+    var geradoEm = new Date().toLocaleString('pt-BR');
 
     root.innerHTML =
       '<div class="page-head">'+
         '<div><h1>'+esc(obra.nome)+'</h1><p>Custos, materiais e serviços lançados nesta obra.</p></div>'+
-        '<button type="button" class="btn primary" id="btnExportFinanceiro">⬇ Exportar relatório financeiro</button>'+
+        '<div style="display:flex;gap:8px;">'+
+          '<button type="button" class="btn ghost" id="btnPrintFinanceiro">🖶 Imprimir relatório</button>'+
+          '<button type="button" class="btn primary" id="btnExportFinanceiro">⬇ Exportar relatório financeiro</button>'+
+        '</div>'+
       '</div>'+
       '<div class="kpi-row">'+
-        kpiTile(fmtMoeda(resumo.total), filtroAtivo?'Custo total (filtro aplicado)':'Custo total da obra', 'accent')+
+        kpiTile(fmtMoeda(resumo.total), filtroAtivo?'Valor total (filtro aplicado)':'Valor total da obra', 'accent')+
         kpiTile(resumo.totalItens, 'Total de itens', '')+
         kpiTile(resumo.categorias, 'Categorias', '')+
         kpiTile(resumo.compras, 'Total de compras', '')+
@@ -1275,7 +1355,18 @@
       '</div>'+
       (filtroAtivo ? '<p class="hint">Mostrando '+filtrados.length+' de '+todos.length+' itens — os valores acima já refletem o filtro aplicado.</p>' : '')+
       financeiroFormHtml()+
-      financeiroTableHtml(filtrados, resumo.total);
+      '<div id="finPrintArea">'+
+        '<div class="print-only"><b>'+esc(obra.nome)+'</b> — Relatório financeiro'+(filtroAtivo?' (filtro aplicado)':'')+'<br><span style="font-size:12px;color:#555;">Gerado em '+esc(geradoEm)+'</span></div>'+
+        '<div class="card" id="finReportCard">'+
+          '<h2><span class="idx">R</span><span>Relatório consolidado'+(filtroAtivo?' (filtro aplicado)':'')+'</span></h2>'+
+          '<p class="hint" style="margin:-6px 0 12px;">Lançamentos do mesmo produto/serviço (mesma unidade e valor unitário) são somados aqui. O histórico completo, sem consolidação, fica abaixo.</p>'+
+          financeiroReportTableHtml(consolidado, filtroAtivo)+
+        '</div>'+
+      '</div>'+
+      '<div class="card">'+
+        '<h2><span class="idx">H</span><span>Histórico de lançamentos individuais</span></h2>'+
+        financeiroHistoricoTableHtml(filtrados, resumo.total)+
+      '</div>';
 
     wireFinanceiroFilterBar();
     wireFinanceiroForm(obra);
@@ -1283,21 +1374,30 @@
     document.getElementById('btnExportFinanceiro').addEventListener('click', function(){
       exportFinanceiroPdf(obra, filtrados, resumo, filtroAtivo);
     });
+    document.getElementById('btnPrintFinanceiro').addEventListener('click', function(){
+      window.print();
+    });
   }
 
   function financeiroFormHtml(){
     var editing = state.financeiroEditId ? state.financeiroItens.find(function(x){return x.id===state.financeiroEditId;}) : null;
+    var catalogoOpts = state.catalogoItens.map(function(c){
+      return '<option value="'+esc(c.descricao)+'">'+esc(fmtMoeda(c.custoUnitario))+' / '+esc(c.unidade)+'</option>';
+    }).join('');
+    var previewInicial = editing ? editing.valorTotal : 0;
     return '<div class="card">'+
       '<h2><span class="idx">+</span><span id="finFormTitle">'+(editing?'Editar item':'Lançar item')+'</span></h2>'+
+      '<p class="hint" style="margin:-6px 0 12px;">Selecione um item da tabela de preços em "Produto/Serviço" para preencher automaticamente a unidade e o valor unitário (ainda editáveis).</p>'+
       '<form id="financeiroForm">'+
+        '<input type="hidden" id="finCatalogoItemId" value="'+esc(editing&&editing.catalogoItemId?editing.catalogoItemId:'')+'">'+
         '<div class="grid4">'+
-          '<div class="field"><label>Produto/Serviço</label><input type="text" id="finProduto" required value="'+esc(editing?editing.produtoServico:'')+'"></div>'+
+          '<div class="field"><label>Produto/Serviço</label><input type="text" id="finProduto" list="finCatalogoList" autocomplete="off" required value="'+esc(editing?editing.produtoServico:'')+'"></div>'+
           '<div class="field"><label>Categoria</label><input type="text" id="finCategoria" list="finCategoriaList" placeholder="Ex: Rede coletora" value="'+esc(editing?editing.categoria:'')+'"></div>'+
           '<div class="field"><label>Unidade</label><input type="text" id="finUnidade" list="finUnidadeList" required placeholder="Ex: m, m², unid, vb" value="'+esc(editing?editing.unidade:'')+'"></div>'+
           '<div class="field"><label>Quantidade</label><input type="number" id="finQuantidade" step="0.001" min="0" required value="'+(editing?editing.quantidade:'')+'"></div>'+
         '</div>'+
         '<div class="grid4" style="margin-top:12px;">'+
-          '<div class="field"><label>Valor unitário (R$)</label><input type="number" id="finValorUnitario" step="0.01" min="0" required value="'+(editing?editing.valorUnitario:'')+'"></div>'+
+          '<div class="field"><label>Valor unitário (R$) <span id="finValorUnitarioTag" class="tag-financeiro" style="display:'+(editing&&editing.catalogoItemId?'':'none')+';">tabela</span></label><input type="number" id="finValorUnitario" step="0.01" min="0" required value="'+(editing?editing.valorUnitario:'')+'"></div>'+
           '<div class="field"><label>Data</label><input type="date" id="finData" value="'+esc(editing?(editing.data||''):todayISO())+'"></div>'+
           '<div class="field"><label>Fornecedor</label><input type="text" id="finFornecedor" list="finFornecedorList" value="'+esc(editing?editing.fornecedor:'')+'"></div>'+
           '<div class="field"><label>Nº da compra</label><input type="text" id="finNumeroCompra" value="'+esc(editing?editing.numeroCompra:'')+'"></div>'+
@@ -1305,6 +1405,8 @@
         '<div class="grid2" style="margin-top:12px;">'+
           '<div class="field full"><label>Descrição (opcional)</label><input type="text" id="finDescricao" value="'+esc(editing?editing.descricao:'')+'"></div>'+
         '</div>'+
+        '<div class="fin-preview-row">Valor do item: <b id="finPreviewValor">'+fmtMoeda(previewInicial)+'</b></div>'+
+        '<datalist id="finCatalogoList">'+catalogoOpts+'</datalist>'+
         '<datalist id="finUnidadeList">'+FIN_UNIDADE_OPTS.map(function(u){return '<option value="'+esc(u)+'">';}).join('')+'</datalist>'+
         '<datalist id="finCategoriaList">'+uniqueSorted(state.financeiroItens.map(function(it){return it.categoria;})).map(function(c){return '<option value="'+esc(c)+'">';}).join('')+'</datalist>'+
         '<datalist id="finFornecedorList">'+uniqueSorted(state.financeiroItens.map(function(it){return it.fornecedor;})).map(function(c){return '<option value="'+esc(c)+'">';}).join('')+'</datalist>'+
@@ -1316,7 +1418,33 @@
     '</div>';
   }
 
-  function financeiroTableHtml(itens, totalGeral){
+  function financeiroReportTableHtml(consolidado, filtroAtivo){
+    if(!consolidado.grupos.length){
+      return '<div class="table-wrap"><p class="empty-hint" style="padding:20px;">Nenhum item financeiro lançado ainda para esta obra.</p></div>';
+    }
+    var rowsHtml = '';
+    consolidado.grupos.forEach(function(g){
+      rowsHtml += '<tr><td colspan="5" class="fin-group-head"><span>'+esc(g.categoria)+'</span><span>'+fmtMoeda(g.subtotal)+'</span></td></tr>';
+      g.itens.forEach(function(it){
+        rowsHtml += '<tr>'+
+          '<td>'+esc(it.produtoServico)+(it.count>1?' <span class="fin-count-badge">'+it.count+' lançamentos</span>':'')+'</td>'+
+          '<td>'+esc(it.unidade)+'</td>'+
+          '<td class="num">'+fmtQtd(it.quantidade)+'</td>'+
+          '<td class="num">'+fmtMoeda(it.valorUnitario)+'</td>'+
+          '<td class="num"><b>'+fmtMoeda(it.valorTotal)+'</b></td>'+
+        '</tr>';
+      });
+    });
+    return '<div class="table-wrap">'+
+      '<table class="fin-list">'+
+        '<thead><tr><th>Produto/Serviço</th><th>Unidade</th><th>Quantidade</th><th>Valor Unitário</th><th>Valor Total</th></tr></thead>'+
+        '<tbody>'+rowsHtml+'</tbody>'+
+      '</table>'+
+      '<div class="fin-total-row"><span>VALOR TOTAL'+(filtroAtivo?' (FILTRO)':' DA OBRA')+'</span><span>'+fmtMoeda(consolidado.total)+'</span></div>'+
+    '</div>';
+  }
+
+  function financeiroHistoricoTableHtml(itens, totalGeral){
     if(itens.length===0){
       return '<div class="table-wrap"><p class="empty-hint" style="padding:20px;">Nenhum item financeiro lançado ainda para esta obra.</p></div>';
     }
@@ -1324,7 +1452,7 @@
     var rowsHtml = '';
     var n = 0;
     grupos.forEach(function(g){
-      var subtotal = g.itens.reduce(function(s,it){return s+it.valorTotal;},0);
+      var subtotal = sumMoeda(g.itens, function(it){return it.valorTotal;});
       rowsHtml += '<tr><td colspan="7" class="fin-group-head"><span>'+esc(g.categoria)+' · '+g.itens.length+' item'+(g.itens.length>1?'ns':'')+'</span><span>'+fmtMoeda(subtotal)+'</span></td></tr>';
       g.itens.forEach(function(it){
         n++;
@@ -1347,7 +1475,7 @@
         '<thead><tr><th>Item</th><th>Produto/Serviço</th><th>Unidade</th><th>Quantidade</th><th>Valor Unitário</th><th>Valor Total</th><th></th></tr></thead>'+
         '<tbody>'+rowsHtml+'</tbody>'+
       '</table>'+
-      '<div class="fin-total-row"><span>TOTAL'+(financeiroIsFiltroAtivo()?' (FILTRO)':' DA OBRA')+'</span><span>'+fmtMoeda(totalGeral)+'</span></div>'+
+      '<div class="fin-total-row"><span>VALOR TOTAL'+(financeiroIsFiltroAtivo()?' (FILTRO)':' DO HISTÓRICO')+'</span><span>'+fmtMoeda(totalGeral)+'</span></div>'+
     '</div>';
   }
 
@@ -1374,19 +1502,66 @@
   function wireFinanceiroForm(obra){
     var form = document.getElementById('financeiroForm');
     if(!form) return;
+    var catalogoItemIdInput = document.getElementById('finCatalogoItemId');
+    var produtoInput = document.getElementById('finProduto');
+    var categoriaInput = document.getElementById('finCategoria');
+    var unidadeInput = document.getElementById('finUnidade');
+    var valorInput = document.getElementById('finValorUnitario');
+    var qtdInput = document.getElementById('finQuantidade');
+    var valorTag = document.getElementById('finValorUnitarioTag');
+    var previewEl = document.getElementById('finPreviewValor');
+
+    function findCatalogoMatch(txt){
+      var alvo = String(txt||'').trim().toLowerCase();
+      if(!alvo) return null;
+      return state.catalogoItens.find(function(c){ return String(c.descricao||'').trim().toLowerCase()===alvo; }) || null;
+    }
+    function updatePreview(){
+      if(!previewEl) return;
+      var qtd = Number(qtdInput.value)||0;
+      var vu = Number(valorInput.value)||0;
+      previewEl.textContent = fmtMoeda(qtd*vu);
+    }
+    function aplicarCatalogo(c){
+      if(!c){
+        catalogoItemIdInput.value = '';
+        if(valorTag) valorTag.style.display = 'none';
+        return;
+      }
+      catalogoItemIdInput.value = c.id;
+      unidadeInput.value = c.unidade;
+      if(!categoriaInput.value.trim()) categoriaInput.value = c.categoriaNome;
+      valorInput.value = c.custoUnitario;
+      if(valorTag) valorTag.style.display = '';
+      updatePreview();
+    }
+    if(produtoInput){
+      produtoInput.addEventListener('input', function(){
+        aplicarCatalogo(findCatalogoMatch(produtoInput.value));
+      });
+    }
+    if(qtdInput) qtdInput.addEventListener('input', updatePreview);
+    if(valorInput) valorInput.addEventListener('input', function(){
+      catalogoItemIdInput.value = '';
+      if(valorTag) valorTag.style.display = 'none';
+      updatePreview();
+    });
+    updatePreview();
+
     form.addEventListener('submit', function(e){
       e.preventDefault();
       var payload = {
         obra_id: obra.id,
-        produto_servico: document.getElementById('finProduto').value.trim(),
-        categoria: document.getElementById('finCategoria').value.trim() || null,
-        unidade: document.getElementById('finUnidade').value.trim(),
-        quantidade: Number(document.getElementById('finQuantidade').value),
-        valor_unitario: Number(document.getElementById('finValorUnitario').value),
+        produto_servico: produtoInput.value.trim(),
+        categoria: categoriaInput.value.trim() || null,
+        unidade: unidadeInput.value.trim(),
+        quantidade: Number(qtdInput.value),
+        valor_unitario: Number(valorInput.value),
         data: document.getElementById('finData').value || null,
         fornecedor: document.getElementById('finFornecedor').value.trim() || null,
         numero_compra: document.getElementById('finNumeroCompra').value.trim() || null,
-        descricao: document.getElementById('finDescricao').value.trim() || null
+        descricao: document.getElementById('finDescricao').value.trim() || null,
+        catalogo_item_id: catalogoItemIdInput.value || null
       };
       if(!payload.produto_servico || !payload.unidade){ toast('Preencha produto/serviço e unidade.','error'); return; }
       if(!(payload.quantidade>=0) || !(payload.valor_unitario>=0)){ toast('Quantidade e valor unitário precisam ser números válidos.','error'); return; }
@@ -2933,7 +3108,7 @@
 
   /* ---------------- financeiro: PDF do relatório por obra ---------------- */
   function financeiroPdfBodyHtml(obra, itens, resumo, filtroAtivo){
-    var grupos = financeiroAgrupado(itens);
+    var consolidado = financeiroConsolidado(itens);
     var geradoEm = new Date().toLocaleString('pt-BR');
     var f = state.financeiroFilters||{};
     var periodoTxt = '';
@@ -2952,8 +3127,8 @@
     var resumoCard = rdoCard(
       rdoCardHead('Resumo financeiro' + (filtroAtivo?' (filtro aplicado)':'')) +
       rdoTileGridHtml([
-        {label:'Custo total', value:fmtMoeda(resumo.total), total:true},
-        {label:'Total de itens', value:String(resumo.totalItens)},
+        {label:'Valor total', value:fmtMoeda(resumo.total), total:true},
+        {label:'Total de itens (lançamentos)', value:String(resumo.totalItens)},
         {label:'Categorias', value:String(resumo.categorias)},
         {label:'Total de compras', value:String(resumo.compras)},
         {label:'Maior gasto (item)', value:fmtMoeda(resumo.maior)}
@@ -2962,7 +3137,6 @@
 
     var tableHeader =
       '<div style="display:flex;padding:8px 12px;font-weight:bold;font-size:10px;background:'+RDO_HEAD+';border-bottom:1px solid '+RDO_BORDER+';text-transform:uppercase;letter-spacing:.3px;">' +
-        '<div style="width:26px;flex:none;">Item</div>' +
         '<div style="flex:1;padding:0 8px;">Produto/Serviço</div>' +
         '<div style="width:46px;flex:none;text-align:center;">Unid.</div>' +
         '<div style="width:68px;flex:none;text-align:right;">Qtd.</div>' +
@@ -2970,17 +3144,13 @@
         '<div style="width:96px;flex:none;text-align:right;">Valor Total</div>' +
       '</div>';
 
-    var n = 0;
-    var groupsHtml = grupos.map(function(g){
-      var subtotal = g.itens.reduce(function(s,it){ return s+it.valorTotal; },0);
+    var groupsHtml = consolidado.grupos.map(function(g){
       var head = '<div data-pdf-row="1" style="display:flex;justify-content:space-between;padding:7px 12px;font-weight:bold;font-size:10.5px;background:'+RDO_HEAD+';border-top:1px solid '+RDO_BORDER+';border-bottom:1px solid '+RDO_BORDER+';">' +
-        '<span>'+esc(g.categoria)+' · '+g.itens.length+' item'+(g.itens.length>1?'ns':'')+'</span><span>'+fmtMoeda(subtotal)+'</span>' +
+        '<span>'+esc(g.categoria)+'</span><span>'+fmtMoeda(g.subtotal)+'</span>' +
       '</div>';
       var rows = g.itens.map(function(it){
-        n++;
         return '<div data-pdf-row="1" style="display:flex;padding:8px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';font-size:11px;">' +
-          '<div style="width:26px;flex:none;color:'+RDO_MUTED+';">'+n+'</div>' +
-          '<div style="flex:1;padding:0 8px;">'+esc(it.produtoServico)+(it.descricao?'<div style="font-size:10px;color:'+RDO_MUTED+';">'+esc(it.descricao)+'</div>':'')+'</div>' +
+          '<div style="flex:1;padding:0 8px;">'+esc(it.produtoServico)+(it.count>1?'<div style="font-size:9.5px;color:'+RDO_MUTED+';">'+it.count+' lançamentos consolidados</div>':'')+'</div>' +
           '<div style="width:46px;flex:none;text-align:center;">'+esc(it.unidade)+'</div>' +
           '<div style="width:68px;flex:none;text-align:right;">'+fmtQtd(it.quantidade)+'</div>' +
           '<div style="width:88px;flex:none;text-align:right;">'+fmtMoeda(it.valorUnitario)+'</div>' +
@@ -2990,14 +3160,14 @@
       return head + rows;
     }).join('');
 
-    var listaCard = itens.length ?
-      rdoCard(rdoCardHead('Itens lançados', itens.length) + tableHeader + groupsHtml) :
-      rdoCard(rdoCardHead('Itens lançados', 0) + rdoEmptyMsg());
+    var listaCard = consolidado.grupos.length ?
+      rdoCard(rdoCardHead('Itens consolidados (relatório)', itens.length) + tableHeader + groupsHtml) :
+      rdoCard(rdoCardHead('Itens consolidados (relatório)', 0) + rdoEmptyMsg());
 
     var totalCard = rdoCard(
       '<div data-pdf-row="1" style="display:flex;justify-content:space-between;align-items:center;padding:16px 18px;background:'+RDO_HEAD+';">' +
-        '<span style="font-weight:bold;font-size:13px;text-transform:uppercase;letter-spacing:.3px;">TOTAL GERAL DA OBRA'+(filtroAtivo?' (FILTRO APLICADO)':'')+'</span>' +
-        '<span style="font-weight:bold;font-size:17px;">'+fmtMoeda(resumo.total)+'</span>' +
+        '<span style="font-weight:bold;font-size:13px;text-transform:uppercase;letter-spacing:.3px;">VALOR TOTAL DA OBRA'+(filtroAtivo?' (FILTRO APLICADO)':'')+'</span>' +
+        '<span style="font-weight:bold;font-size:17px;">'+fmtMoeda(consolidado.total)+'</span>' +
       '</div>'
     );
 
