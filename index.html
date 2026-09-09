@@ -680,7 +680,7 @@
   var OCC_TIPOS = ['Pendência','Ocorrência','Resolvido'];
   var TEAM_STATUS_OPTS = ['Em andamento','Parcialmente concluído','Concluído'];
   var CONCLUIDO_TIPO_OPTS = ['Concluído','Pendente'];
-  var CHECKLIST_OK_OPTS = ['Sim','Não'];
+  var CHECKLIST_OK_OPTS = ['Conforme','Pendente'];
   var CARGO_OPTS = ['Administrador','Gerente de Operação','Engenheiro(a) de Obras','Encarregado de Obra','Encarregado de Obra Júnior','Encarregado de Manutenção','Técnico de Segurança','Operador de Máquina','Pedreiro','Servente','Encanador','Cliente','Outro'];
   var STATUS_LABEL = { rascunho:'Rascunho', enviado:'Aguardando aprovação', aprovado:'Aprovado', rejeitado:'Rejeitado' };
 
@@ -1777,17 +1777,8 @@
       equipesDia:[], equipesDetalhe:[], maoDeObra:[], gestao:{adm:'',eng:''}, numeroEquipe:[], equipamentos:[],
       ocorrencias:[], checklist:[], comentarios:[],
       responsavel: state.currentUser ? state.currentUser.nome : '', status:'rascunho',
-      assinaturas:[{nome:'',cargo:'Cliente'},{nome:'',cargo:'VENKO'}]
+      assinaturas:[]
     };
-  }
-  function assinaturaNome(rdo, cargo){
-    var a = (rdo.assinaturas||[]).find(function(x){ return x.cargo===cargo; });
-    return a ? (a.nome||'') : '';
-  }
-  function setAssinaturaNome(rdo, cargo, nome){
-    rdo.assinaturas = rdo.assinaturas || [];
-    var a = rdo.assinaturas.find(function(x){ return x.cargo===cargo; });
-    if(a){ a.nome = nome; } else { rdo.assinaturas.push({nome:nome, cargo:cargo}); }
   }
   function renderEquipeChecklist(selectedNames){
     var ativas = state.equipes.filter(function(e){ return e.ativa; });
@@ -2021,16 +2012,12 @@
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">12</span>Responsável e assinaturas</h2>'+
+        '<h2><span class="idx">12</span>Responsável</h2>'+
         '<div class="grid2">'+
           '<div class="field"><label>Preenchido por</label><input type="text" id="rdoResponsavel" value="'+esc(rdo.responsavel||'')+'" required></div>'+
         '</div>'+
         (isLockedEdit ? '' : '<div class="checkline" style="margin-top:12px;"><input type="checkbox" id="rdoDeclaracao"><label for="rdoDeclaracao">Confirmo que as informações acima refletem fielmente o que ocorreu na obra nesta data.</label></div>') +
-        '<h3 style="margin-top:16px;">Assinaturas</h3>'+
-        '<div class="grid2">'+
-          '<div class="field"><label>Assinatura Cliente</label><input type="text" id="rdoAssinaturaCliente" value="'+esc(assinaturaNome(rdo,'Cliente'))+'" placeholder="Nome do responsável pelo cliente"></div>'+
-          '<div class="field"><label>Assinatura VENKO</label><input type="text" id="rdoAssinaturaVenko" value="'+esc(assinaturaNome(rdo,'VENKO'))+'" placeholder="Nome do responsável VENKO"></div>'+
-        '</div>'+
+        '<p class="hint" style="margin-top:12px;">A assinatura de Cliente e VENKO é adicionada apenas no PDF, no momento da impressão.</p>'+
       '</div>'+
 
       '<div class="form-actions">'+
@@ -2059,8 +2046,6 @@
     wireDynTable('oc', [{key:'tipo',type:'select',options:OCC_TIPOS},{key:'texto'},{key:'acao'}], function(){ return rdo.ocorrencias; }, function(v){ rdo.ocorrencias=v; });
     wireDynTable('chk', [{key:'item'},{key:'ok',type:'select',options:CHECKLIST_OK_OPTS}], function(){ return rdo.checklist; }, function(v){ rdo.checklist=v; });
     wireDynTable('com', [{key:'texto'}], function(){ return strListRows(rdo.comentarios); }, function(v){ rdo.comentarios = v.map(function(r){return r.texto||'';}); });
-    document.getElementById('rdoAssinaturaCliente').addEventListener('input', function(){ setAssinaturaNome(rdo,'Cliente', this.value); });
-    document.getElementById('rdoAssinaturaVenko').addEventListener('input', function(){ setAssinaturaNome(rdo,'VENKO', this.value); });
 
     renderPhotoUI();
     document.getElementById('rdoFotos').addEventListener('change', function(e){
@@ -2169,7 +2154,6 @@
         fotos: state.photos.map(function(p){ return p.dataUrl; }),
         videos: state.videos.map(function(v){ return {url:v.url, name:v.name||''}; }),
         responsavel: responsavel,
-        assinaturas: (rdo.assinaturas||[]).filter(function(a){ return a.nome; }).map(function(a){ return {nome:a.nome.trim(), cargo:(a.cargo||'').trim()}; }),
         status: isLockedEdit ? rdo.status : (wantsSend ? 'enviado' : 'rascunho'),
         updated_at: new Date().toISOString()
       };
@@ -2206,12 +2190,6 @@
     var el = document.getElementById('detailContent');
     if(!r){ el.innerHTML = '<p class="empty-hint">RDO não encontrada.</p>'; return; }
 
-    var pendCount = (r.ocorrencias||[]).filter(function(o){ return o.tipo==='Pendência'; }).length;
-    var climaResumo = [
-      (r.climaManha&&(r.climaManha.tempo||r.climaManha.condicao)) ? 'Manhã: '+[r.climaManha.tempo,r.climaManha.condicao].filter(Boolean).join(' · ') : '',
-      (r.climaTarde&&(r.climaTarde.tempo||r.climaTarde.condicao)) ? 'Tarde: '+[r.climaTarde.tempo,r.climaTarde.condicao].filter(Boolean).join(' · ') : ''
-    ].filter(Boolean).join(' — ') || '—';
-
     el.innerHTML =
       '<div class="detail-head">'+
         '<div class="detail-title"><h1>'+esc(r.obraNome)+(r.exemplo?'<span class="tag-example">exemplo</span>':'')+'</h1>'+
@@ -2222,78 +2200,7 @@
         '</div>'+
       '</div>'+
 
-      '<div class="card">'+
-        '<h2><span class="idx">i</span>Resumo</h2>'+
-        '<div class="kv">'+
-          kvItem('Clima', climaResumo) +
-          kvItem('Equipes em campo', (r.equipesDia&&r.equipesDia.length) ? r.equipesDia.join(', ') : '—') +
-          kvItem('Mão de obra', (r.maoDeObra||[]).length+' pessoa(s)') +
-          kvItem('Ocorrências', (r.ocorrencias||[]).length + (pendCount? ' · '+pendCount+' pendência(s)':''), pendCount>0) +
-        '</div>'+
-      '</div>'+
-
-      readSection('Mão de obra', ['Nome','Função','Departamento'], (r.maoDeObra||[]).map(function(x){return [x.nome,x.funcao,x.departamento];})) +
-      ((r.gestao && (r.gestao.adm || r.gestao.eng)) ? '<div class="card"><h2><span class="idx">·</span>Gestão</h2><div class="kv">'+
-        kvItem('ADM', r.gestao.adm||0) + kvItem('ENG', r.gestao.eng||0) + kvItem('Total', (parseFloat(r.gestao.adm)||0)+(parseFloat(r.gestao.eng)||0)) +
-      '</div></div>' : '') +
-
-      (((r.equipesDia&&r.equipesDia.length)) ? '<div class="card"><h2><span class="idx">·</span>Atividades por equipe</h2>'+
-        r.equipesDia.map(function(nome, i){
-          var d = (r.equipesDetalhe&&r.equipesDetalhe[i]) || {};
-          var ne = (r.numeroEquipe&&r.numeroEquipe[i]) || {};
-          var integrantesTxt = (ne.integrantes&&ne.integrantes.length) ? ne.integrantes.map(function(c){return esc(c.nome)+' — '+esc(c.funcao);}).join(', ') : '—';
-          var statusColor = d.status==='Concluído' ? 'var(--status-approved,#1f9d55)' : (d.status==='Em andamento' ? 'var(--status-sent,#2f5d8a)' : 'var(--ink-soft,#6b7280)');
-          return '<div style="margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border,#e4e7eb);">'+
-            '<b>Equipe '+(i+1)+': '+esc(nome)+'</b>'+(d.status?' <span style="font-size:12px;font-weight:bold;color:'+statusColor+';margin-left:6px;">'+esc(d.status)+'</span>':'')+
-            (d.frente?'<div class="hint" style="margin-top:2px;">Frente: '+esc(d.frente)+'</div>':'')+
-            (ne.encarregado?'<div class="hint">Encarregado: '+esc(ne.encarregado)+'</div>':'')+
-            '<div class="hint" style="margin-top:4px;">Integrantes: '+integrantesTxt+'</div>'+
-            (d.atividades?'<p style="margin-top:8px;">'+esc(d.atividades).replace(/\n/g,'<br>')+'</p>':'')+
-            ((d.concluidos&&d.concluidos.length) ? '<table class="readtable" style="margin-top:8px;"><thead><tr><th>Item</th><th>Situação</th></tr></thead><tbody>'+
-              d.concluidos.map(function(c){ return '<tr><td>'+esc(c.texto)+'</td><td>'+(c.tipo==='Concluído'?'<span style="color:var(--status-approved,#1f9d55);">Concluído</span>':'<span style="color:var(--status-rejected,#c6433f);">Pendente</span>')+'</td></tr>'; }).join('')+
-            '</tbody></table>' : '')+
-          '</div>';
-        }).join('') +
-      '</div>' : '') +
-
-      (((r.equipesDetalhe&&r.equipesDetalhe.some(function(d){return (d.resumoAtividades&&d.resumoAtividades.length)||(d.resumoItens&&d.resumoItens.length);}))) ?
-        '<div class="card"><h2><span class="idx">·</span>Resumo de Produção</h2>'+
-        '<div class="subtable-wrap"><table class="readtable"><thead><tr><th>EQ</th><th>Ativ.</th><th>Itens Concluídos</th></tr></thead><tbody>'+
-        r.equipesDia.map(function(nome,i){
-          var d = (r.equipesDetalhe&&r.equipesDetalhe[i]) || {};
-          return '<tr><td>Q'+(i+1)+' — '+esc(nome)+'</td>'+
-            '<td>'+((d.resumoAtividades||[]).map(esc).join('<br>')||'—')+'</td>'+
-            '<td>'+((d.resumoItens||[]).map(esc).join('<br>')||'—')+'</td></tr>';
-        }).join('') +
-        '</tbody></table></div></div>' : '') +
-
-      readSection('Equipamentos', ['Equipamento','Qtd.','Horas'], (r.equipamentos||[]).map(function(x){return [x.nome,x.qtd,x.horas];})) +
-      ((r.materiaisLegado&&r.materiaisLegado.length) ? readSection('Materiais (registro anterior)', ['Material','Qtd.','Unidade'], r.materiaisLegado.map(function(x){return [x.nome,x.qtd,x.unidade];})) : '') +
-      ((r.atividadesLegado&&r.atividadesLegado.length) ? readSection('Atividades executadas (registro anterior)', ['Descrição','Tipo','Equipe'], r.atividadesLegado.map(function(x){return [x.descricao,x.tipo,x.equipe||'—'];})) : '') +
-
-      readSection('Ocorrências', ['Tipo','Descrição','Ação'], (r.ocorrencias||[]).map(function(x){
-        var color = x.tipo==='Pendência' ? 'var(--status-rejected,#c6433f)' : (x.tipo==='Resolvido' ? 'var(--status-approved,#1f9d55)' : 'var(--ink-soft,#6b7280)');
-        return ['<span style="color:'+color+';font-weight:bold;">'+esc(x.tipo)+'</span>', esc(x.texto), esc(x.acao||'—')];
-      }), true) +
-
-      ((r.checklist&&r.checklist.length) ? readSection('Checklist', ['Item','Situação'], r.checklist.map(function(x){
-        return [esc(x.item), x.ok==='Sim' ? '<span style="color:var(--status-approved,#1f9d55);font-weight:bold;">Sim</span>' : '<span style="color:var(--status-rejected,#c6433f);font-weight:bold;">Não</span>'];
-      }), true) : '') +
-
-      (((r.comentarios&&r.comentarios.length) || r.observacoesLegado) ? '<div class="card"><h2><span class="idx">i</span>Comentários</h2>'+
-        ((r.comentarios&&r.comentarios.length) ? '<ul style="margin:0;padding-left:18px;">'+r.comentarios.map(function(c){return '<li>'+esc(c)+'</li>';}).join('')+'</ul>' : '')+
-        (r.observacoesLegado ? '<p style="margin-top:8px;color:var(--ink-soft);font-size:13px;">'+esc(r.observacoesLegado).replace(/\n/g,'<br>')+'</p>' : '')+
-      '</div>' : '') +
-
-      ((r.fotos&&r.fotos.length) ? '<div class="card"><h2><span class="idx">i</span>Fotos</h2><div class="gallery" id="detailGallery">'+
-        r.fotos.map(function(f){ return '<img src="'+f+'">'; }).join('') + '</div></div>' : '') +
-
-      ((r.videos&&r.videos.length) ? '<div class="card"><h2><span class="idx">i</span>Vídeos</h2><div class="video-gallery">'+
-        r.videos.map(function(v){
-          var vv = (typeof v==='string') ? {url:v,name:''} : v;
-          return '<div class="video-thumb"><video src="'+vv.url+'" controls preload="metadata"></video>'+
-            (vv.name ? '<div class="video-name">'+esc(vv.name)+'</div>' : '') + '</div>';
-        }).join('') + '</div></div>' : '') +
+      rdoBodyHtml(r, {print:false}) +
 
       '<div class="card">'+
         '<h2><span class="idx">✓</span>Assinatura e aprovação</h2>'+
@@ -2308,13 +2215,6 @@
           '</div>'+
           (r.aprovacao.comentario ? '<p style="margin-top:10px;color:var(--ink-soft);font-size:13px;">"'+esc(r.aprovacao.comentario)+'"</p>' : '')
         ) : (r.status==='enviado' ? approveBox() : '<p class="empty-hint">Envie a RDO para aprovação para habilitar esta etapa.</p>')) +
-      '</div>'+
-
-      '<div class="card">'+
-        '<h2><span class="idx">✍</span>Assinaturas</h2>'+
-        ((r.assinaturas&&r.assinaturas.length) ? '<div class="kv">'+
-          r.assinaturas.map(function(a){ return kvItem(a.cargo||'Assinatura', a.nome||'—'); }).join('') +
-        '</div>' : '<p class="empty-hint">Nenhuma assinatura registrada.</p>') +
       '</div>';
 
     document.querySelectorAll('#detailGallery img').forEach(function(img){
@@ -2376,90 +2276,106 @@
     var idx = mesmaObra.findIndex(function(x){ return x.id===r.id; });
     return idx>=0 ? (idx+1) : mesmaObra.length+1;
   }
-  function exportRdoPdf(r){
-    if(!window.jspdf || !window.jspdf.jsPDF){
-      toast('Gerador de PDF indisponível neste momento.','error');
-      return;
-    }
-    if(!window.html2canvas){
-      toast('Gerador de PDF indisponível (html2canvas não carregado).','error');
-      return;
-    }
-    toast('Gerando PDF…','ok');
-
-    var C = { border:'#d7dbe0', head:'#eef1f4', label:'#2f5d8a', ink:'#1a1a1a', muted:'#6b7280', green:'#1f9d55', red:'#c6433f' };
-
-    function row(html, extra){ return '<div style="display:flex;'+(extra||'')+'">'+html+'</div>'; }
-    function cell(html, w, extra){ return '<div style="'+(w?('flex:'+w+';'):'flex:1;')+'box-sizing:border-box;padding:7px 10px;'+(extra||'')+'">'+html+'</div>'; }
-    function sectionWrap(inner){ return '<div style="border:1px solid '+C.border+';margin:0 16px 7px;background:#fff;">'+inner+'</div>'; }
-    function sectionHead(label, count){
-      var txt = esc(label) + (count!=null ? ' ('+count+')' : '');
-      return '<div style="padding:7px 10px;font-weight:bold;font-size:12.5px;background:'+C.head+';border-bottom:1px solid '+C.border+';">'+txt+'</div>';
-    }
-    function labelValue(label, value){
-      return '<div><div style="font-weight:bold;font-size:11px;">'+esc(label)+'</div><div style="font-size:12px;margin-top:2px;">'+esc(value||'—')+'</div></div>';
-    }
-    function emptyMsg(){ return '<div style="padding:8px 10px;color:'+C.muted+';">Nenhum registro.</div>'; }
-    function tileGridHtml(items, cols){
-      cols = cols || 6;
-      var w = (100/cols).toFixed(4)+'%';
-      var tiles = items.map(function(it){
-        var bg = it.total ? '#f5f6f8' : '#fff';
-        return '<div style="width:'+w+';box-sizing:border-box;padding:8px 10px;border-right:1px solid '+C.border+';border-bottom:1px solid '+C.border+';background:'+bg+';">'+
-          '<div style="font-size:10.5px;color:'+(it.total?C.ink:C.label)+';font-weight:'+(it.total?'bold':'normal')+';">'+esc(it.label)+'</div>'+
-          '<div style="font-size:15px;font-weight:bold;margin-top:2px;">'+esc(it.value)+'</div>'+
-        '</div>';
-      }).join('');
-      return '<div style="display:flex;flex-wrap:wrap;">'+tiles+'</div>';
-    }
-    function colaboradorRowHtml(nome, funcao, departamento){
-      return '<div style="display:flex;padding:8px 10px;border-bottom:1px solid #eee;">'+
-        '<div style="flex:1;">'+esc(nome||'—')+'</div>'+
-        '<div style="width:170px;flex:none;">'+esc(funcao||'—')+'</div>'+
-        '<div style="width:130px;flex:none;text-align:right;">'+esc(departamento||'—')+'</div>'+
+  /* ---- shared report body (used identically on screen and in the PDF) ---- */
+  var RDO_BORDER = 'var(--line)';
+  var RDO_HEAD = 'var(--paper)';
+  var RDO_MUTED = 'var(--steel)';
+  var RDO_LINE_SOFT = 'var(--line-soft)';
+  var RDO_SHELL = 'var(--surface-2)';
+  function rdoRow(html, extra){ return '<div style="display:flex;'+(extra||'')+'">'+html+'</div>'; }
+  function rdoCell(html, w, extra){ return '<div style="'+(w?('flex:'+w+';'):'flex:1;')+'box-sizing:border-box;padding:9px 12px;'+(extra||'')+'">'+html+'</div>'; }
+  function rdoCard(inner, extra){ return '<div style="border:1px solid '+RDO_BORDER+';border-radius:10px;margin:0 0 12px;background:var(--surface);overflow:hidden;'+(extra||'')+'">'+inner+'</div>'; }
+  function rdoCardHead(label, count){
+    var txt = esc(label) + (count!=null ? ' <span style="font-weight:normal;color:'+RDO_MUTED+';">('+count+')</span>' : '');
+    return '<div style="padding:10px 14px;font-weight:bold;font-size:12.5px;background:'+RDO_HEAD+';border-bottom:1px solid '+RDO_BORDER+';letter-spacing:.2px;">'+txt+'</div>';
+  }
+  function rdoLabelValue(label, value){
+    return '<div><div style="font-weight:bold;font-size:10px;color:'+RDO_MUTED+';text-transform:uppercase;letter-spacing:.4px;">'+esc(label)+'</div><div style="font-size:12.5px;margin-top:3px;">'+esc(value||'—')+'</div></div>';
+  }
+  function rdoEmptyMsg(){ return '<div style="padding:10px 14px;color:'+RDO_MUTED+';">Nenhum registro.</div>'; }
+  function rdoStag(text, colorVar){ return '<span style="font-weight:bold;color:'+colorVar+';">'+esc(text)+'</span>'; }
+  function rdoCondicaoTxt(c){
+    if(c==='Praticável') return rdoStag(c, 'var(--status-approved)');
+    if(c==='Impraticável') return rdoStag(c, 'var(--status-rejected)');
+    if(c) return rdoStag(c, 'var(--status-stopped)');
+    return '—';
+  }
+  function rdoStatusTxt(s){
+    if(s==='Concluído') return rdoStag(s, 'var(--status-approved)');
+    if(s) return rdoStag(s, 'var(--status-stopped)');
+    return '';
+  }
+  function rdoTipoOcTxt(t){
+    if(t==='Pendência') return rdoStag(t, 'var(--status-stopped)');
+    if(t==='Resolvido') return rdoStag(t, 'var(--status-approved)');
+    return rdoStag(t||'Ocorrência', 'var(--status-rejected)');
+  }
+  function rdoOkTxt(ok){ return ok==='Conforme' ? rdoStag('Conforme', 'var(--status-approved)') : rdoStag('Pendente', 'var(--status-stopped)'); }
+  function rdoTileGridHtml(items, cols){
+    cols = cols || 6;
+    var w = (100/cols).toFixed(4)+'%';
+    var tiles = items.map(function(it){
+      var bg = it.total ? RDO_HEAD : 'var(--surface)';
+      return '<div style="width:'+w+';box-sizing:border-box;padding:10px 12px;border-right:1px solid '+RDO_BORDER+';border-bottom:1px solid '+RDO_BORDER+';background:'+bg+';">'+
+        '<div style="font-size:10px;color:'+(it.total?'var(--ink)':'var(--venko-yellow-deep)')+';font-weight:'+(it.total?'bold':'normal')+';">'+esc(it.label)+'</div>'+
+        '<div style="font-size:16px;font-weight:bold;margin-top:2px;">'+esc(it.value)+'</div>'+
       '</div>';
-    }
-    function condicaoColorFor(c){ return c==='Praticável' ? C.green : (c==='Impraticável' ? C.red : '#b8860b'); }
-    function equipeDetalheRowHtml(nome, i, d, ne){
-      var integrantesTxt = (ne.integrantes&&ne.integrantes.length) ? ne.integrantes.map(function(c){ return esc(c.nome)+' — '+esc(c.funcao); }).join(', ') : 'Nenhum colaborador ativo.';
-      var concl = (d.concluidos||[]).map(function(c){
-        var color = c.tipo==='Concluído' ? C.green : C.red;
-        return '<div style="padding:2px 0;">• '+esc(c.texto)+' <span style="color:'+color+';font-weight:bold;">('+esc(c.tipo||'—')+')</span></div>';
-      }).join('');
-      return '<div style="padding:8px 10px;border-bottom:1px solid #eee;">'+
-        '<div style="font-weight:bold;">Equipe '+(i+1)+': '+esc(nome)+(d.status?' <span style="font-size:10.5px;color:'+C.label+';">— '+esc(d.status)+'</span>':'')+'</div>'+
-        (d.frente ? '<div style="font-size:10.5px;color:'+C.muted+';margin-top:2px;">Frente: '+esc(d.frente)+'</div>' : '')+
-        (ne.encarregado ? '<div style="font-size:10.5px;color:'+C.muted+';">Encarregado: '+esc(ne.encarregado)+'</div>' : '')+
-        '<div style="font-size:10.5px;margin-top:3px;">Integrantes: '+integrantesTxt+'</div>'+
-        (d.atividades ? '<div style="margin-top:5px;white-space:pre-wrap;">'+esc(d.atividades)+'</div>' : '')+
-        (concl ? '<div style="margin-top:5px;">'+concl+'</div>' : '')+
-      '</div>';
-    }
-    function resumoProducaoRowHtml(nome, i, d){
-      return '<div style="display:flex;padding:8px 10px;border-bottom:1px solid #eee;">'+
-        '<div style="width:130px;flex:none;font-weight:bold;">Q'+(i+1)+' — '+esc(nome)+'</div>'+
-        '<div style="flex:1;padding:0 8px;">'+((d.resumoAtividades||[]).map(esc).join('<br>')||'—')+'</div>'+
-        '<div style="flex:1;padding:0 8px;">'+((d.resumoItens||[]).map(esc).join('<br>')||'—')+'</div>'+
-      '</div>';
-    }
-    function checklistRowHtml(item, ok){
-      var color = ok==='Sim' ? C.green : C.red;
-      return '<div style="display:flex;padding:8px 10px;border-bottom:1px solid #eee;">'+
-        '<div style="flex:1;">'+esc(item||'—')+'</div>'+
-        '<div style="width:70px;flex:none;text-align:right;font-weight:bold;color:'+color+';">'+esc(ok||'—')+'</div>'+
-      '</div>';
-    }
-    function occurrenceRowHtml(tipo, texto, acao){
-      var color = tipo==='Pendência' ? C.red : (tipo==='Resolvido' ? C.green : C.label);
-      return '<div style="padding:8px 10px;border-bottom:1px solid #eee;">'+
-        '<div><span style="font-weight:bold;color:'+color+';">'+esc(tipo||'—')+'</span></div>'+
-        '<div style="margin-top:2px;">'+esc(texto||'—')+'</div>'+
-        (acao ? '<div style="font-size:10.5px;color:'+C.muted+';margin-top:2px;">'+esc(acao)+'</div>' : '')+
-      '</div>';
-    }
-
+    }).join('');
+    return '<div style="display:flex;flex-wrap:wrap;">'+tiles+'</div>';
+  }
+  function moTilesFromNominal(mo){
+    var counts = {};
+    mo.forEach(function(x){ var f = x.funcao||'Outro'; counts[f] = (counts[f]||0)+1; });
+    var tiles = Object.keys(counts).map(function(f){ return {label:f, value:counts[f]}; });
+    if(mo.length) tiles.push({label:'Mão de obra própria', value:mo.length, total:true});
+    return tiles;
+  }
+  function rdoColaboradorRowHtml(nome, funcao, departamento){
+    return '<div style="display:flex;padding:9px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
+      '<div style="flex:1;">'+esc(nome||'—')+'</div>'+
+      '<div style="width:170px;flex:none;">'+esc(funcao||'—')+'</div>'+
+      '<div style="width:130px;flex:none;text-align:right;">'+esc(departamento||'—')+'</div>'+
+    '</div>';
+  }
+  function rdoEquipeDetalheRowHtml(nome, i, d, ne){
+    var integrantesTxt = (ne.integrantes&&ne.integrantes.length) ? ne.integrantes.map(function(c){ return esc(c.nome)+' — '+esc(c.funcao); }).join(', ') : 'Nenhum colaborador ativo.';
+    var concl = (d.concluidos||[]).map(function(c){
+      return '<div style="padding:2px 0;">• '+esc(c.texto)+' '+rdoStatusTxt(c.tipo||'—')+'</div>';
+    }).join('');
+    return '<div style="padding:10px 14px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
+      '<div style="font-weight:bold;">EQ'+(i+1)+' — '+esc(nome)+(d.status?' &nbsp;'+rdoStatusTxt(d.status):'')+'</div>'+
+      (d.frente ? '<div style="font-size:11px;color:'+RDO_MUTED+';margin-top:2px;">'+esc(d.frente)+'</div>' : '')+
+      (ne.encarregado ? '<div style="font-size:10.5px;color:'+RDO_MUTED+';">Encarregado: '+esc(ne.encarregado)+'</div>' : '')+
+      '<div style="font-size:10.5px;margin-top:4px;">Integrantes: '+integrantesTxt+'</div>'+
+      (d.atividades ? '<div style="margin-top:6px;white-space:pre-wrap;">'+esc(d.atividades)+'</div>' : '')+
+      (concl ? '<div style="margin-top:6px;">'+concl+'</div>' : '')+
+    '</div>';
+  }
+  function rdoResumoProducaoRowHtml(nome, i, d){
+    return '<div style="display:flex;padding:9px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
+      '<div style="width:130px;flex:none;font-weight:bold;">EQ'+(i+1)+' — '+esc(nome)+'</div>'+
+      '<div style="flex:1;padding:0 8px;">'+((d.resumoAtividades||[]).map(esc).join('<br>')||'—')+'</div>'+
+      '<div style="flex:1;padding:0 8px;">'+((d.resumoItens||[]).map(esc).join('<br>')||'—')+'</div>'+
+    '</div>';
+  }
+  function rdoChecklistRowHtml(item, ok){
+    return '<div style="display:flex;align-items:center;padding:9px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
+      '<div style="flex:1;">'+esc(item||'—')+'</div>'+
+      '<div style="width:90px;flex:none;text-align:right;">'+rdoOkTxt(ok)+'</div>'+
+    '</div>';
+  }
+  function rdoOccurrenceRowHtml(tipo, texto, acao){
+    return '<div style="padding:9px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
+      '<div>'+rdoTipoOcTxt(tipo)+'</div>'+
+      '<div style="margin-top:4px;">'+esc(texto||'—')+'</div>'+
+      (acao ? '<div style="font-size:10.5px;color:'+RDO_MUTED+';margin-top:3px;">'+esc(acao)+'</div>' : '')+
+    '</div>';
+  }
+  function rdoBodyHtml(r, opts){
+    opts = opts || {};
     var obraCad = state.obras.find(function(o){ return o.id===r.obraId; }) || {};
     var mo = r.maoDeObra||[];
+    var moTiles = moTilesFromNominal(mo);
     var gestaoData = r.gestao||{};
     var gestaoTiles = [{label:'ADM', value:gestaoData.adm||0}, {label:'ENG', value:gestaoData.eng||0}, {label:'Total', value:(parseFloat(gestaoData.adm)||0)+(parseFloat(gestaoData.eng)||0), total:true}];
     var equipesDia = r.equipesDia||[];
@@ -2478,92 +2394,108 @@
 
     var cManha = r.climaManha||{}, cTarde = r.climaTarde||{};
 
-    var html =
-      '<div style="width:800px;background:#fff;color:'+C.ink+';font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.4;padding:18px 0 24px;">' +
-        '<div style="display:flex;align-items:center;justify-content:center;padding:0 0 10px;">' +
-          '<img src="'+LOGO_DATA+'" style="height:32px;">' +
+    var headCards = !opts.print ? '' :
+      rdoCard(rdoRow(
+        rdoCell(rdoLabelValue('Relatório nº', String(reportNumberFor(r)).padStart(3,'0')), 1, 'border-right:1px solid '+RDO_BORDER+';') +
+        rdoCell(rdoLabelValue('Data', fmtDate(r.data)), 1, 'border-right:1px solid '+RDO_BORDER+';') +
+        rdoCell(rdoLabelValue('Dia da semana', diaDaSemana(r.data)), 1)
+      )) +
+      rdoCard(
+        rdoRow(rdoCell(rdoLabelValue('Obra', r.obraNome + (obraCad.contrato?' — '+obraCad.contrato:'')), 1)) +
+        rdoRow(rdoCell(rdoLabelValue('Localidade', obraCad.localidade||obraCad.endereco), 1), 'border-top:1px solid '+RDO_BORDER+';')
+      ) +
+      rdoCard(rdoRow(rdoCell(rdoLabelValue('Responsável', r.responsavel), 1)));
+
+    var sigBlock = !opts.print ? '' : rdoCard(
+      '<div style="display:flex;flex-wrap:wrap;padding:30px 20px 18px;">' +
+        '<div style="flex:1;min-width:160px;text-align:center;padding:0 20px 20px;">' +
+          '<div style="border-top:1px solid var(--ink);margin-top:34px;padding-top:6px;font-weight:bold;">Assinatura Cliente</div>' +
         '</div>' +
-        '<div style="text-align:center;font-weight:bold;font-size:15px;padding:0 16px 10px;border-bottom:2px solid '+C.ink+';margin:0 16px 10px;">Relatório Diário de Obra (RDO)</div>' +
+        '<div style="flex:1;min-width:160px;text-align:center;padding:0 20px 20px;">' +
+          '<div style="border-top:1px solid var(--ink);margin-top:34px;padding-top:6px;font-weight:bold;">Assinatura VENKO</div>' +
+        '</div>' +
+      '</div>'
+    );
 
-        sectionWrap(row(
-          cell(labelValue('Relatório nº', String(reportNumberFor(r)).padStart(3,'0')), 1, 'border-right:1px solid '+C.border+';') +
-          cell(labelValue('Data', fmtDate(r.data)), 1, 'border-right:1px solid '+C.border+';') +
-          cell(labelValue('Dia da semana', diaDaSemana(r.data)), 1)
-        )) +
+    return headCards +
 
-        sectionWrap(row(
-          cell(labelValue('Obra', r.obraNome + (obraCad.contrato?' — '+obraCad.contrato:'')), 2, 'border-right:1px solid '+C.border+';') +
-          cell(labelValue('Localidade', obraCad.localidade||obraCad.endereco), 1)
-        )) +
-
-        sectionWrap(row(
-          cell(labelValue('Responsável', r.responsavel), 1)
-        )) +
-
-        sectionWrap(
-          '<div style="padding:7px 10px;font-weight:bold;border-bottom:1px solid '+C.border+';">Clima</div>' +
-          row(
-            cell('', '0 0 90px', 'border-right:1px solid '+C.border+';') +
-            cell('<b>Tempo</b>', 1, 'border-right:1px solid '+C.border+';') +
-            cell('<b>Condição</b>', 1),
-            'border-bottom:1px solid '+C.border+';'
-          ) +
-          row(
-            cell('<b>Manhã</b>', '0 0 90px', 'border-right:1px solid '+C.border+';') +
-            cell(esc(cManha.tempo||'—'), 1, 'border-right:1px solid '+C.border+';') +
-            cell('<span style="color:'+condicaoColorFor(cManha.condicao)+';font-weight:bold;">'+esc(cManha.condicao||'—')+'</span>', 1),
-            'border-bottom:1px solid '+C.border+';'
-          ) +
-          row(
-            cell('<b>Tarde</b>', '0 0 90px', 'border-right:1px solid '+C.border+';') +
-            cell(esc(cTarde.tempo||'—'), 1, 'border-right:1px solid '+C.border+';') +
-            cell('<span style="color:'+condicaoColorFor(cTarde.condicao)+';font-weight:bold;">'+esc(cTarde.condicao||'—')+'</span>', 1)
-          )
+      rdoCard(
+        rdoCardHead('Clima') +
+        rdoRow(
+          rdoCell('', '0 0 90px', 'border-right:1px solid '+RDO_BORDER+';') +
+          rdoCell('<b style="font-size:10px;color:'+RDO_MUTED+';text-transform:uppercase;">Tempo</b>', 1, 'border-right:1px solid '+RDO_BORDER+';') +
+          rdoCell('<b style="font-size:10px;color:'+RDO_MUTED+';text-transform:uppercase;">Condição</b>', 1),
+          'border-bottom:1px solid '+RDO_BORDER+';'
         ) +
+        rdoRow(
+          rdoCell('<b>Manhã</b>', '0 0 90px', 'border-right:1px solid '+RDO_BORDER+';') +
+          rdoCell(esc(cManha.tempo||'—'), 1, 'border-right:1px solid '+RDO_BORDER+';') +
+          rdoCell(rdoCondicaoTxt(cManha.condicao), 1),
+          'border-bottom:1px solid '+RDO_BORDER+';'
+        ) +
+        rdoRow(
+          rdoCell('<b>Tarde</b>', '0 0 90px', 'border-right:1px solid '+RDO_BORDER+';') +
+          rdoCell(esc(cTarde.tempo||'—'), 1, 'border-right:1px solid '+RDO_BORDER+';') +
+          rdoCell(rdoCondicaoTxt(cTarde.condicao), 1)
+        )
+      ) +
 
-        sectionWrap(sectionHead('Equipes em campo', equipesDia.length) + (equipesDia.length ? '<div style="padding:8px 10px;">'+esc(equipesDia.join(', '))+'</div>' : emptyMsg())) +
+      rdoCard(rdoCardHead('Equipes em campo', equipesDia.length) + (equipesDia.length ? '<div style="padding:10px 14px;">'+esc(equipesDia.join(', '))+'</div>' : rdoEmptyMsg())) +
 
-        sectionWrap(sectionHead('Mão de obra', mo.length) + (mo.length ? mo.map(function(x){ return colaboradorRowHtml(x.nome, x.funcao, x.departamento); }).join('') : emptyMsg())) +
+      rdoCard(rdoCardHead('Mão de obra', mo.length) + (moTiles.length ? rdoTileGridHtml(moTiles,4) : rdoEmptyMsg())) +
 
-        sectionWrap(sectionHead('Gestão') + tileGridHtml(gestaoTiles,3)) +
+      rdoCard(rdoCardHead('Gestão') + rdoTileGridHtml(gestaoTiles,3)) +
 
-        sectionWrap(sectionHead('Atividades por equipe', equipesDia.length) + (equipesDia.length ? equipesDia.map(function(nome,i){ return equipeDetalheRowHtml(nome, i, equipesDetalhe[i]||{}, numEq[i]||{}); }).join('') : emptyMsg())) +
+      rdoCard(rdoCardHead('Atividades por equipe', equipesDia.length) + (equipesDia.length ? equipesDia.map(function(nome,i){ return rdoEquipeDetalheRowHtml(nome, i, equipesDetalhe[i]||{}, numEq[i]||{}); }).join('') : rdoEmptyMsg())) +
 
-        (equipesDia.length ? sectionWrap(sectionHead('Resumo de Produção') +
-          '<div style="display:flex;padding:7px 10px;font-weight:bold;font-size:10.5px;background:'+C.head+';border-bottom:1px solid '+C.border+';">'+
-            '<div style="width:130px;flex:none;">EQ</div><div style="flex:1;padding:0 8px;">Ativ.</div><div style="flex:1;padding:0 8px;">Itens Concluídos</div>'+
+      (equipesDia.length ? rdoCard(rdoCardHead('Resumo de Produção') +
+        '<div style="display:flex;padding:9px 12px;font-weight:bold;font-size:10.5px;background:'+RDO_HEAD+';border-bottom:1px solid '+RDO_BORDER+';">'+
+          '<div style="width:130px;flex:none;">EQ</div><div style="flex:1;padding:0 8px;">Ativ.</div><div style="flex:1;padding:0 8px;">Itens Concluídos</div>'+
+        '</div>' +
+        equipesDia.map(function(nome,i){ return rdoResumoProducaoRowHtml(nome, i, equipesDetalhe[i]||{}); }).join('')
+      ) : '') +
+
+      rdoCard(rdoCardHead('Equipamentos', totalEq) + (eqTiles.length ? rdoTileGridHtml(eqTiles,6) : rdoEmptyMsg())) +
+
+      ((r.materiaisLegado&&r.materiaisLegado.length) ? rdoCard(rdoCardHead('Materiais (registro anterior)', r.materiaisLegado.length) + r.materiaisLegado.map(function(x){ return rdoColaboradorRowHtml(x.nome, x.qtd, x.unidade); }).join('')) : '') +
+      ((r.atividadesLegado&&r.atividadesLegado.length) ? rdoCard(rdoCardHead('Atividades executadas (registro anterior)', r.atividadesLegado.length) + r.atividadesLegado.map(function(x){ return rdoColaboradorRowHtml(x.descricao, x.tipo, x.equipe); }).join('')) : '') +
+
+      rdoCard(rdoCardHead('Ocorrências', oc.length) + (oc.length ? oc.map(function(x){ return rdoOccurrenceRowHtml(x.tipo, x.texto, x.acao); }).join('') : rdoEmptyMsg())) +
+
+      rdoCard(rdoCardHead('Checklist', checklist.length) + (checklist.length ? checklist.map(function(x){ return rdoChecklistRowHtml(x.item, x.ok); }).join('') : rdoEmptyMsg())) +
+
+      rdoCard(rdoCardHead('Comentários', comentarios.length) + (comentarios.length ? '<div style="padding:10px 14px;">'+comentarios.map(function(c){ return '<div style="padding:2px 0;">• '+esc(c)+'</div>'; }).join('')+'</div>' : (r.observacoesLegado ? '<div style="padding:10px 14px;white-space:pre-wrap;">'+esc(r.observacoesLegado)+'</div>' : rdoEmptyMsg()))) +
+
+      (fotos.length ? rdoCard(rdoCardHead('Fotos', fotos.length) + '<div class="gallery" id="detailGallery" style="display:flex;flex-wrap:wrap;padding:8px;">'+fotos.map(function(f){ return '<img src="'+f+'" style="width:104px;height:80px;object-fit:cover;margin:4px;border:1px solid '+RDO_BORDER+';border-radius:6px;'+(opts.print?'':'cursor:pointer;')+'">'; }).join('')+'</div>') : '') +
+
+      (videosList.length ? rdoCard(rdoCardHead('Vídeos', videosList.length) + (opts.print ?
+        '<div style="padding:10px 14px;">'+videosList.map(function(v){ return '<div style="padding:3px 0;">🎬 '+esc(v.name||'vídeo anexado')+'</div>'; }).join('')+'</div>' :
+        '<div class="video-gallery" style="padding:10px 14px;">'+videosList.map(function(v){ return '<div class="video-thumb" style="margin-bottom:8px;"><video src="'+v.url+'" controls preload="metadata" style="max-width:100%;border-radius:6px;"></video>'+(v.name?'<div class="video-name" style="font-size:11px;color:'+RDO_MUTED+';margin-top:2px;">'+esc(v.name)+'</div>':'')+'</div>'; }).join('')+'</div>'
+      )) : '') +
+
+      sigBlock;
+  }
+
+  function exportRdoPdf(r){
+    if(!window.jspdf || !window.jspdf.jsPDF){
+      toast('Gerador de PDF indisponível neste momento.','error');
+      return;
+    }
+    if(!window.html2canvas){
+      toast('Gerador de PDF indisponível (html2canvas não carregado).','error');
+      return;
+    }
+    toast('Gerando PDF…','ok');
+
+    var html =
+      '<div style="width:800px;background:'+RDO_SHELL+';color:var(--ink);font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.45;padding:18px 16px 24px;">' +
+        rdoCard(
+          '<div style="display:flex;align-items:center;justify-content:center;padding:14px 0 6px;">' +
+            '<img src="'+LOGO_DATA+'" style="height:30px;">' +
           '</div>' +
-          equipesDia.map(function(nome,i){ return resumoProducaoRowHtml(nome, i, equipesDetalhe[i]||{}); }).join('')
-        ) : '') +
-
-        sectionWrap(sectionHead('Equipamentos', totalEq) + (eqTiles.length ? tileGridHtml(eqTiles,6) : emptyMsg())) +
-
-        ((r.materiaisLegado&&r.materiaisLegado.length) ? sectionWrap(sectionHead('Materiais (registro anterior)', r.materiaisLegado.length) + r.materiaisLegado.map(function(x){ return colaboradorRowHtml(x.nome, x.qtd, x.unidade); }).join('')) : '') +
-        ((r.atividadesLegado&&r.atividadesLegado.length) ? sectionWrap(sectionHead('Atividades executadas (registro anterior)', r.atividadesLegado.length) + r.atividadesLegado.map(function(x){ return colaboradorRowHtml(x.descricao, x.tipo, x.equipe); }).join('')) : '') +
-
-        sectionWrap(sectionHead('Ocorrências', oc.length) + (oc.length ? oc.map(function(x){ return occurrenceRowHtml(x.tipo, x.texto, x.acao); }).join('') : emptyMsg())) +
-
-        sectionWrap(sectionHead('Checklist', checklist.length) + (checklist.length ? checklist.map(function(x){ return checklistRowHtml(x.item, x.ok); }).join('') : emptyMsg())) +
-
-        sectionWrap(sectionHead('Comentários', comentarios.length) + (comentarios.length ? '<div style="padding:8px 10px;">'+comentarios.map(function(c){ return '<div style="padding:2px 0;">• '+esc(c)+'</div>'; }).join('')+'</div>' : (r.observacoesLegado ? '<div style="padding:8px 10px;white-space:pre-wrap;">'+esc(r.observacoesLegado)+'</div>' : ''))) +
-
-        sectionWrap(sectionHead('Fotos', fotos.length) + (fotos.length ? '<div style="display:flex;flex-wrap:wrap;padding:8px;">'+fotos.map(function(f){ return '<img src="'+f+'" style="width:104px;height:80px;object-fit:cover;margin:4px;border:1px solid '+C.border+';">'; }).join('')+'</div>' : '')) +
-
-        sectionWrap(sectionHead('Vídeos', videosList.length) + (videosList.length ? '<div style="padding:8px 10px;">'+videosList.map(function(v){ return '<div style="padding:3px 0;">🎬 '+esc(v.name||'vídeo anexado')+'</div>'; }).join('')+'</div>' : '')) +
-        sectionWrap(sectionHead('Anexos', 0)) +
-
-        sectionWrap(
-          sectionHead('Assinaturas') +
-          '<div style="display:flex;flex-wrap:wrap;padding:26px 20px 16px;">' +
-            ((r.assinaturas&&r.assinaturas.length) ? r.assinaturas.map(function(a){
-              return '<div style="flex:1;min-width:160px;text-align:center;padding:0 20px 20px;">' +
-                '<div style="border-top:1px solid '+C.ink+';margin-top:34px;padding-top:6px;font-weight:bold;">'+esc(a.cargo||'Assinatura')+'</div>' +
-                '<div style="font-size:11px;color:'+C.muted+';margin-top:3px;min-height:14px;">'+esc(a.nome||'')+'</div>' +
-              '</div>';
-            }).join('') : '<div style="flex:1;text-align:center;color:'+C.muted+';">Nenhuma assinatura registrada.</div>') +
-          '</div>'
+          '<div style="text-align:center;font-weight:bold;font-size:14.5px;padding:0 16px 14px;">Relatório Diário de Obra (RDO)</div>'
         ) +
-
+        rdoBodyHtml(r, {print:true}) +
       '</div>';
 
     var container = document.createElement('div');
