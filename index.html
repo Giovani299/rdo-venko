@@ -427,6 +427,10 @@
             <div class="field"><label>Responsável técnico</label><input type="text" id="obraResp"></div>
             <div class="field"><label>Início</label><input type="date" id="obraInicio"></div>
           </div>
+          <div class="grid2" style="margin-top:12px;">
+            <div class="field"><label>Localidade</label><input type="text" id="obraLocalidade" placeholder="Cidade/UF"></div>
+            <div class="field"><label>Contrato</label><input type="text" id="obraContrato" placeholder="Ex: Contrato 023 — Torre 03 / Bloco C"></div>
+          </div>
           <div class="form-actions"><button type="submit" class="btn primary">Salvar obra</button></div>
         </form>
       </div>
@@ -664,18 +668,19 @@
     rdos: [],
     profiles: [],
     currentUser: null,
-    filters: { obraId:'', dataIni:'', dataFim:'', responsavel:'', status:'', tipo:'', busca:'' },
+    filters: { obraId:'', dataIni:'', dataFim:'', responsavel:'', status:'', busca:'' },
     editId: null,
     detailId: null,
     photos: [],          // {dataUrl}
     videos: []           // {url, path, name, uploading}
   };
 
-  var CLIMA_OPTS = ['Produtivo','Improdutivo','Parcialmente produtivo'];
-  var ATIV_TIPOS = ['Terraplenagem','Fundação','Estrutura','Alvenaria','Elétrica','Hidráulica','Acabamento','Cobertura','Outro'];
+  var CLIMA_OPTS = ['Praticável','Parcialmente praticável','Impraticável'];
   var FUNCAO_OPTS = ['Encanador','Servente','Operador de Máquina','Encarregado de Obra','Pedreiro','Encarregado de Obra Júnior','Gerente de Operação','Encarregado de Manutenção'];
-  var MATERIAL_OPTS = ['Cimento CP-II','Areia média','Areia fina','Brita 1','Brita 2','Bloco cerâmico','Bloco de concreto','Tijolo baiano','Aço CA-50','Argamassa colante','Concreto usinado','Tinta acrílica','Fio elétrico','Tubo PVC','Cal hidratada'];
-  var OCC_TIPOS = ['Segurança','Qualidade','Paralisação','Fiscalização','Outro'];
+  var OCC_TIPOS = ['Pendência','Ocorrência','Resolvido'];
+  var TEAM_STATUS_OPTS = ['Em andamento','Parcialmente concluído','Concluído'];
+  var CONCLUIDO_TIPO_OPTS = ['Concluído','Pendente'];
+  var CHECKLIST_OK_OPTS = ['Sim','Não'];
   var CARGO_OPTS = ['Administrador','Gerente de Operação','Engenheiro(a) de Obras','Encarregado de Obra','Encarregado de Obra Júnior','Encarregado de Manutenção','Técnico de Segurança','Operador de Máquina','Pedreiro','Servente','Encanador','Cliente','Outro'];
   var STATUS_LABEL = { rascunho:'Rascunho', enviado:'Aguardando aprovação', aprovado:'Aprovado', rejeitado:'Rejeitado' };
 
@@ -739,7 +744,7 @@
 
   /* ---------------- data loading (Postgres + Realtime) ---------------- */
   function mapObraRow(row){
-    return { id:row.id, nome:row.nome, endereco:row.endereco, responsavelTecnico:row.responsavel_tecnico, dataInicio:row.data_inicio, status:row.status, exemplo:row.exemplo, createdAt:row.created_at };
+    return { id:row.id, nome:row.nome, endereco:row.endereco, responsavelTecnico:row.responsavel_tecnico, dataInicio:row.data_inicio, localidade:row.localidade||'', contrato:row.contrato||'', status:row.status, exemplo:row.exemplo, createdAt:row.created_at };
   }
   function mapEquipamentoRow(row){
     return { id:row.id, nome:row.nome, createdAt:row.created_at };
@@ -754,14 +759,21 @@
     return { id:row.id, nome:row.nome, funcao:row.funcao, departamentoId:row.departamento_id, equipeId:row.equipe_id, ativo:row.ativo, createdAt:row.created_at, updatedAt:row.updated_at };
   }
   function mapRdoRow(row){
+    var legacyCond = row.impraticavel ? 'Impraticável' : (row.clima ? 'Praticável' : '');
+    var legacySignatures = [];
+    if(row.assinatura_cliente) legacySignatures.push({nome:row.assinatura_cliente, cargo:'Cliente'});
+    if(row.assinatura_venko) legacySignatures.push({nome:row.assinatura_venko, cargo:'VENKO'});
     return {
-      id: row.id, obraId: row.obra_id, obraNome: row.obra_nome, data: row.data, clima: row.clima,
-      impraticavel: row.impraticavel, maoDeObra: row.mao_de_obra||[], equipamentos: row.equipamentos||[],
-      materiais: row.materiais||[], atividades: row.atividades||[], ocorrencias: row.ocorrencias||[],
-      equipesDia: row.equipes_dia||[], gestao: row.gestao||{}, producaoEquipes: row.producao_equipes||[], numeroEquipe: row.numero_equipe||[],
-      observacoes: row.observacoes, fotos: row.fotos||[], videos: row.videos||[], responsavel: row.responsavel, status: row.status,
+      id: row.id, obraId: row.obra_id, obraNome: row.obra_nome, data: row.data,
+      climaManha: row.clima_manha || {tempo: row.clima||'', condicao: legacyCond},
+      climaTarde: row.clima_tarde || {tempo: row.clima||'', condicao: legacyCond},
+      maoDeObra: row.mao_de_obra||[], equipamentos: row.equipamentos||[],
+      ocorrencias: row.ocorrencias||[], checklist: row.checklist||[], comentarios: row.comentarios||[],
+      equipesDia: row.equipes_dia||[], equipesDetalhe: row.equipes_detalhe||[], gestao: row.gestao||{}, numeroEquipe: row.numero_equipe||[],
+      observacoesLegado: row.observacoes||'', materiaisLegado: row.materiais||[], atividadesLegado: row.atividades||[],
+      fotos: row.fotos||[], videos: row.videos||[], responsavel: row.responsavel, status: row.status,
       assinatura: row.assinatura, aprovacao: row.aprovacao, exemplo: row.exemplo,
-      assinaturaCliente: row.assinatura_cliente||'', assinaturaVenko: row.assinatura_venko||'',
+      assinaturas: (row.assinaturas && row.assinaturas.length) ? row.assinaturas : legacySignatures,
       createdAt: row.created_at, updatedAt: row.updated_at
     };
   }
@@ -1074,16 +1086,16 @@
     var obrasAtivas = state.obras.filter(function(o){ return o.status==='ativa'; }).length;
     var rdosMes = state.rdos.filter(function(r){ return monthKey(r.data)===mkey; }).length;
     var pendentes = state.rdos.filter(function(r){ return r.status==='enviado'; }).length;
-    var diasParados = 0;
+    var diasComPendencia = 0;
     state.rdos.filter(function(r){ return monthKey(r.data)===mkey; }).forEach(function(r){
-      var stopped = (r.ocorrencias||[]).some(function(o){ return o.tipo==='Paralisação'; });
-      if(stopped) diasParados++;
+      var temPendencia = (r.ocorrencias||[]).some(function(o){ return o.tipo==='Pendência'; });
+      if(temPendencia) diasComPendencia++;
     });
     document.getElementById('kpiRow').innerHTML =
       kpiTile(obrasAtivas,'Obras ativas','accent') +
       kpiTile(rdosMes,'RDOs este mês','') +
       kpiTile(pendentes,'Aguardando aprovação','pend') +
-      kpiTile(diasParados,'Dias com paralisação (mês)','warn');
+      kpiTile(diasComPendencia,'Dias com pendência (mês)','warn');
   }
   function kpiTile(n,label,extra){
     return '<div class="kpi '+extra+'"><div class="n">'+n+'</div><div class="l">'+esc(label)+'</div></div>';
@@ -1097,17 +1109,13 @@
     var statusOpts = '<option value="">Qualquer status</option>' + Object.keys(STATUS_LABEL).map(function(k){
       return '<option value="'+k+'"'+(f.status===k?' selected':'')+'>'+STATUS_LABEL[k]+'</option>';
     }).join('');
-    var tipoOpts = '<option value="">Qualquer atividade</option>' + ATIV_TIPOS.map(function(t){
-      return '<option value="'+t+'"'+(f.tipo===t?' selected':'')+'>'+t+'</option>';
-    }).join('');
     document.getElementById('filterBar').innerHTML =
       '<div class="field"><label>Obra</label><select id="fObra">'+obraOpts+'</select></div>'+
       '<div class="field"><label>De</label><input type="date" id="fDe" value="'+esc(f.dataIni)+'"></div>'+
       '<div class="field"><label>Até</label><input type="date" id="fAte" value="'+esc(f.dataFim)+'"></div>'+
       '<div class="field"><label>Responsável</label><input type="text" id="fResp" placeholder="nome" value="'+esc(f.responsavel)+'"></div>'+
       '<div class="field"><label>Status</label><select id="fStatus">'+statusOpts+'</select></div>'+
-      '<div class="field"><label>Atividade</label><select id="fTipo">'+tipoOpts+'</select></div>'+
-      '<div class="field grow"><label>Buscar</label><input type="text" id="fBusca" placeholder="texto nas observações, atividades..." value="'+esc(f.busca)+'"></div>'+
+      '<div class="field grow"><label>Buscar</label><input type="text" id="fBusca" placeholder="texto nos comentários, ocorrências..." value="'+esc(f.busca)+'"></div>'+
       '<button class="btn ghost sm" id="fClear" type="button">Limpar filtros</button>';
 
     document.getElementById('fObra').addEventListener('change', function(e){ f.obraId=e.target.value; renderRdoTable(); });
@@ -1115,10 +1123,9 @@
     document.getElementById('fAte').addEventListener('change', function(e){ f.dataFim=e.target.value; renderRdoTable(); });
     document.getElementById('fResp').addEventListener('input', function(e){ f.responsavel=e.target.value; renderRdoTable(); });
     document.getElementById('fStatus').addEventListener('change', function(e){ f.status=e.target.value; renderRdoTable(); });
-    document.getElementById('fTipo').addEventListener('change', function(e){ f.tipo=e.target.value; renderRdoTable(); });
     document.getElementById('fBusca').addEventListener('input', function(e){ f.busca=e.target.value; renderRdoTable(); });
     document.getElementById('fClear').addEventListener('click', function(){
-      state.filters = { obraId:'', dataIni:'', dataFim:'', responsavel:'', status:'', tipo:'', busca:'' };
+      state.filters = { obraId:'', dataIni:'', dataFim:'', responsavel:'', status:'', busca:'' };
       renderFilters(); renderRdoTable();
     });
   }
@@ -1131,11 +1138,11 @@
       if(f.dataFim && r.data > f.dataFim) return false;
       if(f.responsavel && (r.responsavel||'').toLowerCase().indexOf(f.responsavel.toLowerCase())===-1) return false;
       if(f.status && r.status!==f.status) return false;
-      if(f.tipo && !(r.atividades||[]).some(function(a){ return a.tipo===f.tipo; })) return false;
       if(f.busca){
-        var hay = [r.observacoes, r.obraNome].concat(
-          (r.atividades||[]).map(function(a){return a.descricao;}),
-          (r.ocorrencias||[]).map(function(o){return o.descricao;})
+        var hay = [r.obraNome, r.observacoesLegado].concat(
+          (r.comentarios||[]),
+          (r.ocorrencias||[]).map(function(o){return o.texto;}),
+          (r.equipesDetalhe||[]).map(function(e){return e.atividades;})
         ).join(' ').toLowerCase();
         if(hay.indexOf(f.busca.toLowerCase())===-1) return false;
       }
@@ -1151,13 +1158,14 @@
       return;
     }
     body.innerHTML = rows.map(function(r){
-      var stopCount = (r.ocorrencias||[]).filter(function(o){ return o.tipo==='Paralisação'; }).length;
-      var occText = stopCount>0 ? '<span class="tag-stop">⛔ '+stopCount+' paralisação(ões)</span>' : ((r.ocorrencias||[]).length ? (r.ocorrencias.length+' registrada(s)') : '—');
+      var pendCount = (r.ocorrencias||[]).filter(function(o){ return o.tipo==='Pendência'; }).length;
+      var occText = pendCount>0 ? '<span class="tag-stop">⚠ '+pendCount+' pendência(s)</span>' : ((r.ocorrencias||[]).length ? (r.ocorrencias.length+' registrada(s)') : '—');
+      var climaTxt = (r.climaManha&&r.climaManha.condicao) || r.clima || '—';
       return '<tr data-id="'+r.id+'">'+
         '<td class="mono-num">'+fmtDate(r.data)+'</td>'+
         '<td>'+esc(r.obraNome)+(r.exemplo?'<span class="tag-example">exemplo</span>':'')+'</td>'+
         '<td>'+esc(r.responsavel||'—')+'</td>'+
-        '<td>'+esc(r.clima||'—')+'</td>'+
+        '<td>'+esc(climaTxt)+'</td>'+
         '<td>'+occText+'</td>'+
         '<td>'+statusChip(r.status)+'</td>'+
       '</tr>';
@@ -1185,6 +1193,8 @@
       endereco: document.getElementById('obraEndereco').value.trim(),
       responsavel_tecnico: document.getElementById('obraResp').value.trim(),
       data_inicio: document.getElementById('obraInicio').value || null,
+      localidade: document.getElementById('obraLocalidade').value.trim(),
+      contrato: document.getElementById('obraContrato').value.trim(),
       status: 'ativa'
     }).then(function(res){
       if(res.error){ toast('Erro ao salvar obra: '+res.error.message,'error'); return; }
@@ -1204,7 +1214,7 @@
       var rdoCount = state.rdos.filter(function(r){ return r.obraId===o.id; }).length;
       return '<div class="obra-card" data-id="'+o.id+'">'+
         '<div class="info"><b>'+esc(o.nome)+(o.exemplo?'<span class="tag-example">exemplo</span>':'')+'</b>'+
-          '<div class="meta">'+esc(o.endereco||'Endereço não informado')+' · Resp.: '+esc(o.responsavelTecnico||'—')+' · '+rdoCount+' RDO(s)</div>'+
+          '<div class="meta">'+esc(o.endereco||'Endereço não informado')+(o.localidade?' · '+esc(o.localidade):'')+' · Resp.: '+esc(o.responsavelTecnico||'—')+' · '+rdoCount+' RDO(s)</div>'+
         '</div>'+
         '<div class="obra-actions">'+
           '<span class="chip '+(o.status==='ativa'?'approved':'draft')+'">'+(o.status==='ativa'?'Ativa':'Concluída')+'</span>'+
@@ -1762,12 +1772,22 @@
   /* ---------------- RDO form (create / edit) ---------------- */
   function blankRdo(){
     return {
-      obraId:'', data: todayISO(), clima: CLIMA_OPTS[0], impraticavel:false,
-      equipesDia:[], maoDeObra:[], gestao:{adm:'',eng:''}, producaoEquipes:[], numeroEquipe:[], equipamentos:[],
-      materiais:[], atividades:[],
-      ocorrencias:[], observacoes:'', responsavel: state.currentUser ? state.currentUser.nome : '', status:'rascunho',
-      assinaturaCliente:'', assinaturaVenko:''
+      obraId:'', data: todayISO(),
+      climaManha:{tempo:'',condicao:CLIMA_OPTS[0]}, climaTarde:{tempo:'',condicao:CLIMA_OPTS[0]},
+      equipesDia:[], equipesDetalhe:[], maoDeObra:[], gestao:{adm:'',eng:''}, numeroEquipe:[], equipamentos:[],
+      ocorrencias:[], checklist:[], comentarios:[],
+      responsavel: state.currentUser ? state.currentUser.nome : '', status:'rascunho',
+      assinaturas:[{nome:'',cargo:'Cliente'},{nome:'',cargo:'VENKO'}]
     };
+  }
+  function assinaturaNome(rdo, cargo){
+    var a = (rdo.assinaturas||[]).find(function(x){ return x.cargo===cargo; });
+    return a ? (a.nome||'') : '';
+  }
+  function setAssinaturaNome(rdo, cargo, nome){
+    rdo.assinaturas = rdo.assinaturas || [];
+    var a = rdo.assinaturas.find(function(x){ return x.cargo===cargo; });
+    if(a){ a.nome = nome; } else { rdo.assinaturas.push({nome:nome, cargo:cargo}); }
   }
   function renderEquipeChecklist(selectedNames){
     var ativas = state.equipes.filter(function(e){ return e.ativa; });
@@ -1813,68 +1833,80 @@
     rdo.maoDeObra = rows;
     refreshMaoDeObraUI(rdo);
   }
-  function producaoEquipesHtml(rdo){
-    if(!(rdo.equipesDia&&rdo.equipesDia.length)) return '<p class="empty-hint">Selecione ao menos uma equipe em campo para lançar a produção.</p>';
-    return '<div class="checklist-wrap" id="producaoWrap">' + rdo.equipesDia.map(function(nome, i){
-      var existing = (rdo.producaoEquipes||[]).find(function(p){ return p.equipe===nome; }) || {};
-      return '<div class="checklist-item" style="align-items:center;">'+
-        '<span class="checklist-label">Produção da equipe '+(i+1)+' ('+esc(nome)+')</span>'+
-        '<span class="checklist-extra" style="display:flex;">'+
-          '<input type="number" min="0" step="1" data-prodidx="'+i+'" placeholder="Produções" value="'+esc(existing.producoes!=null?existing.producoes:'')+'">'+
-          '<select data-prodstatusidx="'+i+'"><option value="">Resultado…</option>'+
-            ['Concluído','Em andamento','Não iniciado'].map(function(o){ return '<option value="'+o+'"'+(existing.resultado===o?' selected':'')+'>'+o+'</option>'; }).join('')+
-          '</select>'+
-        '</span>'+
+  /* ---- equipe detalhada (frente, status, integrantes, atividades, concluídos, resumo) ---- */
+  function equipeDetalheBlank(){
+    return { frente:'', status:TEAM_STATUS_OPTS[0], atividades:'', concluidos:[], resumoAtividades:[], resumoItens:[] };
+  }
+  function syncEquipesDetalhe(rdo){
+    rdo.equipesDetalhe = (rdo.equipesDia||[]).map(function(nome, i){
+      return (rdo.equipesDetalhe && rdo.equipesDetalhe[i]) || equipeDetalheBlank();
+    });
+  }
+  function strListRows(arr){ return (arr||[]).map(function(s){ return {texto:s}; }); }
+  function equipesDetalheHtml(rdo){
+    if(!(rdo.equipesDia&&rdo.equipesDia.length)) return '<p class="empty-hint">Selecione ao menos uma equipe em campo para detalhar as atividades.</p>';
+    syncEquipesDetalhe(rdo);
+    return rdo.equipesDia.map(function(nome, i){
+      var d = rdo.equipesDetalhe[i];
+      var eq = state.equipes.find(function(e){ return e.nome===nome; });
+      var integrantes = equipeColaboradores(nome);
+      return '<div class="card" style="margin:0 0 12px;background:#fbfbfa;">'+
+        '<div style="font-weight:bold;margin-bottom:8px;">Equipe '+(i+1)+': '+esc(nome)+(eq&&eq.encarregado?' <span class="hint" style="font-weight:normal;">— Encarregado: '+esc(eq.encarregado)+'</span>':'')+'</div>'+
+        '<div class="grid2">'+
+          '<div class="field"><label>Frente de trabalho</label><input type="text" data-eqfrente="'+i+'" value="'+esc(d.frente||'')+'" placeholder="Ex: Pavimento 14 · Pilares e vigas"></div>'+
+          '<div class="field"><label>Status</label><select data-eqstatus="'+i+'">'+TEAM_STATUS_OPTS.map(function(o){return '<option'+(o===d.status?' selected':'')+'>'+o+'</option>';}).join('')+'</select></div>'+
+        '</div>'+
+        '<div class="hint" style="margin:8px 0 4px;">Integrantes: '+(integrantes.length ? integrantes.map(function(c){return esc(c.nome)+' — '+esc(c.funcao);}).join(', ') : 'Nenhum colaborador ativo nesta equipe.')+'</div>'+
+        '<div class="field full" style="margin-top:8px;"><label>Atividades do dia</label><textarea data-eqativ="'+i+'" placeholder="O que a equipe fez hoje...">'+esc(d.atividades||'')+'</textarea></div>'+
+        '<h3 style="font-size:13px;font-weight:700;margin:14px 0 4px;">Itens concluídos / pendentes</h3>'+
+        dynTable('concl'+i, [{key:'texto',label:'Item',width:'66%'},{key:'tipo',label:'Situação',type:'select',options:CONCLUIDO_TIPO_OPTS,width:'34%'}], d.concluidos) +
+        '<div class="grid2" style="margin-top:12px;">'+
+          '<div><h3 style="font-size:13px;font-weight:700;margin:0 0 4px;">Resumo — atividades</h3>'+
+            dynTable('resat'+i, [{key:'texto',label:'Atividade',width:'100%'}], strListRows(d.resumoAtividades)) +
+          '</div>'+
+          '<div><h3 style="font-size:13px;font-weight:700;margin:0 0 4px;">Resumo — itens concluídos</h3>'+
+            dynTable('resit'+i, [{key:'texto',label:'Item concluído',width:'100%'}], strListRows(d.resumoItens)) +
+          '</div>'+
+        '</div>'+
       '</div>';
-    }).join('') + '</div>';
+    }).join('');
   }
-  function wireProducaoEquipes(rdo){
-    var wrap = document.getElementById('producaoWrap');
-    if(!wrap) return;
-    function rebuild(){
-      rdo.producaoEquipes = (rdo.equipesDia||[]).map(function(nome, i){
-        var numInp = wrap.querySelector('[data-prodidx="'+i+'"]');
-        var selInp = wrap.querySelector('[data-prodstatusidx="'+i+'"]');
-        return { equipe:nome, producoes: (numInp&&numInp.value!=='')?parseFloat(numInp.value):'', resultado: selInp?selInp.value:'' };
-      });
-    }
-    wrap.querySelectorAll('[data-prodidx]').forEach(function(inp){ inp.addEventListener('input', rebuild); });
-    wrap.querySelectorAll('[data-prodstatusidx]').forEach(function(sel){ sel.addEventListener('change', rebuild); });
-    rebuild();
+  function wireEquipesDetalhe(rdo){
+    var container = document.getElementById('equipesDetalheContainer');
+    if(!container) return;
+    rdo.equipesDia.forEach(function(nome, i){
+      var frenteInp = container.querySelector('[data-eqfrente="'+i+'"]');
+      var statusSel = container.querySelector('[data-eqstatus="'+i+'"]');
+      var ativTa = container.querySelector('[data-eqativ="'+i+'"]');
+      if(frenteInp) frenteInp.addEventListener('input', function(){ rdo.equipesDetalhe[i].frente = frenteInp.value; });
+      if(statusSel) statusSel.addEventListener('change', function(){ rdo.equipesDetalhe[i].status = statusSel.value; });
+      if(ativTa) ativTa.addEventListener('input', function(){ rdo.equipesDetalhe[i].atividades = ativTa.value; });
+      wireDynTable('concl'+i, [{key:'texto'},{key:'tipo',type:'select',options:CONCLUIDO_TIPO_OPTS}],
+        function(){ return rdo.equipesDetalhe[i].concluidos; },
+        function(v){ rdo.equipesDetalhe[i].concluidos = v; });
+      wireDynTable('resat'+i, [{key:'texto'}],
+        function(){ return strListRows(rdo.equipesDetalhe[i].resumoAtividades); },
+        function(v){ rdo.equipesDetalhe[i].resumoAtividades = v.map(function(r){return r.texto||'';}); });
+      wireDynTable('resit'+i, [{key:'texto'}],
+        function(){ return strListRows(rdo.equipesDetalhe[i].resumoItens); },
+        function(v){ rdo.equipesDetalhe[i].resumoItens = v.map(function(r){return r.texto||'';}); });
+    });
   }
-  function refreshProducaoEquipesUI(rdo){
-    var box = document.getElementById('producaoContainer');
+  function refreshEquipesDetalheUI(rdo){
+    var box = document.getElementById('equipesDetalheContainer');
     if(!box) return;
-    box.innerHTML = producaoEquipesHtml(rdo);
-    wireProducaoEquipes(rdo);
+    box.innerHTML = equipesDetalheHtml(rdo);
+    wireEquipesDetalhe(rdo);
   }
   function numeroEquipeCompute(rdo){
     return (rdo.equipesDia||[]).map(function(nome, i){
       var eq = state.equipes.find(function(e){ return e.nome===nome; });
       var counts = {};
-      equipeColaboradores(nome).forEach(function(c){ counts[c.funcao] = (counts[c.funcao]||0) + 1; });
+      var integrantes = equipeColaboradores(nome).map(function(c){ return {nome:c.nome, funcao:c.funcao}; });
+      integrantes.forEach(function(c){ counts[c.funcao] = (counts[c.funcao]||0) + 1; });
       var funcoes = Object.keys(counts).map(function(f){ return {funcao:f, qtd:counts[f]}; });
-      return { numero:(i+1), nomeEquipe:nome, encarregado: eq?(eq.encarregado||''):'', funcoes:funcoes };
+      return { numero:(i+1), nomeEquipe:nome, encarregado: eq?(eq.encarregado||''):'', funcoes:funcoes, integrantes:integrantes };
     });
-  }
-  function numeroEquipeHtml(rdo){
-    var data = numeroEquipeCompute(rdo);
-    if(!data.length) return '<p class="empty-hint">Selecione uma equipe em campo para ver o detalhamento por função.</p>';
-    return data.map(function(d){
-      return '<div class="card" style="margin:0 0 10px;background:#fbfbfa;">'+
-        '<div style="font-weight:bold;">Equipe '+d.numero+': '+esc(d.nomeEquipe)+'</div>'+
-        '<div class="hint" style="margin:2px 0 8px;">'+(d.encarregado?'Encarregado: '+esc(d.encarregado):'Sem encarregado definido')+'</div>'+
-        (d.funcoes.length ? '<table class="readtable"><thead><tr><th>Função</th><th>Quantidade</th></tr></thead><tbody>'+
-          d.funcoes.map(function(f){ return '<tr><td>'+esc(f.funcao)+'</td><td>'+f.qtd+'</td></tr>'; }).join('')+
-        '</tbody></table>' : '<p class="empty-hint">Nenhum colaborador ativo nesta equipe.</p>')+
-      '</div>';
-    }).join('');
-  }
-  function refreshNumeroEquipeUI(rdo){
-    var box = document.getElementById('numeroEquipeContainer');
-    if(!box) return;
-    box.innerHTML = numeroEquipeHtml(rdo);
-    rdo.numeroEquipe = numeroEquipeCompute(rdo);
   }
   function wireEquipeChecklist(rdo){
     var wrap = document.getElementById('rdoEquipesWrap');
@@ -1885,11 +1917,11 @@
         if(chk.checked){
           if(rdo.equipesDia.indexOf(nome)===-1) rdo.equipesDia.push(nome);
         } else {
-          rdo.equipesDia = rdo.equipesDia.filter(function(n){ return n!==nome; });
+          var idx = rdo.equipesDia.indexOf(nome);
+          if(idx!==-1){ rdo.equipesDia.splice(idx,1); if(rdo.equipesDetalhe) rdo.equipesDetalhe.splice(idx,1); }
         }
         autofillMaoDeObraFromEquipes(rdo);
-        refreshProducaoEquipesUI(rdo);
-        refreshNumeroEquipeUI(rdo);
+        refreshEquipesDetalheUI(rdo);
       });
     });
   }
@@ -1909,19 +1941,27 @@
         '<div class="grid4">'+
           '<div class="field full" style="grid-column:1/3"><label>Obra</label><select id="rdoObra" required></select></div>'+
           '<div class="field"><label>Data</label><input type="date" id="rdoData" value="'+esc(rdo.data)+'" required></div>'+
-          '<div class="field"><label>Clima</label><select id="rdoClima">'+CLIMA_OPTS.map(function(c){return '<option'+(c===rdo.clima?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>'+
         '</div>'+
-        '<div class="checkline" style="margin-top:10px;"><input type="checkbox" id="rdoImpraticavel" '+(rdo.impraticavel?'checked':'')+'><label for="rdoImpraticavel">Dia total ou parcialmente impraticável para trabalho</label></div>'+
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">2</span>Equipes em campo</h2>'+
+        '<h2><span class="idx">2</span>Clima</h2>'+
+        '<div class="grid4">'+
+          '<div class="field"><label>Manhã — Tempo</label><input type="text" id="rdoClimaManhaTempo" value="'+esc(rdo.climaManha&&rdo.climaManha.tempo||'')+'" placeholder="Ex: Claro"></div>'+
+          '<div class="field"><label>Manhã — Condição</label><select id="rdoClimaManhaCond">'+CLIMA_OPTS.map(function(c){return '<option'+(c===(rdo.climaManha&&rdo.climaManha.condicao)?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>'+
+          '<div class="field"><label>Tarde — Tempo</label><input type="text" id="rdoClimaTardeTempo" value="'+esc(rdo.climaTarde&&rdo.climaTarde.tempo||'')+'" placeholder="Ex: Nublado / chuva às 14h"></div>'+
+          '<div class="field"><label>Tarde — Condição</label><select id="rdoClimaTardeCond">'+CLIMA_OPTS.map(function(c){return '<option'+(c===(rdo.climaTarde&&rdo.climaTarde.condicao)?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>'+
+        '</div>'+
+      '</div>'+
+
+      '<div class="card">'+
+        '<h2><span class="idx">3</span>Equipes em campo</h2>'+
         '<p class="hint">Selecione as equipes que atuaram na obra hoje — a mão de obra abaixo é preenchida automaticamente a partir dos colaboradores de cada equipe (pode ajustar se faltou alguém).</p>'+
         renderEquipeChecklist(rdo.equipesDia) +
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">3</span>Mão de obra</h2>'+
+        '<h2><span class="idx">4</span>Mão de obra</h2>'+
         '<p class="hint">Marque os colaboradores presentes na obra hoje — preenchido automaticamente ao selecionar as equipes acima (pode ajustar se faltou alguém, ou adicionar avulso).</p>'+
         '<div id="moContainer">'+maoDeObraChecklistHtml(rdo.maoDeObra, moNomesFor(rdo.equipesDia))+'</div>'+
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:16px;">'+
@@ -1929,43 +1969,36 @@
           '<div class="field"><label>Gestão — ENG</label><input type="number" min="0" step="1" id="rdoGestaoEng" value="'+esc(rdo.gestao&&rdo.gestao.eng!=null?rdo.gestao.eng:'')+'"></div>'+
           '<div class="field"><label>Total (Gestão)</label><input type="text" id="rdoGestaoTotal" value="'+((parseFloat(rdo.gestao&&rdo.gestao.adm)||0)+(parseFloat(rdo.gestao&&rdo.gestao.eng)||0))+'" readonly></div>'+
         '</div>'+
-        '<h3 style="font-size:14px;font-weight:700;margin:18px 0 4px;">Produção de equipe</h3>'+
-        '<p class="hint">Informe quantas produções cada equipe concluiu hoje.</p>'+
-        '<div id="producaoContainer">'+producaoEquipesHtml(rdo)+'</div>'+
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">4</span>Número da equipe</h2>'+
-        '<p class="hint">Detalhamento por equipe — nome, encarregado e quantidade por função (calculado a partir do cadastro de colaboradores).</p>'+
-        '<div id="numeroEquipeContainer">'+numeroEquipeHtml(rdo)+'</div>'+
+        '<h2><span class="idx">5</span>Atividades por equipe</h2>'+
+        '<p class="hint">Para cada equipe em campo: frente de trabalho, status, o que foi feito, itens concluídos/pendentes e o resumo que entra no quadro de produção do relatório.</p>'+
+        '<div id="equipesDetalheContainer">'+equipesDetalheHtml(rdo)+'</div>'+
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">5</span>Equipamentos</h2>'+
+        '<h2><span class="idx">6</span>Equipamentos</h2>'+
         '<p class="hint">Marque os equipamentos cadastrados que foram usados hoje.</p>'+
         checklistTable('eq', state.equipamentos.map(function(x){return x.nome;}), 'nome', [{key:'qtd',type:'number',placeholder:'Qtd.'},{key:'horas',type:'number',placeholder:'Horas trabalhadas'}], rdo.equipamentos, 'Outro equipamento') +
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">6</span>Materiais</h2>'+
-        '<p class="hint">Marque os materiais usados hoje e informe quantidade e unidade.</p>'+
-        checklistTable('mat', MATERIAL_OPTS, 'nome', [{key:'qtd',type:'number',placeholder:'Qtd.'},{key:'unidade',type:'text',placeholder:'Unidade'}], rdo.materiais, 'Outro material') +
+        '<h2><span class="idx">7</span>Ocorrências</h2>'+
+        '<p class="hint">Classifique cada registro como Pendência, Ocorrência ou Resolvido e descreva a ação/encaminhamento.</p>'+
+        dynTable('oc', [{key:'tipo',label:'Tipo',type:'select',options:OCC_TIPOS,width:'18%'},{key:'texto',label:'Descrição',width:'42%'},{key:'acao',label:'Ação/Encaminhamento',width:'40%'}], rdo.ocorrencias) +
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">7</span>Atividades executadas</h2>'+
-        '<p class="hint">Marque os tipos de atividade executados hoje, detalhe na descrição e informe qual equipe executou (para pontuar a produção por equipe).</p>'+
-        checklistTable('at', ATIV_TIPOS, 'tipo', [{key:'descricao',type:'text',placeholder:'Descrição (opcional)'},{key:'equipe',type:'select',placeholder:'Equipe (opcional)',options:state.equipes.filter(function(e){return e.ativa;}).map(function(e){return e.nome;})}], rdo.atividades, 'Outra atividade') +
+        '<h2><span class="idx">8</span>Checklist</h2>'+
+        '<p class="hint">Itens de verificação do dia (segurança, qualidade, organização...).</p>'+
+        dynTable('chk', [{key:'item',label:'Item',width:'70%'},{key:'ok',label:'Situação',type:'select',options:CHECKLIST_OK_OPTS,width:'30%'}], rdo.checklist) +
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">8</span>Ocorrências</h2>'+
-        dynTable('oc', [{key:'descricao',label:'Descrição',width:'46%'},{key:'tipo',label:'Tipo',type:'select',options:OCC_TIPOS,width:'22%'},{key:'horasParadas',label:'Horas paradas',type:'number',width:'22%'}], rdo.ocorrencias) +
-      '</div>'+
-
-      '<div class="card">'+
-        '<h2><span class="idx">9</span>Observações gerais</h2>'+
-        '<div class="field full"><textarea id="rdoObs" placeholder="Anotações livres sobre o dia de trabalho...">'+esc(rdo.observacoes)+'</textarea></div>'+
+        '<h2><span class="idx">9</span>Comentários</h2>'+
+        '<p class="hint">Anotações livres sobre o dia de trabalho — uma por linha.</p>'+
+        dynTable('com', [{key:'texto',label:'Comentário',width:'100%'}], strListRows(rdo.comentarios)) +
       '</div>'+
 
       '<div class="card">'+
@@ -1988,15 +2021,15 @@
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">12</span>Responsável e assinatura</h2>'+
+        '<h2><span class="idx">12</span>Responsável e assinaturas</h2>'+
         '<div class="grid2">'+
           '<div class="field"><label>Preenchido por</label><input type="text" id="rdoResponsavel" value="'+esc(rdo.responsavel||'')+'" required></div>'+
         '</div>'+
         (isLockedEdit ? '' : '<div class="checkline" style="margin-top:12px;"><input type="checkbox" id="rdoDeclaracao"><label for="rdoDeclaracao">Confirmo que as informações acima refletem fielmente o que ocorreu na obra nesta data.</label></div>') +
         '<h3 style="margin-top:16px;">Assinaturas</h3>'+
         '<div class="grid2">'+
-          '<div class="field"><label>Assinatura Cliente</label><input type="text" id="rdoAssinaturaCliente" value="'+esc(rdo.assinaturaCliente||'')+'" placeholder="Nome de quem assina pelo cliente"></div>'+
-          '<div class="field"><label>Assinatura VENKO</label><input type="text" id="rdoAssinaturaVenko" value="'+esc(rdo.assinaturaVenko||'')+'" placeholder="Nome de quem assina pela VENKO"></div>'+
+          '<div class="field"><label>Assinatura Cliente</label><input type="text" id="rdoAssinaturaCliente" value="'+esc(assinaturaNome(rdo,'Cliente'))+'" placeholder="Nome do responsável pelo cliente"></div>'+
+          '<div class="field"><label>Assinatura VENKO</label><input type="text" id="rdoAssinaturaVenko" value="'+esc(assinaturaNome(rdo,'VENKO'))+'" placeholder="Nome do responsável VENKO"></div>'+
         '</div>'+
       '</div>'+
 
@@ -2012,16 +2045,22 @@
     populateObraSelect();
     document.getElementById('rdoObra').value = rdo.obraId||'';
 
+    document.getElementById('rdoClimaManhaTempo').addEventListener('input', function(){ rdo.climaManha = rdo.climaManha||{}; rdo.climaManha.tempo = this.value; });
+    document.getElementById('rdoClimaManhaCond').addEventListener('change', function(){ rdo.climaManha = rdo.climaManha||{}; rdo.climaManha.condicao = this.value; });
+    document.getElementById('rdoClimaTardeTempo').addEventListener('input', function(){ rdo.climaTarde = rdo.climaTarde||{}; rdo.climaTarde.tempo = this.value; });
+    document.getElementById('rdoClimaTardeCond').addEventListener('change', function(){ rdo.climaTarde = rdo.climaTarde||{}; rdo.climaTarde.condicao = this.value; });
+
     wireEquipeChecklist(rdo);
     wireChecklistTable('mo', 'nome', [{key:'funcao',type:'text'},{key:'departamento',type:'text'}], function(v){ rdo.maoDeObra=v; }, 'Adicionar colaborador');
     document.getElementById('rdoGestaoAdm').addEventListener('input', function(){ rdo.gestao = rdo.gestao||{}; rdo.gestao.adm = this.value; var t=document.getElementById('rdoGestaoTotal'); if(t) t.value = (parseFloat(rdo.gestao.adm)||0)+(parseFloat(rdo.gestao.eng)||0); });
     document.getElementById('rdoGestaoEng').addEventListener('input', function(){ rdo.gestao = rdo.gestao||{}; rdo.gestao.eng = this.value; var t=document.getElementById('rdoGestaoTotal'); if(t) t.value = (parseFloat(rdo.gestao.adm)||0)+(parseFloat(rdo.gestao.eng)||0); });
-    wireProducaoEquipes(rdo);
-    rdo.numeroEquipe = numeroEquipeCompute(rdo);
+    wireEquipesDetalhe(rdo);
     wireChecklistTable('eq', 'nome', [{key:'qtd',type:'number'},{key:'horas',type:'number'}], function(v){ rdo.equipamentos=v; }, 'Outro equipamento');
-    wireChecklistTable('mat', 'nome', [{key:'qtd',type:'number'},{key:'unidade',type:'text'}], function(v){ rdo.materiais=v; }, 'Outro material');
-    wireChecklistTable('at', 'tipo', [{key:'descricao',type:'text'},{key:'equipe',type:'select'}], function(v){ rdo.atividades=v; }, 'Outra atividade');
-    wireDynTable('oc', [{key:'descricao'},{key:'tipo',type:'select',options:OCC_TIPOS},{key:'horasParadas',type:'number'}], function(){ return rdo.ocorrencias; }, function(v){ rdo.ocorrencias=v; });
+    wireDynTable('oc', [{key:'tipo',type:'select',options:OCC_TIPOS},{key:'texto'},{key:'acao'}], function(){ return rdo.ocorrencias; }, function(v){ rdo.ocorrencias=v; });
+    wireDynTable('chk', [{key:'item'},{key:'ok',type:'select',options:CHECKLIST_OK_OPTS}], function(){ return rdo.checklist; }, function(v){ rdo.checklist=v; });
+    wireDynTable('com', [{key:'texto'}], function(){ return strListRows(rdo.comentarios); }, function(v){ rdo.comentarios = v.map(function(r){return r.texto||'';}); });
+    document.getElementById('rdoAssinaturaCliente').addEventListener('input', function(){ setAssinaturaNome(rdo,'Cliente', this.value); });
+    document.getElementById('rdoAssinaturaVenko').addEventListener('input', function(){ setAssinaturaNome(rdo,'VENKO', this.value); });
 
     renderPhotoUI();
     document.getElementById('rdoFotos').addEventListener('change', function(e){
@@ -2110,23 +2149,27 @@
       var payload = {
         obra_id: obraId, obra_nome: obra ? obra.nome : rdo.obraNome,
         data: document.getElementById('rdoData').value,
-        clima: document.getElementById('rdoClima').value,
-        impraticavel: document.getElementById('rdoImpraticavel').checked,
+        clima_manha: rdo.climaManha||{}, clima_tarde: rdo.climaTarde||{},
         equipes_dia: rdo.equipesDia||[],
+        equipes_detalhe: (rdo.equipesDetalhe||[]).map(function(d){
+          return {
+            frente: d.frente||'', status: d.status||'', atividades: d.atividades||'',
+            concluidos: (d.concluidos||[]).filter(function(c){ return c.texto; }),
+            resumoAtividades: (d.resumoAtividades||[]).filter(function(s){ return s; }),
+            resumoItens: (d.resumoItens||[]).filter(function(s){ return s; })
+          };
+        }),
         mao_de_obra: rdo.maoDeObra.filter(function(r){ return r.nome; }),
         gestao: rdo.gestao||{},
-        producao_equipes: (rdo.producaoEquipes||[]).filter(function(r){ return (r.producoes!==''&&r.producoes!=null) || r.resultado; }),
-        numero_equipe: rdo.numeroEquipe||[],
+        numero_equipe: numeroEquipeCompute(rdo),
         equipamentos: rdo.equipamentos.filter(function(r){ return r.nome; }),
-        materiais: rdo.materiais.filter(function(r){ return r.nome; }),
-        atividades: rdo.atividades.filter(function(r){ return r.tipo; }),
-        ocorrencias: rdo.ocorrencias.filter(function(r){ return r.descricao; }),
-        observacoes: document.getElementById('rdoObs').value,
+        ocorrencias: rdo.ocorrencias.filter(function(r){ return r.texto; }),
+        checklist: rdo.checklist.filter(function(r){ return r.item; }),
+        comentarios: (rdo.comentarios||[]).filter(function(s){ return s; }),
         fotos: state.photos.map(function(p){ return p.dataUrl; }),
         videos: state.videos.map(function(v){ return {url:v.url, name:v.name||''}; }),
         responsavel: responsavel,
-        assinatura_cliente: document.getElementById('rdoAssinaturaCliente').value.trim(),
-        assinatura_venko: document.getElementById('rdoAssinaturaVenko').value.trim(),
+        assinaturas: (rdo.assinaturas||[]).filter(function(a){ return a.nome; }).map(function(a){ return {nome:a.nome.trim(), cargo:(a.cargo||'').trim()}; }),
         status: isLockedEdit ? rdo.status : (wantsSend ? 'enviado' : 'rascunho'),
         updated_at: new Date().toISOString()
       };
@@ -2163,7 +2206,11 @@
     var el = document.getElementById('detailContent');
     if(!r){ el.innerHTML = '<p class="empty-hint">RDO não encontrada.</p>'; return; }
 
-    var stopCount = (r.ocorrencias||[]).filter(function(o){ return o.tipo==='Paralisação'; }).length;
+    var pendCount = (r.ocorrencias||[]).filter(function(o){ return o.tipo==='Pendência'; }).length;
+    var climaResumo = [
+      (r.climaManha&&(r.climaManha.tempo||r.climaManha.condicao)) ? 'Manhã: '+[r.climaManha.tempo,r.climaManha.condicao].filter(Boolean).join(' · ') : '',
+      (r.climaTarde&&(r.climaTarde.tempo||r.climaTarde.condicao)) ? 'Tarde: '+[r.climaTarde.tempo,r.climaTarde.condicao].filter(Boolean).join(' · ') : ''
+    ].filter(Boolean).join(' — ') || '—';
 
     el.innerHTML =
       '<div class="detail-head">'+
@@ -2178,10 +2225,10 @@
       '<div class="card">'+
         '<h2><span class="idx">i</span>Resumo</h2>'+
         '<div class="kv">'+
-          kvItem('Clima', r.clima) + kvItem('Impraticável', r.impraticavel?'Sim':'Não', r.impraticavel) +
+          kvItem('Clima', climaResumo) +
           kvItem('Equipes em campo', (r.equipesDia&&r.equipesDia.length) ? r.equipesDia.join(', ') : '—') +
           kvItem('Mão de obra', (r.maoDeObra||[]).length+' pessoa(s)') +
-          kvItem('Ocorrências', (r.ocorrencias||[]).length + (stopCount? ' · '+stopCount+' paralisação(ões)':'')) +
+          kvItem('Ocorrências', (r.ocorrencias||[]).length + (pendCount? ' · '+pendCount+' pendência(s)':''), pendCount>0) +
         '</div>'+
       '</div>'+
 
@@ -2189,23 +2236,54 @@
       ((r.gestao && (r.gestao.adm || r.gestao.eng)) ? '<div class="card"><h2><span class="idx">·</span>Gestão</h2><div class="kv">'+
         kvItem('ADM', r.gestao.adm||0) + kvItem('ENG', r.gestao.eng||0) + kvItem('Total', (parseFloat(r.gestao.adm)||0)+(parseFloat(r.gestao.eng)||0)) +
       '</div></div>' : '') +
-      readSection('Produção de equipe', ['Equipe','Produções','Resultado'], (r.producaoEquipes||[]).map(function(x){return [x.equipe,x.producoes,x.resultado];})) +
-      ((r.numeroEquipe&&r.numeroEquipe.length) ? '<div class="card"><h2><span class="idx">·</span>Número da equipe</h2>'+
-        r.numeroEquipe.map(function(d){
-          return '<div style="margin-bottom:10px;"><b>Equipe '+d.numero+': '+esc(d.nomeEquipe)+'</b>'+
-            (d.encarregado?'<div class="hint">Encarregado: '+esc(d.encarregado)+'</div>':'')+
-            (d.funcoes&&d.funcoes.length ? '<table class="readtable" style="margin-top:6px;"><thead><tr><th>Função</th><th>Quantidade</th></tr></thead><tbody>'+
-              d.funcoes.map(function(f){return '<tr><td>'+esc(f.funcao)+'</td><td>'+f.qtd+'</td></tr>';}).join('')+
+
+      (((r.equipesDia&&r.equipesDia.length)) ? '<div class="card"><h2><span class="idx">·</span>Atividades por equipe</h2>'+
+        r.equipesDia.map(function(nome, i){
+          var d = (r.equipesDetalhe&&r.equipesDetalhe[i]) || {};
+          var ne = (r.numeroEquipe&&r.numeroEquipe[i]) || {};
+          var integrantesTxt = (ne.integrantes&&ne.integrantes.length) ? ne.integrantes.map(function(c){return esc(c.nome)+' — '+esc(c.funcao);}).join(', ') : '—';
+          var statusColor = d.status==='Concluído' ? 'var(--status-approved,#1f9d55)' : (d.status==='Em andamento' ? 'var(--status-sent,#2f5d8a)' : 'var(--ink-soft,#6b7280)');
+          return '<div style="margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border,#e4e7eb);">'+
+            '<b>Equipe '+(i+1)+': '+esc(nome)+'</b>'+(d.status?' <span style="font-size:12px;font-weight:bold;color:'+statusColor+';margin-left:6px;">'+esc(d.status)+'</span>':'')+
+            (d.frente?'<div class="hint" style="margin-top:2px;">Frente: '+esc(d.frente)+'</div>':'')+
+            (ne.encarregado?'<div class="hint">Encarregado: '+esc(ne.encarregado)+'</div>':'')+
+            '<div class="hint" style="margin-top:4px;">Integrantes: '+integrantesTxt+'</div>'+
+            (d.atividades?'<p style="margin-top:8px;">'+esc(d.atividades).replace(/\n/g,'<br>')+'</p>':'')+
+            ((d.concluidos&&d.concluidos.length) ? '<table class="readtable" style="margin-top:8px;"><thead><tr><th>Item</th><th>Situação</th></tr></thead><tbody>'+
+              d.concluidos.map(function(c){ return '<tr><td>'+esc(c.texto)+'</td><td>'+(c.tipo==='Concluído'?'<span style="color:var(--status-approved,#1f9d55);">Concluído</span>':'<span style="color:var(--status-rejected,#c6433f);">Pendente</span>')+'</td></tr>'; }).join('')+
             '</tbody></table>' : '')+
           '</div>';
         }).join('') +
       '</div>' : '') +
-      readSection('Equipamentos', ['Equipamento','Qtd.','Horas'], (r.equipamentos||[]).map(function(x){return [x.nome,x.qtd,x.horas];})) +
-      readSection('Materiais', ['Material','Qtd.','Unidade'], (r.materiais||[]).map(function(x){return [x.nome,x.qtd,x.unidade];})) +
-      readSection('Atividades executadas', ['Descrição','Tipo','Equipe'], (r.atividades||[]).map(function(x){return [x.descricao,x.tipo,x.equipe||'—'];})) +
-      readSection('Ocorrências', ['Descrição','Tipo','Horas paradas'], (r.ocorrencias||[]).map(function(x){return [x.descricao, x.tipo==='Paralisação'?'<span class="occ-stop">'+x.tipo+'</span>':x.tipo, x.horasParadas||'—'];}), true) +
 
-      (r.observacoes ? '<div class="card"><h2><span class="idx">i</span>Observações</h2><p>'+esc(r.observacoes).replace(/\n/g,'<br>')+'</p></div>' : '') +
+      (((r.equipesDetalhe&&r.equipesDetalhe.some(function(d){return (d.resumoAtividades&&d.resumoAtividades.length)||(d.resumoItens&&d.resumoItens.length);}))) ?
+        '<div class="card"><h2><span class="idx">·</span>Resumo de Produção</h2>'+
+        '<div class="subtable-wrap"><table class="readtable"><thead><tr><th>EQ</th><th>Ativ.</th><th>Itens Concluídos</th></tr></thead><tbody>'+
+        r.equipesDia.map(function(nome,i){
+          var d = (r.equipesDetalhe&&r.equipesDetalhe[i]) || {};
+          return '<tr><td>Q'+(i+1)+' — '+esc(nome)+'</td>'+
+            '<td>'+((d.resumoAtividades||[]).map(esc).join('<br>')||'—')+'</td>'+
+            '<td>'+((d.resumoItens||[]).map(esc).join('<br>')||'—')+'</td></tr>';
+        }).join('') +
+        '</tbody></table></div></div>' : '') +
+
+      readSection('Equipamentos', ['Equipamento','Qtd.','Horas'], (r.equipamentos||[]).map(function(x){return [x.nome,x.qtd,x.horas];})) +
+      ((r.materiaisLegado&&r.materiaisLegado.length) ? readSection('Materiais (registro anterior)', ['Material','Qtd.','Unidade'], r.materiaisLegado.map(function(x){return [x.nome,x.qtd,x.unidade];})) : '') +
+      ((r.atividadesLegado&&r.atividadesLegado.length) ? readSection('Atividades executadas (registro anterior)', ['Descrição','Tipo','Equipe'], r.atividadesLegado.map(function(x){return [x.descricao,x.tipo,x.equipe||'—'];})) : '') +
+
+      readSection('Ocorrências', ['Tipo','Descrição','Ação'], (r.ocorrencias||[]).map(function(x){
+        var color = x.tipo==='Pendência' ? 'var(--status-rejected,#c6433f)' : (x.tipo==='Resolvido' ? 'var(--status-approved,#1f9d55)' : 'var(--ink-soft,#6b7280)');
+        return ['<span style="color:'+color+';font-weight:bold;">'+esc(x.tipo)+'</span>', esc(x.texto), esc(x.acao||'—')];
+      }), true) +
+
+      ((r.checklist&&r.checklist.length) ? readSection('Checklist', ['Item','Situação'], r.checklist.map(function(x){
+        return [esc(x.item), x.ok==='Sim' ? '<span style="color:var(--status-approved,#1f9d55);font-weight:bold;">Sim</span>' : '<span style="color:var(--status-rejected,#c6433f);font-weight:bold;">Não</span>'];
+      }), true) : '') +
+
+      (((r.comentarios&&r.comentarios.length) || r.observacoesLegado) ? '<div class="card"><h2><span class="idx">i</span>Comentários</h2>'+
+        ((r.comentarios&&r.comentarios.length) ? '<ul style="margin:0;padding-left:18px;">'+r.comentarios.map(function(c){return '<li>'+esc(c)+'</li>';}).join('')+'</ul>' : '')+
+        (r.observacoesLegado ? '<p style="margin-top:8px;color:var(--ink-soft);font-size:13px;">'+esc(r.observacoesLegado).replace(/\n/g,'<br>')+'</p>' : '')+
+      '</div>' : '') +
 
       ((r.fotos&&r.fotos.length) ? '<div class="card"><h2><span class="idx">i</span>Fotos</h2><div class="gallery" id="detailGallery">'+
         r.fotos.map(function(f){ return '<img src="'+f+'">'; }).join('') + '</div></div>' : '') +
@@ -2234,10 +2312,9 @@
 
       '<div class="card">'+
         '<h2><span class="idx">✍</span>Assinaturas</h2>'+
-        '<div class="kv">'+
-          kvItem('Assinatura Cliente', r.assinaturaCliente||'—') +
-          kvItem('Assinatura VENKO', r.assinaturaVenko||'—') +
-        '</div>'+
+        ((r.assinaturas&&r.assinaturas.length) ? '<div class="kv">'+
+          r.assinaturas.map(function(a){ return kvItem(a.cargo||'Assinatura', a.nome||'—'); }).join('') +
+        '</div>' : '<p class="empty-hint">Nenhuma assinatura registrada.</p>') +
       '</div>';
 
     document.querySelectorAll('#detailGallery img').forEach(function(img){
@@ -2335,22 +2412,6 @@
       }).join('');
       return '<div style="display:flex;flex-wrap:wrap;">'+tiles+'</div>';
     }
-    function activityRowHtml(desc, tipo, status){
-      return '<div style="display:flex;padding:8px 10px;border-bottom:1px solid #eee;">'+
-        '<div style="flex:1;">'+
-          '<div style="white-space:pre-wrap;">'+esc(desc||'—')+'</div>'+
-          (tipo ? '<div style="font-size:10.5px;color:'+C.muted+';margin-top:2px;">Tipo: '+esc(tipo)+'</div>' : '')+
-        '</div>'+
-        '<div style="width:110px;flex:none;text-align:right;font-weight:bold;color:'+C.muted+';">'+esc(status||'—')+'</div>'+
-      '</div>';
-    }
-    function occurrenceRowHtml(desc, tipo, horas){
-      return '<div style="display:flex;padding:8px 10px;border-bottom:1px solid #eee;">'+
-        '<div style="flex:1;">'+esc(desc||'—')+'</div>'+
-        '<div style="width:110px;flex:none;">'+esc(tipo||'—')+'</div>'+
-        '<div style="width:90px;flex:none;text-align:right;">'+esc((horas!=null&&horas!=='')?horas:'—')+'</div>'+
-      '</div>';
-    }
     function colaboradorRowHtml(nome, funcao, departamento){
       return '<div style="display:flex;padding:8px 10px;border-bottom:1px solid #eee;">'+
         '<div style="flex:1;">'+esc(nome||'—')+'</div>'+
@@ -2358,33 +2419,64 @@
         '<div style="width:130px;flex:none;text-align:right;">'+esc(departamento||'—')+'</div>'+
       '</div>';
     }
-    function numeroEquipeRowHtml(d){
-      var funcoesHtml = (d.funcoes||[]).map(function(f){ return '<span style="margin-right:14px;">'+esc(f.funcao)+': <b>'+f.qtd+'</b></span>'; }).join('');
+    function condicaoColorFor(c){ return c==='Praticável' ? C.green : (c==='Impraticável' ? C.red : '#b8860b'); }
+    function equipeDetalheRowHtml(nome, i, d, ne){
+      var integrantesTxt = (ne.integrantes&&ne.integrantes.length) ? ne.integrantes.map(function(c){ return esc(c.nome)+' — '+esc(c.funcao); }).join(', ') : 'Nenhum colaborador ativo.';
+      var concl = (d.concluidos||[]).map(function(c){
+        var color = c.tipo==='Concluído' ? C.green : C.red;
+        return '<div style="padding:2px 0;">• '+esc(c.texto)+' <span style="color:'+color+';font-weight:bold;">('+esc(c.tipo||'—')+')</span></div>';
+      }).join('');
       return '<div style="padding:8px 10px;border-bottom:1px solid #eee;">'+
-        '<div style="font-weight:bold;">Equipe '+d.numero+': '+esc(d.nomeEquipe)+'</div>'+
-        (d.encarregado ? '<div style="font-size:10.5px;color:'+C.muted+';margin:2px 0 4px;">Encarregado: '+esc(d.encarregado)+'</div>' : '')+
-        '<div style="font-size:11px;">'+(funcoesHtml||'Nenhum colaborador ativo.')+'</div>'+
+        '<div style="font-weight:bold;">Equipe '+(i+1)+': '+esc(nome)+(d.status?' <span style="font-size:10.5px;color:'+C.label+';">— '+esc(d.status)+'</span>':'')+'</div>'+
+        (d.frente ? '<div style="font-size:10.5px;color:'+C.muted+';margin-top:2px;">Frente: '+esc(d.frente)+'</div>' : '')+
+        (ne.encarregado ? '<div style="font-size:10.5px;color:'+C.muted+';">Encarregado: '+esc(ne.encarregado)+'</div>' : '')+
+        '<div style="font-size:10.5px;margin-top:3px;">Integrantes: '+integrantesTxt+'</div>'+
+        (d.atividades ? '<div style="margin-top:5px;white-space:pre-wrap;">'+esc(d.atividades)+'</div>' : '')+
+        (concl ? '<div style="margin-top:5px;">'+concl+'</div>' : '')+
+      '</div>';
+    }
+    function resumoProducaoRowHtml(nome, i, d){
+      return '<div style="display:flex;padding:8px 10px;border-bottom:1px solid #eee;">'+
+        '<div style="width:130px;flex:none;font-weight:bold;">Q'+(i+1)+' — '+esc(nome)+'</div>'+
+        '<div style="flex:1;padding:0 8px;">'+((d.resumoAtividades||[]).map(esc).join('<br>')||'—')+'</div>'+
+        '<div style="flex:1;padding:0 8px;">'+((d.resumoItens||[]).map(esc).join('<br>')||'—')+'</div>'+
+      '</div>';
+    }
+    function checklistRowHtml(item, ok){
+      var color = ok==='Sim' ? C.green : C.red;
+      return '<div style="display:flex;padding:8px 10px;border-bottom:1px solid #eee;">'+
+        '<div style="flex:1;">'+esc(item||'—')+'</div>'+
+        '<div style="width:70px;flex:none;text-align:right;font-weight:bold;color:'+color+';">'+esc(ok||'—')+'</div>'+
+      '</div>';
+    }
+    function occurrenceRowHtml(tipo, texto, acao){
+      var color = tipo==='Pendência' ? C.red : (tipo==='Resolvido' ? C.green : C.label);
+      return '<div style="padding:8px 10px;border-bottom:1px solid #eee;">'+
+        '<div><span style="font-weight:bold;color:'+color+';">'+esc(tipo||'—')+'</span></div>'+
+        '<div style="margin-top:2px;">'+esc(texto||'—')+'</div>'+
+        (acao ? '<div style="font-size:10.5px;color:'+C.muted+';margin-top:2px;">'+esc(acao)+'</div>' : '')+
       '</div>';
     }
 
+    var obraCad = state.obras.find(function(o){ return o.id===r.obraId; }) || {};
     var mo = r.maoDeObra||[];
     var gestaoData = r.gestao||{};
     var gestaoTiles = [{label:'ADM', value:gestaoData.adm||0}, {label:'ENG', value:gestaoData.eng||0}, {label:'Total', value:(parseFloat(gestaoData.adm)||0)+(parseFloat(gestaoData.eng)||0), total:true}];
-    var prodEq = r.producaoEquipes||[];
+    var equipesDia = r.equipesDia||[];
+    var equipesDetalhe = r.equipesDetalhe||[];
     var numEq = r.numeroEquipe||[];
 
     var eq = r.equipamentos||[];
     var eqTiles = eq.map(function(x){ return {label:x.nome, value:x.qtd}; });
     var totalEq = eq.reduce(function(a,x){ return a + (parseFloat(x.qtd)||0); },0);
 
-    var at = r.atividades||[];
     var oc = r.ocorrencias||[];
+    var checklist = r.checklist||[];
+    var comentarios = r.comentarios||[];
     var fotos = r.fotos||[];
     var videosList = (r.videos||[]).map(function(v){ return (typeof v==='string') ? {url:v,name:''} : v; });
 
-    var condicaoTxt = r.impraticavel ? 'Impraticável' : 'Praticável';
-    var condicaoColor = r.impraticavel ? C.red : C.green;
-    var climaTxt = esc(r.clima||'—');
+    var cManha = r.climaManha||{}, cTarde = r.climaTarde||{};
 
     var html =
       '<div style="width:800px;background:#fff;color:'+C.ink+';font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.4;padding:18px 0 24px;">' +
@@ -2400,7 +2492,11 @@
         )) +
 
         sectionWrap(row(
-          cell(labelValue('Obra', r.obraNome), 2, 'border-right:1px solid '+C.border+';') +
+          cell(labelValue('Obra', r.obraNome + (obraCad.contrato?' — '+obraCad.contrato:'')), 2, 'border-right:1px solid '+C.border+';') +
+          cell(labelValue('Localidade', obraCad.localidade||obraCad.endereco), 1)
+        )) +
+
+        sectionWrap(row(
           cell(labelValue('Responsável', r.responsavel), 1)
         )) +
 
@@ -2408,42 +2504,48 @@
           '<div style="padding:7px 10px;font-weight:bold;border-bottom:1px solid '+C.border+';">Clima</div>' +
           row(
             cell('', '0 0 90px', 'border-right:1px solid '+C.border+';') +
-            cell('<b>Classificação</b>', 1, 'border-right:1px solid '+C.border+';') +
+            cell('<b>Tempo</b>', 1, 'border-right:1px solid '+C.border+';') +
             cell('<b>Condição</b>', 1),
             'border-bottom:1px solid '+C.border+';'
           ) +
           row(
             cell('<b>Manhã</b>', '0 0 90px', 'border-right:1px solid '+C.border+';') +
-            cell(climaTxt, 1, 'border-right:1px solid '+C.border+';') +
-            cell('<span style="color:'+condicaoColor+';font-weight:bold;">'+condicaoTxt+'</span>', 1),
+            cell(esc(cManha.tempo||'—'), 1, 'border-right:1px solid '+C.border+';') +
+            cell('<span style="color:'+condicaoColorFor(cManha.condicao)+';font-weight:bold;">'+esc(cManha.condicao||'—')+'</span>', 1),
             'border-bottom:1px solid '+C.border+';'
           ) +
           row(
             cell('<b>Tarde</b>', '0 0 90px', 'border-right:1px solid '+C.border+';') +
-            cell(climaTxt, 1, 'border-right:1px solid '+C.border+';') +
-            cell('<span style="color:'+condicaoColor+';font-weight:bold;">'+condicaoTxt+'</span>', 1)
+            cell(esc(cTarde.tempo||'—'), 1, 'border-right:1px solid '+C.border+';') +
+            cell('<span style="color:'+condicaoColorFor(cTarde.condicao)+';font-weight:bold;">'+esc(cTarde.condicao||'—')+'</span>', 1)
           )
         ) +
 
-        sectionWrap(sectionHead('Equipes em campo', (r.equipesDia||[]).length) + ((r.equipesDia&&r.equipesDia.length) ? '<div style="padding:8px 10px;">'+esc(r.equipesDia.join(', '))+'</div>' : emptyMsg())) +
+        sectionWrap(sectionHead('Equipes em campo', equipesDia.length) + (equipesDia.length ? '<div style="padding:8px 10px;">'+esc(equipesDia.join(', '))+'</div>' : emptyMsg())) +
 
         sectionWrap(sectionHead('Mão de obra', mo.length) + (mo.length ? mo.map(function(x){ return colaboradorRowHtml(x.nome, x.funcao, x.departamento); }).join('') : emptyMsg())) +
 
         sectionWrap(sectionHead('Gestão') + tileGridHtml(gestaoTiles,3)) +
 
-        sectionWrap(sectionHead('Produção de equipe', prodEq.length) + (prodEq.length ? prodEq.map(function(x){ return activityRowHtml(x.equipe, 'Produções: '+(x.producoes!=null&&x.producoes!==''?x.producoes:'—'), x.resultado); }).join('') : emptyMsg())) +
+        sectionWrap(sectionHead('Atividades por equipe', equipesDia.length) + (equipesDia.length ? equipesDia.map(function(nome,i){ return equipeDetalheRowHtml(nome, i, equipesDetalhe[i]||{}, numEq[i]||{}); }).join('') : emptyMsg())) +
 
-        sectionWrap(sectionHead('Número da equipe', numEq.length) + (numEq.length ? numEq.map(numeroEquipeRowHtml).join('') : emptyMsg())) +
+        (equipesDia.length ? sectionWrap(sectionHead('Resumo de Produção') +
+          '<div style="display:flex;padding:7px 10px;font-weight:bold;font-size:10.5px;background:'+C.head+';border-bottom:1px solid '+C.border+';">'+
+            '<div style="width:130px;flex:none;">EQ</div><div style="flex:1;padding:0 8px;">Ativ.</div><div style="flex:1;padding:0 8px;">Itens Concluídos</div>'+
+          '</div>' +
+          equipesDia.map(function(nome,i){ return resumoProducaoRowHtml(nome, i, equipesDetalhe[i]||{}); }).join('')
+        ) : '') +
 
         sectionWrap(sectionHead('Equipamentos', totalEq) + (eqTiles.length ? tileGridHtml(eqTiles,6) : emptyMsg())) +
 
-        sectionWrap(sectionHead('Atividades', at.length) + (at.length ? at.map(function(x){ return activityRowHtml(x.descricao, x.tipo, x.equipe); }).join('') : '')) +
+        ((r.materiaisLegado&&r.materiaisLegado.length) ? sectionWrap(sectionHead('Materiais (registro anterior)', r.materiaisLegado.length) + r.materiaisLegado.map(function(x){ return colaboradorRowHtml(x.nome, x.qtd, x.unidade); }).join('')) : '') +
+        ((r.atividadesLegado&&r.atividadesLegado.length) ? sectionWrap(sectionHead('Atividades executadas (registro anterior)', r.atividadesLegado.length) + r.atividadesLegado.map(function(x){ return colaboradorRowHtml(x.descricao, x.tipo, x.equipe); }).join('')) : '') +
 
-        sectionWrap(sectionHead('Ocorrências', oc.length) + (oc.length ? oc.map(function(x){ return occurrenceRowHtml(x.descricao, x.tipo, x.horasParadas); }).join('') : '')) +
+        sectionWrap(sectionHead('Ocorrências', oc.length) + (oc.length ? oc.map(function(x){ return occurrenceRowHtml(x.tipo, x.texto, x.acao); }).join('') : emptyMsg())) +
 
-        sectionWrap(sectionHead('Checklist', 0)) +
+        sectionWrap(sectionHead('Checklist', checklist.length) + (checklist.length ? checklist.map(function(x){ return checklistRowHtml(x.item, x.ok); }).join('') : emptyMsg())) +
 
-        sectionWrap(sectionHead('Comentários', r.observacoes?1:0) + (r.observacoes ? '<div style="padding:8px 10px;white-space:pre-wrap;">'+esc(r.observacoes)+'</div>' : '')) +
+        sectionWrap(sectionHead('Comentários', comentarios.length) + (comentarios.length ? '<div style="padding:8px 10px;">'+comentarios.map(function(c){ return '<div style="padding:2px 0;">• '+esc(c)+'</div>'; }).join('')+'</div>' : (r.observacoesLegado ? '<div style="padding:8px 10px;white-space:pre-wrap;">'+esc(r.observacoesLegado)+'</div>' : ''))) +
 
         sectionWrap(sectionHead('Fotos', fotos.length) + (fotos.length ? '<div style="display:flex;flex-wrap:wrap;padding:8px;">'+fotos.map(function(f){ return '<img src="'+f+'" style="width:104px;height:80px;object-fit:cover;margin:4px;border:1px solid '+C.border+';">'; }).join('')+'</div>' : '')) +
 
@@ -2452,15 +2554,13 @@
 
         sectionWrap(
           sectionHead('Assinaturas') +
-          '<div style="display:flex;padding:26px 20px 16px;">' +
-            '<div style="flex:1;text-align:center;padding:0 20px;">' +
-              '<div style="border-top:1px solid '+C.ink+';margin-top:34px;padding-top:6px;font-weight:bold;">Assinatura Cliente</div>' +
-              '<div style="font-size:11px;color:'+C.muted+';margin-top:3px;min-height:14px;">'+esc(r.assinaturaCliente||'')+'</div>' +
-            '</div>' +
-            '<div style="flex:1;text-align:center;padding:0 20px;">' +
-              '<div style="border-top:1px solid '+C.ink+';margin-top:34px;padding-top:6px;font-weight:bold;">Assinatura VENKO</div>' +
-              '<div style="font-size:11px;color:'+C.muted+';margin-top:3px;min-height:14px;">'+esc(r.assinaturaVenko||'')+'</div>' +
-            '</div>' +
+          '<div style="display:flex;flex-wrap:wrap;padding:26px 20px 16px;">' +
+            ((r.assinaturas&&r.assinaturas.length) ? r.assinaturas.map(function(a){
+              return '<div style="flex:1;min-width:160px;text-align:center;padding:0 20px 20px;">' +
+                '<div style="border-top:1px solid '+C.ink+';margin-top:34px;padding-top:6px;font-weight:bold;">'+esc(a.cargo||'Assinatura')+'</div>' +
+                '<div style="font-size:11px;color:'+C.muted+';margin-top:3px;min-height:14px;">'+esc(a.nome||'')+'</div>' +
+              '</div>';
+            }).join('') : '<div style="flex:1;text-align:center;color:'+C.muted+';">Nenhuma assinatura registrada.</div>') +
           '</div>'
         ) +
 
