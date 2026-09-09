@@ -680,7 +680,6 @@
   var OCC_TIPOS = ['Pendência','Ocorrência','Resolvido'];
   var TEAM_STATUS_OPTS = ['Em andamento','Parcialmente concluído','Concluído'];
   var CONCLUIDO_TIPO_OPTS = ['Concluído','Pendente'];
-  var CHECKLIST_OK_OPTS = ['Conforme','Pendente'];
   var CARGO_OPTS = ['Administrador','Gerente de Operação','Engenheiro(a) de Obras','Encarregado de Obra','Encarregado de Obra Júnior','Encarregado de Manutenção','Técnico de Segurança','Operador de Máquina','Pedreiro','Servente','Encanador','Cliente','Outro'];
   var STATUS_LABEL = { rascunho:'Rascunho', enviado:'Aguardando aprovação', aprovado:'Aprovado', rejeitado:'Rejeitado' };
 
@@ -1775,7 +1774,7 @@
       obraId:'', data: todayISO(),
       climaManha:{tempo:'',condicao:CLIMA_OPTS[0]}, climaTarde:{tempo:'',condicao:CLIMA_OPTS[0]},
       equipesDia:[], equipesDetalhe:[], maoDeObra:[], gestao:{adm:'',eng:''}, numeroEquipe:[], equipamentos:[],
-      ocorrencias:[], checklist:[], comentarios:[],
+      ocorrencias:[],
       responsavel: state.currentUser ? state.currentUser.nome : '', status:'rascunho',
       assinaturas:[]
     };
@@ -1981,19 +1980,7 @@
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">8</span>Checklist</h2>'+
-        '<p class="hint">Itens de verificação do dia (segurança, qualidade, organização...).</p>'+
-        dynTable('chk', [{key:'item',label:'Item',width:'70%'},{key:'ok',label:'Situação',type:'select',options:CHECKLIST_OK_OPTS,width:'30%'}], rdo.checklist) +
-      '</div>'+
-
-      '<div class="card">'+
-        '<h2><span class="idx">9</span>Comentários</h2>'+
-        '<p class="hint">Anotações livres sobre o dia de trabalho — uma por linha.</p>'+
-        dynTable('com', [{key:'texto',label:'Comentário',width:'100%'}], strListRows(rdo.comentarios)) +
-      '</div>'+
-
-      '<div class="card">'+
-        '<h2><span class="idx">10</span>Fotos</h2>'+
+        '<h2><span class="idx">8</span>Fotos</h2>'+
         '<div class="photo-input-row">'+
           '<input type="file" id="rdoFotos" accept="image/*" multiple>'+
         '</div>'+
@@ -2002,7 +1989,7 @@
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">11</span>Vídeos</h2>'+
+        '<h2><span class="idx">9</span>Vídeos</h2>'+
         '<p class="hint">Anexe vídeos curtos da obra (máx. '+VIDEO_MAX_COUNT+', até '+VIDEO_MAX_MB+'MB cada).</p>'+
         '<div class="video-input-row">'+
           '<input type="file" id="rdoVideos" accept="video/*" multiple>'+
@@ -2012,7 +1999,7 @@
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">12</span>Responsável</h2>'+
+        '<h2><span class="idx">10</span>Responsável</h2>'+
         '<div class="grid2">'+
           '<div class="field"><label>Preenchido por</label><input type="text" id="rdoResponsavel" value="'+esc(rdo.responsavel||'')+'" required></div>'+
         '</div>'+
@@ -2044,8 +2031,6 @@
     wireEquipesDetalhe(rdo);
     wireChecklistTable('eq', 'nome', [{key:'qtd',type:'number'},{key:'horas',type:'number'}], function(v){ rdo.equipamentos=v; }, 'Outro equipamento');
     wireDynTable('oc', [{key:'tipo',type:'select',options:OCC_TIPOS},{key:'texto'},{key:'acao'}], function(){ return rdo.ocorrencias; }, function(v){ rdo.ocorrencias=v; });
-    wireDynTable('chk', [{key:'item'},{key:'ok',type:'select',options:CHECKLIST_OK_OPTS}], function(){ return rdo.checklist; }, function(v){ rdo.checklist=v; });
-    wireDynTable('com', [{key:'texto'}], function(){ return strListRows(rdo.comentarios); }, function(v){ rdo.comentarios = v.map(function(r){return r.texto||'';}); });
 
     renderPhotoUI();
     document.getElementById('rdoFotos').addEventListener('change', function(e){
@@ -2149,8 +2134,6 @@
         numero_equipe: numeroEquipeCompute(rdo),
         equipamentos: rdo.equipamentos.filter(function(r){ return r.nome; }),
         ocorrencias: rdo.ocorrencias.filter(function(r){ return r.texto; }),
-        checklist: rdo.checklist.filter(function(r){ return r.item; }),
-        comentarios: (rdo.comentarios||[]).filter(function(s){ return s; }),
         fotos: state.photos.map(function(p){ return p.dataUrl; }),
         videos: state.videos.map(function(v){ return {url:v.url, name:v.name||''}; }),
         responsavel: responsavel,
@@ -2284,7 +2267,7 @@
   var RDO_SHELL = 'var(--surface-2)';
   function rdoRow(html, extra){ return '<div style="display:flex;'+(extra||'')+'">'+html+'</div>'; }
   function rdoCell(html, w, extra){ return '<div style="'+(w?('flex:'+w+';'):'flex:1;')+'box-sizing:border-box;padding:9px 12px;'+(extra||'')+'">'+html+'</div>'; }
-  function rdoCard(inner, extra){ return '<div style="border:1px solid '+RDO_BORDER+';border-radius:10px;margin:0 0 12px;background:var(--surface);overflow:hidden;'+(extra||'')+'">'+inner+'</div>'; }
+  function rdoCard(inner, extra){ return '<div data-pdf-card="1" style="border:1px solid '+RDO_BORDER+';border-radius:10px;margin:0 0 12px;background:var(--surface);overflow:hidden;'+(extra||'')+'">'+inner+'</div>'; }
   function rdoCardHead(label, count){
     var txt = esc(label) + (count!=null ? ' <span style="font-weight:normal;color:'+RDO_MUTED+';">('+count+')</span>' : '');
     return '<div style="padding:10px 14px;font-weight:bold;font-size:12.5px;background:'+RDO_HEAD+';border-bottom:1px solid '+RDO_BORDER+';letter-spacing:.2px;">'+txt+'</div>';
@@ -2310,7 +2293,6 @@
     if(t==='Resolvido') return rdoStag(t, 'var(--status-approved)');
     return rdoStag(t||'Ocorrência', 'var(--status-rejected)');
   }
-  function rdoOkTxt(ok){ return ok==='Conforme' ? rdoStag('Conforme', 'var(--status-approved)') : rdoStag('Pendente', 'var(--status-stopped)'); }
   function rdoTileGridHtml(items, cols){
     cols = cols || 6;
     var w = (100/cols).toFixed(4)+'%';
@@ -2331,7 +2313,7 @@
     return tiles;
   }
   function rdoColaboradorRowHtml(nome, funcao, departamento){
-    return '<div style="display:flex;padding:9px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
+    return '<div data-pdf-row="1" style="display:flex;padding:9px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
       '<div style="flex:1;">'+esc(nome||'—')+'</div>'+
       '<div style="width:170px;flex:none;">'+esc(funcao||'—')+'</div>'+
       '<div style="width:130px;flex:none;text-align:right;">'+esc(departamento||'—')+'</div>'+
@@ -2342,7 +2324,7 @@
     var concl = (d.concluidos||[]).map(function(c){
       return '<div style="padding:2px 0;">• '+esc(c.texto)+' '+rdoStatusTxt(c.tipo||'—')+'</div>';
     }).join('');
-    return '<div style="padding:10px 14px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
+    return '<div data-pdf-row="1" style="padding:10px 14px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
       '<div style="font-weight:bold;">EQ'+(i+1)+' — '+esc(nome)+(d.status?' &nbsp;'+rdoStatusTxt(d.status):'')+'</div>'+
       (d.frente ? '<div style="font-size:11px;color:'+RDO_MUTED+';margin-top:2px;">'+esc(d.frente)+'</div>' : '')+
       (ne.encarregado ? '<div style="font-size:10.5px;color:'+RDO_MUTED+';">Encarregado: '+esc(ne.encarregado)+'</div>' : '')+
@@ -2352,20 +2334,14 @@
     '</div>';
   }
   function rdoResumoProducaoRowHtml(nome, i, d){
-    return '<div style="display:flex;padding:9px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
+    return '<div data-pdf-row="1" style="display:flex;padding:9px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
       '<div style="width:130px;flex:none;font-weight:bold;">EQ'+(i+1)+' — '+esc(nome)+'</div>'+
       '<div style="flex:1;padding:0 8px;">'+((d.resumoAtividades||[]).map(esc).join('<br>')||'—')+'</div>'+
       '<div style="flex:1;padding:0 8px;">'+((d.resumoItens||[]).map(esc).join('<br>')||'—')+'</div>'+
     '</div>';
   }
-  function rdoChecklistRowHtml(item, ok){
-    return '<div style="display:flex;align-items:center;padding:9px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
-      '<div style="flex:1;">'+esc(item||'—')+'</div>'+
-      '<div style="width:90px;flex:none;text-align:right;">'+rdoOkTxt(ok)+'</div>'+
-    '</div>';
-  }
   function rdoOccurrenceRowHtml(tipo, texto, acao){
-    return '<div style="padding:9px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
+    return '<div data-pdf-row="1" style="padding:9px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
       '<div>'+rdoTipoOcTxt(tipo)+'</div>'+
       '<div style="margin-top:4px;">'+esc(texto||'—')+'</div>'+
       (acao ? '<div style="font-size:10.5px;color:'+RDO_MUTED+';margin-top:3px;">'+esc(acao)+'</div>' : '')+
@@ -2387,8 +2363,6 @@
     var totalEq = eq.reduce(function(a,x){ return a + (parseFloat(x.qtd)||0); },0);
 
     var oc = r.ocorrencias||[];
-    var checklist = r.checklist||[];
-    var comentarios = r.comentarios||[];
     var fotos = r.fotos||[];
     var videosList = (r.videos||[]).map(function(v){ return (typeof v==='string') ? {url:v,name:''} : v; });
 
@@ -2462,10 +2436,6 @@
 
       rdoCard(rdoCardHead('Ocorrências', oc.length) + (oc.length ? oc.map(function(x){ return rdoOccurrenceRowHtml(x.tipo, x.texto, x.acao); }).join('') : rdoEmptyMsg())) +
 
-      rdoCard(rdoCardHead('Checklist', checklist.length) + (checklist.length ? checklist.map(function(x){ return rdoChecklistRowHtml(x.item, x.ok); }).join('') : rdoEmptyMsg())) +
-
-      rdoCard(rdoCardHead('Comentários', comentarios.length) + (comentarios.length ? '<div style="padding:10px 14px;">'+comentarios.map(function(c){ return '<div style="padding:2px 0;">• '+esc(c)+'</div>'; }).join('')+'</div>' : (r.observacoesLegado ? '<div style="padding:10px 14px;white-space:pre-wrap;">'+esc(r.observacoesLegado)+'</div>' : rdoEmptyMsg()))) +
-
       (fotos.length ? rdoCard(rdoCardHead('Fotos', fotos.length) + '<div class="gallery" id="detailGallery" style="display:flex;flex-wrap:wrap;padding:8px;">'+fotos.map(function(f){ return '<img src="'+f+'" style="width:104px;height:80px;object-fit:cover;margin:4px;border:1px solid '+RDO_BORDER+';border-radius:6px;'+(opts.print?'':'cursor:pointer;')+'">'; }).join('')+'</div>') : '') +
 
       (videosList.length ? rdoCard(rdoCardHead('Vídeos', videosList.length) + (opts.print ?
@@ -2504,20 +2474,81 @@
     document.body.appendChild(container);
     var target = container.firstChild;
 
+    // ---- measure page-break points BEFORE rasterizing, using real layout ----
+    // A4 in points, with a small top/bottom margin so content never touches the edge.
+    var PAGE_W = 595.28, PAGE_H = 841.89;
+    var MARGIN_TOP = 26, MARGIN_BOTTOM = 26;
+    var ptPerPx = PAGE_W / target.offsetWidth;
+    var pageContentHeightPx = (PAGE_H - MARGIN_TOP - MARGIN_BOTTOM) / ptPerPx;
+
+    var targetTop = target.getBoundingClientRect().top;
+    function relTop(el){ return el.getBoundingClientRect().top - targetTop; }
+    function relBottom(el){ return el.getBoundingClientRect().bottom - targetTop; }
+
+    // Each "card" (rdoCard) is normally kept whole on one page. Only when a
+    // single card is itself taller than a full page do we fall back to
+    // breaking it at its internal row boundaries (data-pdf-row) instead —
+    // so a break can split "between two teams" but never mid-sentence or
+    // mid-row.
+    var cards = Array.prototype.slice.call(target.querySelectorAll('[data-pdf-card]'));
+    var atoms = [];
+    cards.forEach(function(card){
+      var top = relTop(card), bottom = relBottom(card);
+      if((bottom - top) > pageContentHeightPx){
+        var rows = Array.prototype.slice.call(card.querySelectorAll('[data-pdf-row]'));
+        if(rows.length){
+          rows.forEach(function(row, idx){
+            atoms.push({
+              top: idx===0 ? top : relTop(row),
+              bottom: idx===rows.length-1 ? bottom : relBottom(row)
+            });
+          });
+          return;
+        }
+      }
+      atoms.push({top:top, bottom:bottom});
+    });
+
+    var pages = [];
+    var pageStart = 0, pageEnd = 0;
+    atoms.forEach(function(atom, idx){
+      if(idx===0){ pageStart = atom.top; pageEnd = atom.bottom; return; }
+      if((atom.bottom - pageStart) > pageContentHeightPx){
+        pages.push({start:pageStart, end:pageEnd});
+        pageStart = atom.top; pageEnd = atom.bottom;
+      } else {
+        pageEnd = atom.bottom;
+      }
+    });
+    pages.push({start:pageStart, end:pageEnd});
+
     window.html2canvas(target, { scale:2, useCORS:true, backgroundColor:'#ffffff' }).then(function(canvas){
       var jsPDF = window.jspdf.jsPDF;
-      // Single continuous page sized to fit the whole report — nothing is ever
-      // cut or split across a page break: the PDF page itself is exactly as
-      // tall as the content (like a long single-page receipt).
-      var imgW = 595.28; // A4 width in pt, kept for a familiar reading width
-      var imgH = canvas.height * imgW / canvas.width;
-      var doc = new jsPDF({ unit:'pt', format:[imgW, imgH] });
-      var imgData = canvas.toDataURL('image/jpeg', 0.95);
-      doc.addImage(imgData, 'JPEG', 0, 0, imgW, imgH);
+      var scaleFactor = canvas.width / target.offsetWidth;
+      var doc = new jsPDF({ unit:'pt', format:[PAGE_W, PAGE_H] });
+
+      pages.forEach(function(pg, i){
+        if(i>0) doc.addPage([PAGE_W, PAGE_H]);
+        var sliceTopPx = Math.max(0, Math.round(pg.start * scaleFactor));
+        var sliceHeightPx = Math.min(canvas.height - sliceTopPx, Math.round((pg.end - pg.start) * scaleFactor));
+        var sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = Math.max(1, sliceHeightPx);
+        var ctx = sliceCanvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+        ctx.drawImage(canvas, 0, sliceTopPx, canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
+        var sliceData = sliceCanvas.toDataURL('image/jpeg', 0.95);
+        var sliceHeightPt = sliceCanvas.height / scaleFactor * ptPerPx;
+        doc.addImage(sliceData, 'JPEG', 0, MARGIN_TOP, PAGE_W, sliceHeightPt);
+        doc.setFontSize(8);
+        doc.setTextColor(140);
+        doc.text('Página '+(i+1)+' de '+pages.length, PAGE_W-70, PAGE_H-14);
+      });
 
       var fname = 'RDO_Venko_'+(r.obraNome||'obra').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+r.data+'.pdf';
       doc.save(fname);
-      toast('PDF exportado.','ok');
+      toast('PDF exportado ('+pages.length+' página'+(pages.length>1?'s':'')+').','ok');
       document.body.removeChild(container);
     }).catch(function(err){
       toast('Erro ao gerar PDF.','error');
