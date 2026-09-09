@@ -465,9 +465,9 @@
         <form id="clienteForm">
           <div class="grid4">
             <div class="field"><label>Nome da empresa</label><input type="text" id="clienteNomeEmpresa" required></div>
-            <div class="field"><label>CNPJ</label><input type="text" id="clienteCnpj" placeholder="00.000.000/0000-00" required></div>
+            <div class="field"><label>CNPJ</label><input type="text" id="clienteCnpj" placeholder="00.000.000/0000-00" inputmode="numeric" maxlength="18" required></div>
             <div class="field"><label>E-mail</label><input type="email" id="clienteEmail" required></div>
-            <div class="field"><label>Número de contato</label><input type="text" id="clienteTelefone" placeholder="(00) 00000-0000" required></div>
+            <div class="field"><label>Número de contato</label><input type="text" id="clienteTelefone" placeholder="(00) 00000-0000" inputmode="numeric" maxlength="15" required></div>
           </div>
           <div class="form-actions">
             <span id="clienteCancelEditWrap" style="display:none;"><button type="button" class="btn ghost" id="clienteCancelEdit">Cancelar edição</button></span>
@@ -1759,13 +1759,45 @@
   }
 
   /* ---------------- clientes view ---------------- */
+  function onlyDigits(s){ return (s||'').replace(/\D/g,''); }
+  function formatCnpj(raw){
+    var d = onlyDigits(raw).slice(0,14);
+    var out = d.slice(0,2);
+    if(d.length > 2) out += '.' + d.slice(2,5);
+    if(d.length > 5) out += '.' + d.slice(5,8);
+    if(d.length > 8) out += '/' + d.slice(8,12);
+    if(d.length > 12) out += '-' + d.slice(12,14);
+    return out;
+  }
+  function formatTelefone(raw){
+    var d = onlyDigits(raw).slice(0,11);
+    if(d.length === 0) return '';
+    var out = '(' + d.slice(0,2);
+    if(d.length > 2) out += ') ';
+    if(d.length <= 6){
+      out += d.slice(2);
+    } else if(d.length <= 10){
+      out += d.slice(2,6) + '-' + d.slice(6);
+    } else {
+      out += d.slice(2,7) + '-' + d.slice(7);
+    }
+    return out;
+  }
+  (function(){
+    var cnpjInput = document.getElementById('clienteCnpj');
+    var telInput = document.getElementById('clienteTelefone');
+    if(cnpjInput) cnpjInput.addEventListener('input', function(){ this.value = formatCnpj(this.value); });
+    if(telInput) telInput.addEventListener('input', function(){ this.value = formatTelefone(this.value); });
+  })();
   document.getElementById('clienteForm').addEventListener('submit', function(e){
     e.preventDefault();
     var nomeEmpresa = document.getElementById('clienteNomeEmpresa').value.trim();
-    var cnpj = document.getElementById('clienteCnpj').value.trim();
+    var cnpj = formatCnpj(document.getElementById('clienteCnpj').value);
     var email = document.getElementById('clienteEmail').value.trim();
-    var telefone = document.getElementById('clienteTelefone').value.trim();
-    if(!nomeEmpresa || !cnpj || !email || !telefone){ toast('Preencha nome da empresa, CNPJ, e-mail e número de contato.','error'); return; }
+    var telefone = formatTelefone(document.getElementById('clienteTelefone').value);
+    if(!nomeEmpresa || !email){ toast('Preencha nome da empresa e e-mail.','error'); return; }
+    if(onlyDigits(cnpj).length !== 14){ toast('Informe um CNPJ válido, com 14 dígitos.','error'); return; }
+    if(onlyDigits(telefone).length !== 10 && onlyDigits(telefone).length !== 11){ toast('Informe um número de contato válido, com DDD.','error'); return; }
     var payload = { nome_empresa: nomeEmpresa, cnpj: cnpj, email: email, telefone: telefone };
     var editId = state.clienteEditId;
     var req = editId ?
@@ -1820,9 +1852,9 @@
         if(!c) return;
         state.clienteEditId = id;
         document.getElementById('clienteNomeEmpresa').value = c.nomeEmpresa;
-        document.getElementById('clienteCnpj').value = c.cnpj;
+        document.getElementById('clienteCnpj').value = formatCnpj(c.cnpj);
         document.getElementById('clienteEmail').value = c.email;
-        document.getElementById('clienteTelefone').value = c.telefone;
+        document.getElementById('clienteTelefone').value = formatTelefone(c.telefone);
         document.getElementById('clienteCancelEditWrap').style.display = '';
         document.getElementById('clienteSubmitBtn').textContent = 'Salvar alterações';
         window.scrollTo(0,0);
