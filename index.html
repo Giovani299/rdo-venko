@@ -341,6 +341,29 @@
     display:inline-block;margin-left:7px;padding:2px 7px;border-radius:20px;background:var(--venko-yellow-hi);
     color:#232320;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;vertical-align:middle;
   }
+  .tag-financeiro{
+    display:inline-block;margin-left:7px;padding:2px 7px;border-radius:20px;background:var(--status-approved-bg);
+    color:var(--status-approved);font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;vertical-align:middle;
+  }
+
+  /* ---------------- financeiro ---------------- */
+  .fin-group-head{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:10px 14px;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.04em;
+    background:var(--surface-2);border-bottom:1px solid var(--line);
+  }
+  .fin-total-row{
+    display:flex;justify-content:flex-end;gap:24px;padding:14px 16px;font-weight:800;font-size:16px;
+    background:var(--ink);color:var(--venko-yellow-hi);
+  }
+  table.fin-list{width:100%;border-collapse:collapse;min-width:760px;}
+  table.fin-list th{
+    text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--steel);
+    padding:10px 12px;border-bottom:1px solid var(--line);font-weight:700;background:var(--surface-2);
+  }
+  table.fin-list td{padding:9px 12px;border-bottom:1px solid var(--line-soft);font-size:13px;vertical-align:middle;}
+  table.fin-list td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  table.fin-list tbody tr:hover{background:var(--surface-2);}
 </style>
 </head>
 <body>
@@ -371,6 +394,7 @@
       <button class="tab-btn" data-view="equipamentos">Equipamentos</button>
       <button class="tab-btn" data-view="colaboradores">Colaboradores</button>
       <button class="tab-btn" data-view="equipes">Equipes</button>
+      <button class="tab-btn" data-view="financeiro" id="tabFinanceiro" style="display:none">Financeiro</button>
       <button class="tab-btn" data-view="users" id="tabUsers" style="display:none">Usuários</button>
     </nav>
     <div class="user-box" id="userBox"></div>
@@ -512,6 +536,23 @@
       <div id="equipeList"></div>
     </section>
 
+    <section id="view-financeiro" class="view">
+      <div class="page-head">
+        <div>
+          <h1>Financeiro</h1>
+          <p>Custos por obra — produtos, materiais e serviços lançados pela Venko.</p>
+        </div>
+      </div>
+      <div id="financeiroObraList"></div>
+    </section>
+
+    <section id="view-financeiro-obra" class="view">
+      <div class="page-head">
+        <button class="btn ghost" data-goto="financeiro">← Voltar ao Financeiro</button>
+      </div>
+      <div id="financeiroObraContent"></div>
+    </section>
+
     <section id="view-detail" class="view">
       <div class="page-head">
         <button class="btn ghost" data-goto="dashboard">← Voltar ao painel</button>
@@ -536,6 +577,7 @@
             <div class="field"><label>Função</label><select id="userCargo"></select></div>
           </div>
           <div class="checkline" style="margin-top:10px;"><input type="checkbox" id="userIsAdmin"><label for="userIsAdmin">Administrador (pode gerenciar usuários)</label></div>
+          <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoFinanceiro"><label for="userAcessoFinanceiro">Acesso ao módulo Financeiro</label></div>
           <div class="form-actions">
             <button type="button" class="btn ghost" id="userCancelEdit" style="display:none">Cancelar edição</button>
             <button type="submit" class="btn primary" id="userSubmitBtn">Cadastrar usuário</button>
@@ -572,6 +614,20 @@
     return p[2]+'/'+p[1]+'/'+p[0];
   }
   function monthKey(iso){ return iso ? iso.slice(0,7) : ''; }
+  function fmtMoeda(v){
+    v = Number(v)||0;
+    return 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  function fmtQtd(v){
+    v = Number(v)||0;
+    return v.toLocaleString('pt-BR', {minimumFractionDigits:(v%1===0?0:2), maximumFractionDigits:3});
+  }
+  function uniqueSorted(arr){
+    var seen = {}; var out = [];
+    (arr||[]).forEach(function(v){ if(v==null||v==='') return; if(!seen[v]){ seen[v]=1; out.push(v); } });
+    out.sort(function(a,b){ return String(a).localeCompare(String(b)); });
+    return out;
+  }
   function normalizeLogin(v){ return String(v||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
   function toAuthEmail(login){ return normalizeLogin(login) + '@' + LOGIN_DOMAIN; }
 
@@ -672,7 +728,11 @@
     editId: null,
     detailId: null,
     photos: [],          // {dataUrl}
-    videos: []           // {url, path, name, uploading}
+    videos: [],          // {url, path, name, uploading}
+    financeiroObraId: null,
+    financeiroItens: [],
+    financeiroFilters: { categoria:'', unidade:'', fornecedor:'', compra:'', dataIni:'', dataFim:'', busca:'' },
+    financeiroEditId: null
   };
 
   var CLIMA_OPTS = ['Praticável','Parcialmente praticável','Impraticável'];
@@ -699,6 +759,7 @@
     var btn = e.target.closest('.tab-btn'); if(!btn) return;
     var view = btn.getAttribute('data-view');
     if(view==='users' && !(state.currentUser && state.currentUser.is_admin)) return;
+    if((view==='financeiro'||view==='financeiro-obra') && !financeiroCanAccess()) return;
     state.editId = null; state.photos = []; state.videos = [];
     goto(view);
   });
@@ -747,6 +808,15 @@
   }
   function mapEquipamentoRow(row){
     return { id:row.id, nome:row.nome, createdAt:row.created_at };
+  }
+  function mapFinanceiroItemRow(row){
+    return {
+      id:row.id, obraId:row.obra_id, numeroCompra:row.numero_compra||'', fornecedor:row.fornecedor||'',
+      categoria:row.categoria||'', produtoServico:row.produto_servico, descricao:row.descricao||'',
+      unidade:row.unidade, quantidade:Number(row.quantidade), valorUnitario:Number(row.valor_unitario),
+      valorTotal:Number(row.valor_total), data:row.data||'', observacoes:row.observacoes||'', exemplo:row.exemplo,
+      createdAt:row.created_at, updatedAt:row.updated_at
+    };
   }
   function mapDepartamentoRow(row){
     return { id:row.id, nome:row.nome, createdAt:row.created_at };
@@ -834,9 +904,18 @@
           state.currentUser = fresh;
           updateUserBox();
           document.getElementById('tabUsers').style.display = fresh.is_admin ? '' : 'none';
+          document.getElementById('tabFinanceiro').style.display = (fresh.is_admin || fresh.acesso_financeiro) ? '' : 'none';
         }
       }
       if(state.view==='users'){ renderUserList(); }
+    });
+  }
+  function loadFinanceiroItens(obraId){
+    return supabaseClient.from('financeiro_itens').select('*').eq('obra_id', obraId).then(function(res){
+      if(res.error){ toast('Não foi possível carregar os dados financeiros desta obra.','error'); return; }
+      state.financeiroItens = (res.data||[]).map(mapFinanceiroItemRow);
+      state.financeiroItens.sort(function(a,b){ return (b.data||'').localeCompare(a.data||'') || (new Date(b.createdAt)-new Date(a.createdAt)); });
+      renderAll();
     });
   }
   var realtimeSubscribed = false;
@@ -851,6 +930,7 @@
       .on('postgres_changes', {event:'*', schema:'public', table:'colaboradores'}, function(){ loadColaboradores(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'rdos'}, function(){ loadRdos(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'profiles'}, function(){ loadProfiles(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'financeiro_itens'}, function(){ if(state.financeiroObraId) loadFinanceiroItens(state.financeiroObraId); })
       .subscribe();
   }
 
@@ -881,6 +961,7 @@
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = '';
     document.getElementById('tabUsers').style.display = profile.is_admin ? '' : 'none';
+    document.getElementById('tabFinanceiro').style.display = (profile.is_admin || profile.acesso_financeiro) ? '' : 'none';
     updateUserBox();
   }
 
@@ -970,10 +1051,11 @@
     var nome = document.getElementById('userNome').value.trim();
     var cargo = document.getElementById('userCargo').value;
     var isAdmin = document.getElementById('userIsAdmin').checked;
+    var isFinanceiro = document.getElementById('userAcessoFinanceiro').checked;
     if(!login || !nome){ toast('Preencha usuário e nome.','error'); return; }
 
     if(editingUserId){
-      supabaseClient.from('profiles').update({ nome:nome, cargo:cargo, is_admin:isAdmin }).eq('id', editingUserId)
+      supabaseClient.from('profiles').update({ nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro }).eq('id', editingUserId)
         .then(function(res){
           if(res.error){ toast('Erro ao salvar usuário: '+res.error.message,'error'); return; }
           toast('Usuário atualizado.','ok');
@@ -999,9 +1081,16 @@
         return Promise.reject(new Error('sem sessão'));
       }
       var newId = res.data.user.id;
-      return tempClient.from('profiles').insert({ id:newId, login:login, nome:nome, cargo:cargo, is_admin:false }).then(function(res2){
+      return tempClient.from('profiles').insert({ id:newId, login:login, nome:nome, cargo:cargo, is_admin:false, acesso_financeiro:false }).then(function(res2){
         if(res2.error){ toast('Usuário criado, mas houve erro ao salvar o perfil: '+res2.error.message,'error'); return Promise.reject(res2.error); }
-        if(isAdmin){ return supabaseClient.from('profiles').update({is_admin:true}).eq('id', newId); }
+        // acesso_financeiro (assim como is_admin) nunca pode ser definido pelo próprio novo
+        // usuário no insert acima — só o admin que está criando a conta, com seu próprio
+        // client autenticado, pode elevar esses dois campos logo em seguida (o banco também
+        // exige isso: ver trigger trg_protect_acesso_financeiro em 021_financeiro.sql).
+        var updates = {};
+        if(isAdmin) updates.is_admin = true;
+        if(isFinanceiro) updates.acesso_financeiro = true;
+        if(Object.keys(updates).length){ return supabaseClient.from('profiles').update(updates).eq('id', newId); }
       });
     }).then(function(){
       toast('Usuário cadastrado.','ok');
@@ -1017,7 +1106,7 @@
     list.innerHTML = state.profiles.map(function(u){
       var isSelf = state.currentUser && state.currentUser.id===u.id;
       return '<div class="obra-card" data-id="'+u.id+'">'+
-        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+'</b>'+
+        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+(u.acesso_financeiro?'<span class="tag-financeiro">Financeiro</span>':'')+'</b>'+
           '<div class="meta">'+esc(u.login)+' · '+esc(u.cargo||'—')+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
@@ -1040,6 +1129,7 @@
         populateCargoSelect();
         document.getElementById('userCargo').value = (CARGO_OPTS.indexOf(u.cargo)>-1) ? u.cargo : CARGO_OPTS[0];
         document.getElementById('userIsAdmin').checked = !!u.is_admin;
+        document.getElementById('userAcessoFinanceiro').checked = !!u.acesso_financeiro;
         document.getElementById('userFormTitle').textContent = 'Editar usuário — '+u.nome;
         document.getElementById('userSubmitBtn').textContent = 'Salvar alterações';
         document.getElementById('userCancelEdit').style.display = '';
@@ -1068,6 +1158,278 @@
     });
   }
 
+  /* ---------------- financeiro (custos por obra) ---------------- */
+  var FIN_UNIDADE_OPTS = ['m','m²','m³','unid','vb','kg','ton','h','diária','saco','pç'];
+  var FIN_FILTERS_EMPTY = { categoria:'', unidade:'', fornecedor:'', compra:'', dataIni:'', dataFim:'', busca:'' };
+
+  function financeiroCanAccess(){
+    var u = state.currentUser;
+    return !!(u && (u.is_admin || u.acesso_financeiro));
+  }
+
+  function renderFinanceiroObraList(){
+    var list = document.getElementById('financeiroObraList');
+    if(!list) return;
+    if(!financeiroCanAccess()){ list.innerHTML = '<p class="empty-hint">Você não tem acesso ao módulo Financeiro.</p>'; return; }
+    if(state.obras.length===0){ list.innerHTML = '<p class="empty-hint">Nenhuma obra cadastrada ainda.</p>'; return; }
+    list.innerHTML = state.obras.map(function(o){
+      return '<div class="obra-card" data-id="'+o.id+'" style="cursor:pointer;">'+
+        '<div class="info"><b>'+esc(o.nome)+(o.exemplo?'<span class="tag-example">exemplo</span>':'')+'</b>'+
+          '<div class="meta">'+esc(o.endereco||'Endereço não informado')+(o.localidade?' · '+esc(o.localidade):'')+'</div>'+
+        '</div>'+
+        '<div class="obra-actions"><span class="chip '+(o.status==='ativa'?'approved':'draft')+'">'+(o.status==='ativa'?'Ativa':'Concluída')+'</span></div>'+
+      '</div>';
+    }).join('');
+    list.querySelectorAll('[data-id]').forEach(function(card){
+      card.addEventListener('click', function(){
+        state.financeiroObraId = card.getAttribute('data-id');
+        state.financeiroFilters = { categoria:'', unidade:'', fornecedor:'', compra:'', dataIni:'', dataFim:'', busca:'' };
+        state.financeiroEditId = null;
+        goto('financeiro-obra');
+        loadFinanceiroItens(state.financeiroObraId);
+      });
+    });
+  }
+
+  function financeiroFilteredItens(){
+    var f = state.financeiroFilters;
+    var busca = (f.busca||'').trim().toLowerCase();
+    return state.financeiroItens.filter(function(it){
+      if(f.categoria && (it.categoria||'Sem categoria')!==f.categoria) return false;
+      if(f.unidade && it.unidade!==f.unidade) return false;
+      if(f.fornecedor && (it.fornecedor||'—')!==f.fornecedor) return false;
+      if(f.compra && (it.numeroCompra||'—')!==f.compra) return false;
+      if(f.dataIni && (!it.data || it.data<f.dataIni)) return false;
+      if(f.dataFim && (!it.data || it.data>f.dataFim)) return false;
+      if(busca){
+        var hay = [it.produtoServico,it.descricao,it.categoria,it.fornecedor,it.numeroCompra].join(' ').toLowerCase();
+        if(hay.indexOf(busca)===-1) return false;
+      }
+      return true;
+    });
+  }
+  function financeiroIsFiltroAtivo(){
+    return JSON.stringify(state.financeiroFilters) !== JSON.stringify(FIN_FILTERS_EMPTY);
+  }
+  function financeiroResumo(itens){
+    var total = 0, maior = 0; var comprasSet = {}; var categoriasSet = {};
+    itens.forEach(function(it){
+      total += it.valorTotal;
+      if(it.valorTotal>maior) maior = it.valorTotal;
+      if(it.numeroCompra) comprasSet[it.numeroCompra]=1;
+      categoriasSet[it.categoria||'Sem categoria']=1;
+    });
+    return { total:total, totalItens:itens.length, categorias:Object.keys(categoriasSet).length, compras:Object.keys(comprasSet).length, maior:maior };
+  }
+  function financeiroAgrupado(itens){
+    var groups = {}; var order = [];
+    itens.forEach(function(it){
+      var k = it.categoria || 'Sem categoria';
+      if(!groups[k]){ groups[k]=[]; order.push(k); }
+      groups[k].push(it);
+    });
+    order.sort(function(a,b){ if(a==='Sem categoria') return 1; if(b==='Sem categoria') return -1; return a.localeCompare(b); });
+    return order.map(function(k){ return {categoria:k, itens:groups[k]}; });
+  }
+
+  function renderFinanceiroObra(){
+    var root = document.getElementById('financeiroObraContent');
+    if(!root) return;
+    if(!financeiroCanAccess()){ root.innerHTML = '<p class="empty-hint">Você não tem acesso ao módulo Financeiro.</p>'; return; }
+    var obra = state.obras.find(function(o){ return o.id===state.financeiroObraId; });
+    if(!obra){ root.innerHTML = '<p class="empty-hint">Obra não encontrada.</p>'; return; }
+
+    var todos = state.financeiroItens;
+    var filtrados = financeiroFilteredItens();
+    var filtroAtivo = financeiroIsFiltroAtivo();
+    var resumo = financeiroResumo(filtroAtivo ? filtrados : todos);
+
+    var categorias = uniqueSorted(todos.map(function(it){ return it.categoria||'Sem categoria'; }));
+    var unidades = uniqueSorted(todos.map(function(it){ return it.unidade; }));
+    var fornecedores = uniqueSorted(todos.map(function(it){ return it.fornecedor; }));
+    var compras = uniqueSorted(todos.map(function(it){ return it.numeroCompra; }));
+    function opt(v,cur){ return '<option value="'+esc(v)+'"'+(cur===v?' selected':'')+'>'+esc(v)+'</option>'; }
+    var f = state.financeiroFilters;
+
+    root.innerHTML =
+      '<div class="page-head">'+
+        '<div><h1>'+esc(obra.nome)+'</h1><p>Custos, materiais e serviços lançados nesta obra.</p></div>'+
+        '<button type="button" class="btn primary" id="btnExportFinanceiro">⬇ Exportar relatório financeiro</button>'+
+      '</div>'+
+      '<div class="kpi-row">'+
+        kpiTile(fmtMoeda(resumo.total), filtroAtivo?'Custo total (filtro aplicado)':'Custo total da obra', 'accent')+
+        kpiTile(resumo.totalItens, 'Total de itens', '')+
+        kpiTile(resumo.categorias, 'Categorias', '')+
+        kpiTile(resumo.compras, 'Total de compras', '')+
+      '</div>'+
+      (resumo.maior ? '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr);margin-top:-10px;"><div class="kpi warn"><div class="n">'+fmtMoeda(resumo.maior)+'</div><div class="l">Maior gasto (item)</div></div></div>' : '')+
+      '<div class="filters" id="finFilterBar">'+
+        '<div class="field"><label>Categoria</label><select id="finFCategoria"><option value="">Todas</option>'+categorias.map(function(c){return opt(c,f.categoria);}).join('')+'</select></div>'+
+        '<div class="field"><label>Unidade</label><select id="finFUnidade"><option value="">Todas</option>'+unidades.map(function(c){return opt(c,f.unidade);}).join('')+'</select></div>'+
+        '<div class="field"><label>Fornecedor</label><select id="finFFornecedor"><option value="">Todos</option>'+fornecedores.map(function(c){return opt(c,f.fornecedor);}).join('')+'</select></div>'+
+        '<div class="field"><label>Compra</label><select id="finFCompra"><option value="">Todas</option>'+compras.map(function(c){return opt(c,f.compra);}).join('')+'</select></div>'+
+        '<div class="field"><label>De</label><input type="date" id="finFDataIni" value="'+esc(f.dataIni)+'"></div>'+
+        '<div class="field"><label>Até</label><input type="date" id="finFDataFim" value="'+esc(f.dataFim)+'"></div>'+
+        '<div class="field grow"><label>Buscar</label><input type="text" id="finFBusca" placeholder="Produto, descrição, fornecedor…" value="'+esc(f.busca)+'"></div>'+
+        (filtroAtivo ? '<button type="button" class="btn ghost sm" id="finFClear">Limpar filtros</button>' : '')+
+      '</div>'+
+      (filtroAtivo ? '<p class="hint">Mostrando '+filtrados.length+' de '+todos.length+' itens — os valores acima já refletem o filtro aplicado.</p>' : '')+
+      financeiroFormHtml()+
+      financeiroTableHtml(filtrados, resumo.total);
+
+    wireFinanceiroFilterBar();
+    wireFinanceiroForm(obra);
+    wireFinanceiroTableActions(obra);
+    document.getElementById('btnExportFinanceiro').addEventListener('click', function(){
+      exportFinanceiroPdf(obra, filtrados, resumo, filtroAtivo);
+    });
+  }
+
+  function financeiroFormHtml(){
+    var editing = state.financeiroEditId ? state.financeiroItens.find(function(x){return x.id===state.financeiroEditId;}) : null;
+    return '<div class="card">'+
+      '<h2><span class="idx">+</span><span id="finFormTitle">'+(editing?'Editar item':'Lançar item')+'</span></h2>'+
+      '<form id="financeiroForm">'+
+        '<div class="grid4">'+
+          '<div class="field"><label>Produto/Serviço</label><input type="text" id="finProduto" required value="'+esc(editing?editing.produtoServico:'')+'"></div>'+
+          '<div class="field"><label>Categoria</label><input type="text" id="finCategoria" list="finCategoriaList" placeholder="Ex: Rede coletora" value="'+esc(editing?editing.categoria:'')+'"></div>'+
+          '<div class="field"><label>Unidade</label><input type="text" id="finUnidade" list="finUnidadeList" required placeholder="Ex: m, m², unid, vb" value="'+esc(editing?editing.unidade:'')+'"></div>'+
+          '<div class="field"><label>Quantidade</label><input type="number" id="finQuantidade" step="0.001" min="0" required value="'+(editing?editing.quantidade:'')+'"></div>'+
+        '</div>'+
+        '<div class="grid4" style="margin-top:12px;">'+
+          '<div class="field"><label>Valor unitário (R$)</label><input type="number" id="finValorUnitario" step="0.01" min="0" required value="'+(editing?editing.valorUnitario:'')+'"></div>'+
+          '<div class="field"><label>Data</label><input type="date" id="finData" value="'+esc(editing?(editing.data||''):todayISO())+'"></div>'+
+          '<div class="field"><label>Fornecedor</label><input type="text" id="finFornecedor" list="finFornecedorList" value="'+esc(editing?editing.fornecedor:'')+'"></div>'+
+          '<div class="field"><label>Nº da compra</label><input type="text" id="finNumeroCompra" value="'+esc(editing?editing.numeroCompra:'')+'"></div>'+
+        '</div>'+
+        '<div class="grid2" style="margin-top:12px;">'+
+          '<div class="field full"><label>Descrição (opcional)</label><input type="text" id="finDescricao" value="'+esc(editing?editing.descricao:'')+'"></div>'+
+        '</div>'+
+        '<datalist id="finUnidadeList">'+FIN_UNIDADE_OPTS.map(function(u){return '<option value="'+esc(u)+'">';}).join('')+'</datalist>'+
+        '<datalist id="finCategoriaList">'+uniqueSorted(state.financeiroItens.map(function(it){return it.categoria;})).map(function(c){return '<option value="'+esc(c)+'">';}).join('')+'</datalist>'+
+        '<datalist id="finFornecedorList">'+uniqueSorted(state.financeiroItens.map(function(it){return it.fornecedor;})).map(function(c){return '<option value="'+esc(c)+'">';}).join('')+'</datalist>'+
+        '<div class="form-actions">'+
+          (editing?'<button type="button" class="btn ghost" id="finCancelEdit">Cancelar edição</button>':'')+
+          '<button type="submit" class="btn primary">'+(editing?'Salvar alterações':'Lançar item')+'</button>'+
+        '</div>'+
+      '</form>'+
+    '</div>';
+  }
+
+  function financeiroTableHtml(itens, totalGeral){
+    if(itens.length===0){
+      return '<div class="table-wrap"><p class="empty-hint" style="padding:20px;">Nenhum item financeiro lançado ainda para esta obra.</p></div>';
+    }
+    var grupos = financeiroAgrupado(itens);
+    var rowsHtml = '';
+    var n = 0;
+    grupos.forEach(function(g){
+      var subtotal = g.itens.reduce(function(s,it){return s+it.valorTotal;},0);
+      rowsHtml += '<tr><td colspan="7" class="fin-group-head"><span>'+esc(g.categoria)+' · '+g.itens.length+' item'+(g.itens.length>1?'ns':'')+'</span><span>'+fmtMoeda(subtotal)+'</span></td></tr>';
+      g.itens.forEach(function(it){
+        n++;
+        rowsHtml += '<tr data-id="'+it.id+'">'+
+          '<td>'+n+'</td>'+
+          '<td>'+esc(it.produtoServico)+(it.descricao?'<div style="color:var(--steel);font-size:11.5px;">'+esc(it.descricao)+'</div>':'')+'</td>'+
+          '<td>'+esc(it.unidade)+'</td>'+
+          '<td class="num">'+fmtQtd(it.quantidade)+'</td>'+
+          '<td class="num">'+fmtMoeda(it.valorUnitario)+'</td>'+
+          '<td class="num"><b>'+fmtMoeda(it.valorTotal)+'</b></td>'+
+          '<td style="text-align:right;white-space:nowrap;">'+
+            '<button type="button" class="btn ghost sm" data-edit="'+it.id+'">Editar</button> '+
+            '<button type="button" class="btn danger sm" data-del="'+it.id+'">Excluir</button>'+
+          '</td>'+
+        '</tr>';
+      });
+    });
+    return '<div class="table-wrap">'+
+      '<table class="fin-list">'+
+        '<thead><tr><th>Item</th><th>Produto/Serviço</th><th>Unidade</th><th>Quantidade</th><th>Valor Unitário</th><th>Valor Total</th><th></th></tr></thead>'+
+        '<tbody>'+rowsHtml+'</tbody>'+
+      '</table>'+
+      '<div class="fin-total-row"><span>TOTAL'+(financeiroIsFiltroAtivo()?' (FILTRO)':' DA OBRA')+'</span><span>'+fmtMoeda(totalGeral)+'</span></div>'+
+    '</div>';
+  }
+
+  function wireFinanceiroFilterBar(){
+    var bar = document.getElementById('finFilterBar');
+    if(!bar) return;
+    function applyAndRender(){ renderFinanceiroObra(); }
+    var selectMap = {finFCategoria:'categoria',finFUnidade:'unidade',finFFornecedor:'fornecedor',finFCompra:'compra'};
+    Object.keys(selectMap).forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) el.addEventListener('change', function(){ state.financeiroFilters[selectMap[id]] = el.value; applyAndRender(); });
+    });
+    var di = document.getElementById('finFDataIni'); if(di) di.addEventListener('change', function(){ state.financeiroFilters.dataIni = di.value; applyAndRender(); });
+    var df = document.getElementById('finFDataFim'); if(df) df.addEventListener('change', function(){ state.financeiroFilters.dataFim = df.value; applyAndRender(); });
+    var bs = document.getElementById('finFBusca');
+    if(bs){
+      bs.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); state.financeiroFilters.busca = bs.value; applyAndRender(); } });
+      bs.addEventListener('blur', function(){ state.financeiroFilters.busca = bs.value; applyAndRender(); });
+    }
+    var clr = document.getElementById('finFClear');
+    if(clr) clr.addEventListener('click', function(){ state.financeiroFilters = { categoria:'', unidade:'', fornecedor:'', compra:'', dataIni:'', dataFim:'', busca:'' }; applyAndRender(); });
+  }
+
+  function wireFinanceiroForm(obra){
+    var form = document.getElementById('financeiroForm');
+    if(!form) return;
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var payload = {
+        obra_id: obra.id,
+        produto_servico: document.getElementById('finProduto').value.trim(),
+        categoria: document.getElementById('finCategoria').value.trim() || null,
+        unidade: document.getElementById('finUnidade').value.trim(),
+        quantidade: Number(document.getElementById('finQuantidade').value),
+        valor_unitario: Number(document.getElementById('finValorUnitario').value),
+        data: document.getElementById('finData').value || null,
+        fornecedor: document.getElementById('finFornecedor').value.trim() || null,
+        numero_compra: document.getElementById('finNumeroCompra').value.trim() || null,
+        descricao: document.getElementById('finDescricao').value.trim() || null
+      };
+      if(!payload.produto_servico || !payload.unidade){ toast('Preencha produto/serviço e unidade.','error'); return; }
+      if(!(payload.quantidade>=0) || !(payload.valor_unitario>=0)){ toast('Quantidade e valor unitário precisam ser números válidos.','error'); return; }
+      var req = state.financeiroEditId ?
+        supabaseClient.from('financeiro_itens').update(payload).eq('id', state.financeiroEditId) :
+        supabaseClient.from('financeiro_itens').insert(payload);
+      req.then(function(res){
+        if(res.error){ toast('Erro ao salvar item: '+res.error.message,'error'); return; }
+        toast(state.financeiroEditId ? 'Item atualizado.' : 'Item lançado.','ok');
+        state.financeiroEditId = null;
+        loadFinanceiroItens(obra.id);
+      });
+    });
+    var cancel = document.getElementById('finCancelEdit');
+    if(cancel) cancel.addEventListener('click', function(){ state.financeiroEditId = null; renderFinanceiroObra(); });
+  }
+
+  function wireFinanceiroTableActions(obra){
+    var root = document.getElementById('financeiroObraContent');
+    root.querySelectorAll('[data-edit]').forEach(function(b){
+      b.addEventListener('click', function(){
+        state.financeiroEditId = b.getAttribute('data-edit');
+        renderFinanceiroObra();
+        window.scrollTo({top:0, behavior:'smooth'});
+      });
+    });
+    root.querySelectorAll('[data-del]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-del');
+        confirmModal({ title:'Excluir item', msg:'Isso remove este item do relatório financeiro da obra. Deseja continuar?', okLabel:'Excluir', danger:true })
+          .then(function(ok){
+            if(!ok) return;
+            supabaseClient.from('financeiro_itens').delete().eq('id', id).then(function(res){
+              if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
+              toast('Item removido.','ok');
+              if(state.financeiroEditId===id) state.financeiroEditId=null;
+              loadFinanceiroItens(obra.id);
+            });
+          });
+      });
+    });
+  }
+
   /* ---------------- computed / render: dashboard ---------------- */
   function renderAll(){
     if(state.view==='dashboard'){ renderKpis(); renderFilters(); renderRdoTable(); }
@@ -1078,6 +1440,8 @@
     if(state.view==='novo'){ populateObraSelect(); }
     if(state.view==='detail' && state.detailId){ renderDetail(state.detailId); }
     if(state.view==='users'){ renderUserList(); }
+    if(state.view==='financeiro'){ renderFinanceiroObraList(); }
+    if(state.view==='financeiro-obra' && state.financeiroObraId){ renderFinanceiroObra(); }
   }
 
   function renderKpis(){
@@ -2446,35 +2810,13 @@
       sigBlock;
   }
 
-  function exportRdoPdf(r){
-    if(!window.jspdf || !window.jspdf.jsPDF){
-      toast('Gerador de PDF indisponível neste momento.','error');
-      return;
-    }
-    if(!window.html2canvas){
-      toast('Gerador de PDF indisponível (html2canvas não carregado).','error');
-      return;
-    }
-    toast('Gerando PDF…','ok');
-
-    var html =
-      '<div style="width:800px;background:'+RDO_SHELL+';color:var(--ink);font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.45;padding:18px 16px 24px;">' +
-        rdoCard(
-          '<div style="display:flex;align-items:center;justify-content:center;padding:14px 0 6px;">' +
-            '<img src="'+LOGO_DATA+'" style="height:30px;">' +
-          '</div>' +
-          '<div style="text-align:center;font-weight:bold;font-size:14.5px;padding:0 16px 14px;">Relatório Diário de Obra (RDO)</div>'
-        ) +
-        rdoBodyHtml(r, {print:true}) +
-      '</div>';
-
-    var container = document.createElement('div');
-    container.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;';
-    container.innerHTML = html;
-    document.body.appendChild(container);
-    var target = container.firstChild;
-
-    // ---- measure page-break points BEFORE rasterizing, using real layout ----
+  // Rasteriza `target` (já anexado dentro de `container`, fora da tela) em
+  // páginas A4, respeitando os limites data-pdf-card/data-pdf-row (nunca
+  // corta um cartão ou uma linha ao meio), salva o PDF como `fname` e limpa
+  // o container temporário. Compartilhado entre exportRdoPdf e
+  // exportFinanceiroPdf para que os dois PDFs tenham a mesma paginação e
+  // aparência profissional.
+  function paginateAndSavePdf(target, container, fname, doneMsgFn){
     // A4 in points, with a small top/bottom margin so content never touches the edge.
     var PAGE_W = 595.28, PAGE_H = 841.89;
     var MARGIN_TOP = 26, MARGIN_BOTTOM = 26;
@@ -2546,13 +2888,153 @@
         doc.text('Página '+(i+1)+' de '+pages.length, PAGE_W-70, PAGE_H-14);
       });
 
-      var fname = 'RDO_Venko_'+(r.obraNome||'obra').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+r.data+'.pdf';
       doc.save(fname);
-      toast('PDF exportado ('+pages.length+' página'+(pages.length>1?'s':'')+').','ok');
+      toast(doneMsgFn(pages.length),'ok');
       document.body.removeChild(container);
     }).catch(function(err){
       toast('Erro ao gerar PDF.','error');
       try{ document.body.removeChild(container); }catch(e){}
+    });
+  }
+
+  function exportRdoPdf(r){
+    if(!window.jspdf || !window.jspdf.jsPDF){
+      toast('Gerador de PDF indisponível neste momento.','error');
+      return;
+    }
+    if(!window.html2canvas){
+      toast('Gerador de PDF indisponível (html2canvas não carregado).','error');
+      return;
+    }
+    toast('Gerando PDF…','ok');
+
+    var html =
+      '<div style="width:800px;background:'+RDO_SHELL+';color:var(--ink);font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.45;padding:18px 16px 24px;">' +
+        rdoCard(
+          '<div style="display:flex;align-items:center;justify-content:center;padding:14px 0 6px;">' +
+            '<img src="'+LOGO_DATA+'" style="height:30px;">' +
+          '</div>' +
+          '<div style="text-align:center;font-weight:bold;font-size:14.5px;padding:0 16px 14px;">Relatório Diário de Obra (RDO)</div>'
+        ) +
+        rdoBodyHtml(r, {print:true}) +
+      '</div>';
+
+    var container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    var target = container.firstChild;
+
+    var fname = 'RDO_Venko_'+(r.obraNome||'obra').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+r.data+'.pdf';
+    paginateAndSavePdf(target, container, fname, function(n){
+      return 'PDF exportado ('+n+' página'+(n>1?'s':'')+').';
+    });
+  }
+
+  /* ---------------- financeiro: PDF do relatório por obra ---------------- */
+  function financeiroPdfBodyHtml(obra, itens, resumo, filtroAtivo){
+    var grupos = financeiroAgrupado(itens);
+    var geradoEm = new Date().toLocaleString('pt-BR');
+    var f = state.financeiroFilters||{};
+    var periodoTxt = '';
+    if(filtroAtivo && (f.dataIni || f.dataFim)){
+      periodoTxt = (f.dataIni?fmtDate(f.dataIni):'início') + ' até ' + (f.dataFim?fmtDate(f.dataFim):'hoje');
+    }
+
+    var headCards = rdoCard(
+      rdoRow(
+        rdoCell(rdoLabelValue('Obra', obra.nome + (obra.contrato?' — '+obra.contrato:'')), 1, 'border-right:1px solid '+RDO_BORDER+';') +
+        rdoCell(rdoLabelValue('Gerado em', geradoEm), 1)
+      ) +
+      (periodoTxt ? rdoRow(rdoCell(rdoLabelValue('Período', periodoTxt), 1), 'border-top:1px solid '+RDO_BORDER+';') : '')
+    );
+
+    var resumoCard = rdoCard(
+      rdoCardHead('Resumo financeiro' + (filtroAtivo?' (filtro aplicado)':'')) +
+      rdoTileGridHtml([
+        {label:'Custo total', value:fmtMoeda(resumo.total), total:true},
+        {label:'Total de itens', value:String(resumo.totalItens)},
+        {label:'Categorias', value:String(resumo.categorias)},
+        {label:'Total de compras', value:String(resumo.compras)},
+        {label:'Maior gasto (item)', value:fmtMoeda(resumo.maior)}
+      ], 5)
+    );
+
+    var tableHeader =
+      '<div style="display:flex;padding:8px 12px;font-weight:bold;font-size:10px;background:'+RDO_HEAD+';border-bottom:1px solid '+RDO_BORDER+';text-transform:uppercase;letter-spacing:.3px;">' +
+        '<div style="width:26px;flex:none;">Item</div>' +
+        '<div style="flex:1;padding:0 8px;">Produto/Serviço</div>' +
+        '<div style="width:46px;flex:none;text-align:center;">Unid.</div>' +
+        '<div style="width:68px;flex:none;text-align:right;">Qtd.</div>' +
+        '<div style="width:88px;flex:none;text-align:right;">Valor Unit.</div>' +
+        '<div style="width:96px;flex:none;text-align:right;">Valor Total</div>' +
+      '</div>';
+
+    var n = 0;
+    var groupsHtml = grupos.map(function(g){
+      var subtotal = g.itens.reduce(function(s,it){ return s+it.valorTotal; },0);
+      var head = '<div data-pdf-row="1" style="display:flex;justify-content:space-between;padding:7px 12px;font-weight:bold;font-size:10.5px;background:'+RDO_HEAD+';border-top:1px solid '+RDO_BORDER+';border-bottom:1px solid '+RDO_BORDER+';">' +
+        '<span>'+esc(g.categoria)+' · '+g.itens.length+' item'+(g.itens.length>1?'ns':'')+'</span><span>'+fmtMoeda(subtotal)+'</span>' +
+      '</div>';
+      var rows = g.itens.map(function(it){
+        n++;
+        return '<div data-pdf-row="1" style="display:flex;padding:8px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';font-size:11px;">' +
+          '<div style="width:26px;flex:none;color:'+RDO_MUTED+';">'+n+'</div>' +
+          '<div style="flex:1;padding:0 8px;">'+esc(it.produtoServico)+(it.descricao?'<div style="font-size:10px;color:'+RDO_MUTED+';">'+esc(it.descricao)+'</div>':'')+'</div>' +
+          '<div style="width:46px;flex:none;text-align:center;">'+esc(it.unidade)+'</div>' +
+          '<div style="width:68px;flex:none;text-align:right;">'+fmtQtd(it.quantidade)+'</div>' +
+          '<div style="width:88px;flex:none;text-align:right;">'+fmtMoeda(it.valorUnitario)+'</div>' +
+          '<div style="width:96px;flex:none;text-align:right;font-weight:bold;">'+fmtMoeda(it.valorTotal)+'</div>' +
+        '</div>';
+      }).join('');
+      return head + rows;
+    }).join('');
+
+    var listaCard = itens.length ?
+      rdoCard(rdoCardHead('Itens lançados', itens.length) + tableHeader + groupsHtml) :
+      rdoCard(rdoCardHead('Itens lançados', 0) + rdoEmptyMsg());
+
+    var totalCard = rdoCard(
+      '<div data-pdf-row="1" style="display:flex;justify-content:space-between;align-items:center;padding:16px 18px;background:'+RDO_HEAD+';">' +
+        '<span style="font-weight:bold;font-size:13px;text-transform:uppercase;letter-spacing:.3px;">TOTAL GERAL DA OBRA'+(filtroAtivo?' (FILTRO APLICADO)':'')+'</span>' +
+        '<span style="font-weight:bold;font-size:17px;">'+fmtMoeda(resumo.total)+'</span>' +
+      '</div>'
+    );
+
+    return headCards + resumoCard + listaCard + totalCard;
+  }
+
+  function exportFinanceiroPdf(obra, itens, resumo, filtroAtivo){
+    if(!window.jspdf || !window.jspdf.jsPDF){
+      toast('Gerador de PDF indisponível neste momento.','error');
+      return;
+    }
+    if(!window.html2canvas){
+      toast('Gerador de PDF indisponível (html2canvas não carregado).','error');
+      return;
+    }
+    toast('Gerando PDF…','ok');
+
+    var html =
+      '<div style="width:800px;background:'+RDO_SHELL+';color:var(--ink);font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.45;padding:18px 16px 24px;">' +
+        rdoCard(
+          '<div style="display:flex;align-items:center;justify-content:center;padding:14px 0 6px;">' +
+            '<img src="'+LOGO_DATA+'" style="height:30px;">' +
+          '</div>' +
+          '<div style="text-align:center;font-weight:bold;font-size:14.5px;padding:0 16px 14px;">Relatório Financeiro por Obra</div>'
+        ) +
+        financeiroPdfBodyHtml(obra, itens, resumo, filtroAtivo) +
+      '</div>';
+
+    var container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    var target = container.firstChild;
+
+    var fname = 'Financeiro_Venko_'+(obra.nome||'obra').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+todayISO()+'.pdf';
+    paginateAndSavePdf(target, container, fname, function(n){
+      return 'Relatório financeiro exportado ('+n+' página'+(n>1?'s':'')+').';
     });
   }
 
