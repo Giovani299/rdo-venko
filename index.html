@@ -1057,7 +1057,10 @@
     });
   }
   function loadCatalogoProdutos(){
-    return supabaseClient.from('produtos_catalogo').select('*').eq('ativo', true).then(function(res){
+    var query = financeiroCanAccess()
+      ? supabaseClient.from('produtos_catalogo').select('*').eq('ativo', true)
+      : supabaseClient.rpc('produtos_catalogo_checklist');
+    return query.then(function(res){
       if(res.error){ return; }
       state.catalogoItens = (res.data||[]).map(mapCatalogoItemRow);
       state.catalogoItens.sort(function(a,b){ return (a.ordem-b.ordem) || (a.categoriaNome||'').localeCompare(b.categoriaNome||''); });
