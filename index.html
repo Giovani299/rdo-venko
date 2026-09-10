@@ -948,7 +948,7 @@
     };
   }
   function mapObraServicoRow(row){
-    return { id:row.id, obraId:row.obra_id, catalogoItemId:row.catalogo_item_id, createdAt:row.created_at };
+    return { id:row.id, obraId:row.obra_id, catalogoItemId:row.catalogo_item_id, quantidade:(row.quantidade===null||row.quantidade===undefined)?null:Number(row.quantidade), createdAt:row.created_at };
   }
   function mapDepartamentoRow(row){
     return { id:row.id, nome:row.nome, createdAt:row.created_at };
@@ -1068,7 +1068,10 @@
     });
   }
   function loadObraServicosContratados(){
-    return supabaseClient.from('obra_servicos_contratados').select('*').then(function(res){
+    var query = financeiroCanAccess()
+      ? supabaseClient.from('obra_servicos_contratados').select('*')
+      : supabaseClient.rpc('obra_servicos_contratados_checklist');
+    return query.then(function(res){
       if(res.error){ return; }
       state.obraServicosContratados = (res.data||[]).map(mapObraServicoRow);
       if(state.view==='obras') renderObraList();
@@ -2091,7 +2094,14 @@
     });
     list.querySelectorAll('.obra-servicos-panel input[type=checkbox]').forEach(function(chk){
       chk.addEventListener('change', function(){
+        var extra = chk.closest('.checklist-item') && chk.closest('.checklist-item').querySelector('.checklist-extra');
+        if(extra) extra.style.display = chk.checked ? '' : 'none';
         toggleObraServico(chk.getAttribute('data-obra'), chk.getAttribute('data-item'), chk.checked);
+      });
+    });
+    list.querySelectorAll('.obra-servicos-panel [data-qtdobra]').forEach(function(inp){
+      inp.addEventListener('change', function(){
+        updateObraServicoQuantidade(inp.getAttribute('data-qtdobra'), inp.getAttribute('data-qtditem'), inp.value);
       });
     });
     list.querySelectorAll('[data-toggle]').forEach(function(b){
@@ -2121,8 +2131,9 @@
     if(state.catalogoItens.length===0){
       return '<p class="hint">Nenhum serviço cadastrado na tabela de preços ainda.</p>';
     }
+    var canQtd = financeiroCanAccess();
     var contratados = {};
-    state.obraServicosContratados.filter(function(s){ return s.obraId===obraId; }).forEach(function(s){ contratados[s.catalogoItemId]=true; });
+    state.obraServicosContratados.filter(function(s){ return s.obraId===obraId; }).forEach(function(s){ contratados[s.catalogoItemId]=s; });
     var groups = {}, order = [];
     state.catalogoItens.forEach(function(it){
       var key = it.categoriaNome || 'Sem categoria';
@@ -2130,18 +2141,23 @@
       groups[key].push(it);
     });
     var html = '<h2 style="font-size:15px;">Serviços contratados pelo cliente</h2>'+
-      '<p class="hint">Marque todos os serviços da tabela de preços que o cliente contratou para esta obra.</p>';
+      '<p class="hint">Marque todos os serviços da tabela de preços que o cliente contratou para esta obra.'+(canQtd?' Informe também a quantidade desejada.':'')+'</p>';
     html += order.map(function(cat){
       var items = groups[cat];
       return '<div style="margin-bottom:14px;">'+
         '<div class="fin-group-head"><span>'+esc(cat)+'</span></div>'+
         '<div class="checklist-wrap">'+
           items.map(function(it){
-            var checked = !!contratados[it.id];
+            var s = contratados[it.id];
+            var checked = !!s;
+            var qtd = (s && s.quantidade!=null) ? s.quantidade : '';
             return '<label class="checklist-item">'+
               '<input type="checkbox" data-obra="'+obraId+'" data-item="'+it.id+'"'+(checked?' checked':'')+'>'+
               '<span class="checklist-label">'+(it.itemNumero?esc(it.itemNumero)+' — ':'')+esc(it.descricao)+'</span>'+
               '<span class="tag-example" style="background:transparent;">'+esc(it.unidade)+'</span>'+
+              (canQtd ? ('<span class="checklist-extra" style="'+(checked?'':'display:none')+'">'+
+                '<input type="number" step="0.001" min="0" placeholder="Qtd." data-qtdobra="'+obraId+'" data-qtditem="'+it.id+'" value="'+esc(qtd)+'" style="width:84px;">'+
+              '</span>') : '')+
             '</label>';
           }).join('')+
         '</div>'+
@@ -2162,6 +2178,14 @@
         loadObraServicosContratados();
       });
     }
+  }
+  function updateObraServicoQuantidade(obraId, catalogoItemId, value){
+    var qtd = value==='' ? null : Number(value);
+    if(qtd!==null && !(qtd>=0)){ toast('Quantidade inválida.','error'); return; }
+    supabaseClient.from('obra_servicos_contratados').update({ quantidade: qtd }).eq('obra_id', obraId).eq('catalogo_item_id', catalogoItemId).then(function(res){
+      if(res.error){ toast('Erro ao salvar quantidade: '+res.error.message,'error'); return; }
+      loadObraServicosContratados();
+    });
   }
 
   function populateObraSelect(){
