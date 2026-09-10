@@ -2287,6 +2287,11 @@
           return '<option value="'+esc(o)+'"'+(val===o?' selected':'')+'>'+esc(o)+'</option>';
         }).join('') + '</select></td>';
       }
+      if(c.type==='idselect'){
+        return '<td><select data-field="'+c.key+'"><option value=""'+(!val?' selected':'')+'>'+esc(c.placeholder||'Nenhum')+'</option>'+
+          c.options.map(function(o){ return '<option value="'+esc(o.value)+'"'+(val===o.value?' selected':'')+'>'+esc(o.label)+'</option>'; }).join('')+
+        '</select></td>';
+      }
       if(c.type==='combo'){
         var isCustom = val!=='' && c.options.indexOf(val)===-1;
         var selVal = isCustom ? '__custom__' : val;
@@ -2614,6 +2619,12 @@
     rdo.maoDeObra = rows;
     refreshMaoDeObraUI(rdo);
   }
+  function obraServicosOptions(obraId){
+    var ids = {};
+    state.obraServicosContratados.filter(function(s){ return s.obraId===obraId; }).forEach(function(s){ ids[s.catalogoItemId]=true; });
+    return state.catalogoItens.filter(function(it){ return ids[it.id]; })
+      .map(function(it){ return { value: it.id, label: (it.itemNumero?it.itemNumero+' — ':'')+it.descricao+' ('+it.unidade+')' }; });
+  }
   /* ---- equipe detalhada (frente, status, integrantes, atividades, concluídos, resumo) ---- */
   function equipeDetalheBlank(){
     return { frente:'', status:TEAM_STATUS_OPTS[0], atividades:'', concluidos:[], resumoAtividades:[], resumoItens:[] };
@@ -2627,6 +2638,8 @@
   function equipesDetalheHtml(rdo){
     if(!(rdo.equipesDia&&rdo.equipesDia.length)) return '<p class="empty-hint">Selecione ao menos uma equipe em campo para detalhar as atividades.</p>';
     syncEquipesDetalhe(rdo);
+    var obraIdNow = (document.getElementById('rdoObra') && document.getElementById('rdoObra').value) || rdo.obraId || '';
+    var servOpts = obraServicosOptions(obraIdNow);
     return rdo.equipesDia.map(function(nome, i){
       var d = rdo.equipesDetalhe[i];
       var eq = state.equipes.find(function(e){ return e.nome===nome; });
@@ -2640,7 +2653,13 @@
         '<div class="hint" style="margin:8px 0 4px;">Integrantes: '+(integrantes.length ? integrantes.map(function(c){return esc(c.nome)+' — '+esc(c.funcao);}).join(', ') : 'Nenhum colaborador ativo nesta equipe.')+'</div>'+
         '<div class="field full" style="margin-top:8px;"><label>Atividades do dia</label><textarea data-eqativ="'+i+'" placeholder="O que a equipe fez hoje...">'+esc(d.atividades||'')+'</textarea></div>'+
         '<h3 style="font-size:13px;font-weight:700;margin:14px 0 4px;">Itens concluídos / pendentes</h3>'+
-        dynTable('concl'+i, [{key:'texto',label:'Item',width:'66%'},{key:'tipo',label:'Situação',type:'select',options:CONCLUIDO_TIPO_OPTS,width:'34%'}], d.concluidos) +
+        (servOpts.length ? '<p class="hint" style="margin:0 0 8px;">Vincule um item a um serviço contratado e informe a quantidade produzida para calcular o valor da produção do dia.</p>' : '')+
+        dynTable('concl'+i, [
+          {key:'texto',label:'Item',width:'28%'},
+          {key:'tipo',label:'Situação',type:'select',options:CONCLUIDO_TIPO_OPTS,width:'16%'},
+          {key:'catalogoItemId',label:'Serviço contratado',type:'idselect',options:servOpts,placeholder:'Nenhum',width:'36%'},
+          {key:'quantidade',label:'Qtd. produzida',type:'number',width:'20%'}
+        ], d.concluidos) +
         '<div class="grid2" style="margin-top:12px;">'+
           '<div><h3 style="font-size:13px;font-weight:700;margin:0 0 4px;">Resumo — atividades</h3>'+
             dynTable('resat'+i, [{key:'texto',label:'Atividade',width:'100%'}], strListRows(d.resumoAtividades)) +
@@ -2655,6 +2674,8 @@
   function wireEquipesDetalhe(rdo){
     var container = document.getElementById('equipesDetalheContainer');
     if(!container) return;
+    var obraIdNow = (document.getElementById('rdoObra') && document.getElementById('rdoObra').value) || rdo.obraId || '';
+    var servOpts = obraServicosOptions(obraIdNow);
     rdo.equipesDia.forEach(function(nome, i){
       var frenteInp = container.querySelector('[data-eqfrente="'+i+'"]');
       var statusSel = container.querySelector('[data-eqstatus="'+i+'"]');
@@ -2662,7 +2683,7 @@
       if(frenteInp) frenteInp.addEventListener('input', function(){ rdo.equipesDetalhe[i].frente = frenteInp.value; });
       if(statusSel) statusSel.addEventListener('change', function(){ rdo.equipesDetalhe[i].status = statusSel.value; });
       if(ativTa) ativTa.addEventListener('input', function(){ rdo.equipesDetalhe[i].atividades = ativTa.value; });
-      wireDynTable('concl'+i, [{key:'texto'},{key:'tipo',type:'select',options:CONCLUIDO_TIPO_OPTS}],
+      wireDynTable('concl'+i, [{key:'texto'},{key:'tipo',type:'select',options:CONCLUIDO_TIPO_OPTS},{key:'catalogoItemId',type:'idselect',options:servOpts},{key:'quantidade',type:'number'}],
         function(){ return rdo.equipesDetalhe[i].concluidos; },
         function(v){ rdo.equipesDetalhe[i].concluidos = v; });
       wireDynTable('resat'+i, [{key:'texto'}],
@@ -2809,6 +2830,7 @@
 
     populateObraSelect();
     document.getElementById('rdoObra').value = rdo.obraId||'';
+    document.getElementById('rdoObra').addEventListener('change', function(){ refreshEquipesDetalheUI(rdo); });
 
     document.getElementById('rdoClimaManhaTempo').addEventListener('input', function(){ rdo.climaManha = rdo.climaManha||{}; rdo.climaManha.tempo = this.value; });
     document.getElementById('rdoClimaManhaCond').addEventListener('change', function(){ rdo.climaManha = rdo.climaManha||{}; rdo.climaManha.condicao = this.value; });
@@ -2915,7 +2937,9 @@
         equipes_detalhe: (rdo.equipesDetalhe||[]).map(function(d){
           return {
             frente: d.frente||'', status: d.status||'', atividades: d.atividades||'',
-            concluidos: (d.concluidos||[]).filter(function(c){ return c.texto; }),
+            concluidos: (d.concluidos||[]).filter(function(c){ return c.texto || c.catalogoItemId; }).map(function(c){
+              return { texto: c.texto||'', tipo: c.tipo||'', catalogoItemId: c.catalogoItemId||null, quantidade: (c.quantidade===''||c.quantidade==null)?null:(Number(c.quantidade)||0) };
+            }),
             resumoAtividades: (d.resumoAtividades||[]).filter(function(s){ return s; }),
             resumoItens: (d.resumoItens||[]).filter(function(s){ return s; })
           };
@@ -3110,13 +3134,26 @@
       '<div style="width:130px;flex:none;text-align:right;">'+esc(departamento||'—')+'</div>'+
     '</div>';
   }
+  function catalogoItemById(id){
+    return state.catalogoItens.find(function(it){ return it.id===id; }) || null;
+  }
+  function computeEquipeValor(d){
+    return sumMoeda((d.concluidos||[]).filter(function(c){ return c.tipo==='Concluído' && c.catalogoItemId; }), function(c){
+      var item = catalogoItemById(c.catalogoItemId);
+      return (item ? Number(item.custoUnitario)||0 : 0) * (Number(c.quantidade)||0);
+    });
+  }
   function rdoEquipeDetalheRowHtml(nome, i, d, ne){
     var integrantesTxt = (ne.integrantes&&ne.integrantes.length) ? ne.integrantes.map(function(c){ return esc(c.nome)+' — '+esc(c.funcao); }).join(', ') : 'Nenhum colaborador ativo.';
+    var canValor = financeiroCanAccess();
+    var valor = canValor ? computeEquipeValor(d) : 0;
     var concl = (d.concluidos||[]).map(function(c){
-      return '<div style="padding:2px 0;">• '+esc(c.texto)+' '+rdoStatusTxt(c.tipo||'—')+'</div>';
+      var item = c.catalogoItemId ? catalogoItemById(c.catalogoItemId) : null;
+      var itemTxt = item ? ' <span style="color:'+RDO_MUTED+';">— '+esc(item.descricao)+' ('+fmtQtd(c.quantidade)+' '+esc(item.unidade)+')'+(canValor?' · '+fmtMoeda((Number(item.custoUnitario)||0)*(Number(c.quantidade)||0)):'')+'</span>' : '';
+      return '<div style="padding:2px 0;">• '+esc(c.texto)+' '+rdoStatusTxt(c.tipo||'—')+itemTxt+'</div>';
     }).join('');
     return '<div data-pdf-row="1" style="padding:10px 14px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
-      '<div style="font-weight:bold;">EQ'+(i+1)+' — '+esc(nome)+(d.status?' &nbsp;'+rdoStatusTxt(d.status):'')+'</div>'+
+      '<div style="font-weight:bold;">EQ'+(i+1)+' — '+esc(nome)+(d.status?' &nbsp;'+rdoStatusTxt(d.status):'')+(canValor?' &nbsp;<span style="color:var(--venko-yellow-deep);">'+fmtMoeda(valor)+'</span>':'')+'</div>'+
       (d.frente ? '<div style="font-size:11px;color:'+RDO_MUTED+';margin-top:2px;">'+esc(d.frente)+'</div>' : '')+
       (ne.encarregado ? '<div style="font-size:10.5px;color:'+RDO_MUTED+';">Encarregado: '+esc(ne.encarregado)+'</div>' : '')+
       '<div style="font-size:10.5px;margin-top:4px;">Integrantes: '+integrantesTxt+'</div>'+
