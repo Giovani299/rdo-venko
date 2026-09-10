@@ -2067,6 +2067,7 @@
       return;
     }
     var canServ = obrasCanAccess();
+    var canQtd = financeiroCanAccess();
     list.innerHTML = state.obras.map(function(o){
       var rdoCount = state.rdos.filter(function(r){ return r.obraId===o.id; }).length;
       var servCount = state.obraServicosContratados.filter(function(s){ return s.obraId===o.id; }).length;
@@ -2078,6 +2079,7 @@
         '<div class="obra-actions">'+
           '<span class="chip '+(o.status==='ativa'?'approved':'draft')+'">'+(o.status==='ativa'?'Ativa':'Concluída')+'</span>'+
           (canServ?'<button class="btn ghost sm" data-servicos="'+o.id+'">'+(open?'Ocultar serviços':'Serviços contratados')+'</button>':'')+
+          (canQtd?'<button class="btn ghost sm" data-servpdf="'+o.id+'">⬇ Exportar PDF</button>':'')+
           '<button class="btn ghost sm" data-toggle="'+o.id+'">'+(o.status==='ativa'?'Marcar concluída':'Reativar')+'</button>'+
           '<button class="btn danger sm" data-del="'+o.id+'">Excluir</button>'+
         '</div>'+
@@ -2102,6 +2104,11 @@
     list.querySelectorAll('.obra-servicos-panel [data-qtdobra]').forEach(function(inp){
       inp.addEventListener('change', function(){
         updateObraServicoQuantidade(inp.getAttribute('data-qtdobra'), inp.getAttribute('data-qtditem'), inp.value);
+      });
+    });
+    list.querySelectorAll('[data-servpdf]').forEach(function(b){
+      b.addEventListener('click', function(){
+        exportObraServicosPdf(b.getAttribute('data-servpdf'));
       });
     });
     list.querySelectorAll('[data-toggle]').forEach(function(b){
@@ -2140,6 +2147,7 @@
       if(!groups[key]){ groups[key]=[]; order.push(key); }
       groups[key].push(it);
     });
+    var totalGeral = 0;
     var html = '<h2 style="font-size:15px;">Serviços contratados pelo cliente</h2>'+
       '<p class="hint">Marque todos os serviços da tabela de preços que o cliente contratou para esta obra.'+(canQtd?' Informe também a quantidade desejada.':'')+'</p>';
     html += order.map(function(cat){
@@ -2151,18 +2159,29 @@
             var s = contratados[it.id];
             var checked = !!s;
             var qtd = (s && s.quantidade!=null) ? s.quantidade : '';
+            var valorUnit = Number(it.custoUnitario)||0;
+            var valorTotal = (checked && s.quantidade!=null) ? (Number(s.quantidade)*valorUnit) : 0;
+            if(checked && s.quantidade!=null) totalGeral += valorTotal;
+            var extraStyle = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;' + (checked?'':'display:none;');
             return '<label class="checklist-item">'+
               '<input type="checkbox" data-obra="'+obraId+'" data-item="'+it.id+'"'+(checked?' checked':'')+'>'+
               '<span class="checklist-label">'+(it.itemNumero?esc(it.itemNumero)+' — ':'')+esc(it.descricao)+'</span>'+
               '<span class="tag-example" style="background:transparent;">'+esc(it.unidade)+'</span>'+
-              (canQtd ? ('<span class="checklist-extra" style="'+(checked?'':'display:none')+'">'+
+              (canQtd ? ('<span class="checklist-extra" style="'+extraStyle+'">'+
                 '<input type="number" step="0.001" min="0" placeholder="Qtd." data-qtdobra="'+obraId+'" data-qtditem="'+it.id+'" value="'+esc(qtd)+'" style="width:84px;">'+
+                '<span style="color:'+RDO_MUTED+';font-size:11px;">'+fmtMoeda(valorUnit)+'/un.</span>'+
+                (s && s.quantidade!=null ? '<span style="font-weight:700;color:var(--venko-yellow-deep);font-size:11.5px;">'+fmtMoeda(valorTotal)+'</span>' : '')+
               '</span>') : '')+
             '</label>';
           }).join('')+
         '</div>'+
       '</div>';
     }).join('');
+    if(canQtd){
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 6px 2px;border-top:1px solid '+RDO_BORDER+';margin-top:6px;font-weight:700;">'+
+        '<span>Valor total contratado</span><span style="color:var(--venko-yellow-deep);">'+fmtMoeda(totalGeral)+'</span>'+
+      '</div>';
+    }
     return html;
   }
 
@@ -3774,6 +3793,108 @@
     var fname = 'Tabela_Precos_Venko_'+todayISO()+'.pdf';
     paginateAndSavePdf(target, container, fname, function(n){
       return 'Tabela de preços exportada ('+n+' página'+(n>1?'s':'')+').';
+    });
+  }
+
+  /* ---------------- obras: PDF de serviços contratados (com valores) ---------------- */
+  function obraServicosContratadosPdfBodyHtml(obra, contratadosList){
+    var geradoEm = new Date().toLocaleString('pt-BR');
+    var groups = {}, order = [];
+    contratadosList.forEach(function(row){
+      var it = catalogoItemById(row.catalogoItemId);
+      if(!it) return;
+      var key = it.categoriaNome || 'Sem categoria';
+      if(!groups[key]){ groups[key]=[]; order.push(key); }
+      groups[key].push({ item: it, quantidade: row.quantidade });
+    });
+    var totalGeral = 0;
+
+    var headCard = rdoCard(
+      rdoRow(
+        rdoCell(rdoLabelValue('Obra', obra.nome + (obra.contrato?' — '+obra.contrato:'')), 1, 'border-right:1px solid '+RDO_BORDER+';') +
+        rdoCell(rdoLabelValue('Gerado em', geradoEm), 1)
+      )
+    );
+
+    var tableHeader =
+      '<div style="display:flex;padding:8px 12px;font-weight:bold;font-size:10px;background:'+RDO_HEAD+';border-bottom:1px solid '+RDO_BORDER+';text-transform:uppercase;letter-spacing:.3px;">' +
+        '<div style="flex:1;padding:0 8px;">Serviço</div>' +
+        '<div style="width:56px;flex:none;text-align:center;">Unid.</div>' +
+        '<div style="width:70px;flex:none;text-align:right;">Qtd.</div>' +
+        '<div style="width:88px;flex:none;text-align:right;">Valor Unit.</div>' +
+        '<div style="width:96px;flex:none;text-align:right;">Valor Total</div>' +
+      '</div>';
+
+    var groupsHtml = order.map(function(cat){
+      var list = groups[cat];
+      var subtotal = 0;
+      var rows = list.map(function(row){
+        var qtd = row.quantidade!=null ? Number(row.quantidade) : null;
+        var valorUnit = Number(row.item.custoUnitario)||0;
+        var valorTotal = qtd!=null ? qtd*valorUnit : 0;
+        if(qtd!=null){ subtotal += valorTotal; totalGeral += valorTotal; }
+        return '<div data-pdf-row="1" style="display:flex;padding:8px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';font-size:11px;">' +
+          '<div style="flex:1;padding:0 8px;">'+(row.item.itemNumero?esc(row.item.itemNumero)+' — ':'')+esc(row.item.descricao)+'</div>' +
+          '<div style="width:56px;flex:none;text-align:center;">'+esc(row.item.unidade)+'</div>' +
+          '<div style="width:70px;flex:none;text-align:right;">'+(qtd!=null?fmtQtd(qtd):'—')+'</div>' +
+          '<div style="width:88px;flex:none;text-align:right;">'+fmtMoeda(valorUnit)+'</div>' +
+          '<div style="width:96px;flex:none;text-align:right;font-weight:bold;">'+(qtd!=null?fmtMoeda(valorTotal):'—')+'</div>' +
+        '</div>';
+      }).join('');
+      var head = '<div data-pdf-row="1" style="display:flex;justify-content:space-between;padding:7px 12px;font-weight:bold;font-size:10.5px;background:'+RDO_HEAD+';border-top:1px solid '+RDO_BORDER+';border-bottom:1px solid '+RDO_BORDER+';">' +
+        '<span>'+esc(cat)+'</span><span>'+fmtMoeda(subtotal)+'</span>' +
+      '</div>';
+      return head + rows;
+    }).join('');
+
+    var listaCard = order.length ?
+      rdoCard(rdoCardHead('Serviços contratados', contratadosList.length) + tableHeader + groupsHtml) :
+      rdoCard(rdoCardHead('Serviços contratados', 0) + rdoEmptyMsg());
+
+    var totalCard = rdoCard(
+      '<div data-pdf-row="1" style="display:flex;justify-content:space-between;align-items:center;padding:16px 18px;background:'+RDO_HEAD+';">' +
+        '<span style="font-weight:bold;font-size:13px;text-transform:uppercase;letter-spacing:.3px;">VALOR TOTAL CONTRATADO</span>' +
+        '<span style="font-weight:bold;font-size:17px;">'+fmtMoeda(totalGeral)+'</span>' +
+      '</div>'
+    );
+
+    return headCard + listaCard + totalCard;
+  }
+
+  function exportObraServicosPdf(obraId){
+    if(!window.jspdf || !window.jspdf.jsPDF){
+      toast('Gerador de PDF indisponível neste momento.','error');
+      return;
+    }
+    if(!window.html2canvas){
+      toast('Gerador de PDF indisponível (html2canvas não carregado).','error');
+      return;
+    }
+    var obra = state.obras.find(function(o){ return o.id===obraId; });
+    if(!obra) return;
+    var contratadosList = state.obraServicosContratados.filter(function(s){ return s.obraId===obraId; });
+    toast('Gerando PDF…','ok');
+
+    var html =
+      '<div style="width:800px;background:'+RDO_SHELL+';color:var(--ink);font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.45;padding:18px 16px 24px;">' +
+        rdoCard(
+          '<div style="display:flex;align-items:center;justify-content:center;padding:14px 0 6px;">' +
+            '<img src="'+LOGO_DATA+'" style="height:30px;">' +
+          '</div>' +
+          '<div style="text-align:center;font-weight:bold;font-size:14.5px;padding:0 16px 14px;">Serviços Contratados — '+esc(obra.nome)+'</div>'
+        ) +
+        obraServicosContratadosPdfBodyHtml(obra, contratadosList) +
+      '</div>';
+
+    var container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    var target = container.firstChild;
+
+    var fname = 'Servicos_Contratados_'+(obra.nome||'obra').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+todayISO()+'.pdf';
+    paginateAndSavePdf(target, container, fname, function(n){
+      return 'Relatório de serviços contratados exportado ('+n+' página'+(n>1?'s':'')+').';
     });
   }
 
