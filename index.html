@@ -1295,7 +1295,7 @@
     var rowsHtml = '';
     g.order.forEach(function(cat){
       var list = g.groups[cat];
-      rowsHtml += '<tr><td colspan="4" class="fin-group-head"><span>'+esc(cat)+'</span><span>'+list.length+' item'+(list.length>1?'ns':'')+'</span></td></tr>';
+      rowsHtml += '<tr><td colspan="4" class="fin-group-head"><span>'+esc(cat)+'</span><span>'+list.length+' '+(list.length>1?'itens':'item')+'</span></td></tr>';
       list.forEach(function(it){
         rowsHtml += '<tr>'+
           '<td>'+esc(it.itemNumero||'—')+'</td>'+
@@ -3636,7 +3636,7 @@
     var groupsHtml = g.order.map(function(cat){
       var list = g.groups[cat];
       var head = '<div data-pdf-row="1" style="display:flex;justify-content:space-between;padding:7px 12px;font-weight:bold;font-size:10.5px;background:'+RDO_HEAD+';border-top:1px solid '+RDO_BORDER+';border-bottom:1px solid '+RDO_BORDER+';">' +
-        '<span>'+esc(cat)+'</span><span>'+list.length+' item'+(list.length>1?'ns':'')+'</span>' +
+        '<span>'+esc(cat)+'</span><span>'+list.length+' '+(list.length>1?'itens':'item')+'</span>' +
       '</div>';
       var rows = list.map(function(it){
         return '<div data-pdf-row="1" style="display:flex;padding:8px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';font-size:11px;">' +
