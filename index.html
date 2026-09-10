@@ -498,7 +498,7 @@
           <div class="grid4" style="margin-top:12px;">
             <div class="field"><label>Início</label><input type="date" id="obraInicio"></div>
             <div class="field"><label>Localidade</label><input type="text" id="obraLocalidade" placeholder="Cidade/UF"></div>
-            <div class="field" style="grid-column:3/5"><label>Contrato</label><input type="text" id="obraContrato" placeholder="Ex: Contrato 023 — Torre 03 / Bloco C"></div>
+            <div class="field" style="grid-column:3/5"><label>Complemento</label><input type="text" id="obraContrato" placeholder="Ex: Torre 03 / Bloco C"></div>
           </div>
           <p class="hint" id="obraSemClienteHint" style="display:none;margin-top:10px;">Nenhum cliente cadastrado ainda. <a href="#" data-goto="clientes">Cadastre um cliente</a> antes de registrar a obra.</p>
           <div class="form-actions"><button type="submit" class="btn primary">Salvar obra</button></div>
@@ -1351,8 +1351,8 @@
       rowsHtml += '<tr><td colspan="4" class="fin-group-head"><span>'+esc(cat)+'</span><span>'+list.length+' '+(list.length>1?'itens':'item')+'</span></td></tr>';
       list.forEach(function(it){
         rowsHtml += '<tr>'+
-          '<td>'+esc(it.itemNumero||'—')+'</td>'+
           '<td>'+esc(it.descricao)+'</td>'+
+          '<td>1</td>'+
           '<td>'+esc(it.unidade)+'</td>'+
           '<td class="num"><b>'+fmtMoeda(it.custoUnitario)+'</b></td>'+
         '</tr>';
@@ -1360,7 +1360,7 @@
     });
     return '<div class="table-wrap">'+
       '<table class="fin-list">'+
-        '<thead><tr><th>Item</th><th>Descrição</th><th>Unidade</th><th>Valor Unitário</th></tr></thead>'+
+        '<thead><tr><th>Serviço</th><th>Quantidade</th><th>Unidade</th><th>Valor Unitário</th></tr></thead>'+
         '<tbody>'+rowsHtml+'</tbody>'+
       '</table>'+
     '</div>';
@@ -1429,13 +1429,12 @@
   }
   function financeiroResumo(itens){
     var total = sumMoeda(itens, function(it){ return it.valorTotal; });
-    var maior = 0; var comprasSet = {}; var categoriasSet = {};
+    var comprasSet = {}; var categoriasSet = {};
     itens.forEach(function(it){
-      if(it.valorTotal>maior) maior = it.valorTotal;
       if(it.numeroCompra) comprasSet[it.numeroCompra]=1;
       categoriasSet[it.categoria||'Sem categoria']=1;
     });
-    return { total:total, totalItens:itens.length, categorias:Object.keys(categoriasSet).length, compras:Object.keys(comprasSet).length, maior:maior };
+    return { total:total, totalItens:itens.length, categorias:Object.keys(categoriasSet).length, compras:Object.keys(comprasSet).length };
   }
   function financeiroAgrupado(itens){
     var groups = {}; var order = [];
@@ -1514,7 +1513,6 @@
         kpiTile(resumo.totalItens, 'Total de itens', '')+
         kpiTile(resumo.categorias, 'Categorias', '')+
       '</div>'+
-      (resumo.maior ? '<div class="kpi-row" style="grid-template-columns:repeat(4,1fr);margin-top:-10px;"><div class="kpi warn"><div class="n">'+fmtMoeda(resumo.maior)+'</div><div class="l">Maior gasto (item)</div></div></div>' : '')+
       '<div class="filters" id="finFilterBar">'+
         '<div class="field"><label>Categoria</label><select id="finFCategoria"><option value="">Todas</option>'+categorias.map(function(c){return opt(c,f.categoria);}).join('')+'</select></div>'+
         '<div class="field"><label>Unidade</label><select id="finFUnidade"><option value="">Todas</option>'+unidades.map(function(c){return opt(c,f.unidade);}).join('')+'</select></div>'+
@@ -3581,9 +3579,8 @@
       rdoTileGridHtml([
         {label:'Valor total', value:fmtMoeda(resumo.total), total:true},
         {label:'Total de itens (lançamentos)', value:String(resumo.totalItens)},
-        {label:'Categorias', value:String(resumo.categorias)},
-        {label:'Maior gasto (item)', value:fmtMoeda(resumo.maior)}
-      ], 4)
+        {label:'Categorias', value:String(resumo.categorias)}
+      ], 3)
     );
 
     var tableHeader =
@@ -3680,8 +3677,8 @@
 
     var tableHeader =
       '<div style="display:flex;padding:8px 12px;font-weight:bold;font-size:10px;background:'+RDO_HEAD+';border-bottom:1px solid '+RDO_BORDER+';text-transform:uppercase;letter-spacing:.3px;">' +
-        '<div style="width:56px;flex:none;">Item</div>' +
-        '<div style="flex:1;padding:0 8px;">Descrição</div>' +
+        '<div style="flex:1;padding:0 8px 0 0;">Serviço</div>' +
+        '<div style="width:70px;flex:none;text-align:center;">Quantidade</div>' +
         '<div style="width:60px;flex:none;text-align:center;">Unid.</div>' +
         '<div style="width:100px;flex:none;text-align:right;">Valor Unit.</div>' +
       '</div>';
@@ -3693,8 +3690,8 @@
       '</div>';
       var rows = list.map(function(it){
         return '<div data-pdf-row="1" style="display:flex;padding:8px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';font-size:11px;">' +
-          '<div style="width:56px;flex:none;">'+esc(it.itemNumero||'—')+'</div>' +
-          '<div style="flex:1;padding:0 8px;">'+esc(it.descricao)+'</div>' +
+          '<div style="flex:1;padding:0 8px 0 0;">'+esc(it.descricao)+'</div>' +
+          '<div style="width:70px;flex:none;text-align:center;">1</div>' +
           '<div style="width:60px;flex:none;text-align:center;">'+esc(it.unidade)+'</div>' +
           '<div style="width:100px;flex:none;text-align:right;font-weight:bold;">'+fmtMoeda(it.custoUnitario)+'</div>' +
         '</div>';
