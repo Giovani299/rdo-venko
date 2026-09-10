@@ -408,7 +408,7 @@
       <button class="tab-btn active" data-view="dashboard">Painel</button>
       <button class="tab-btn" data-view="novo">Nova RDO</button>
       <button class="tab-btn" data-view="clientes">Clientes</button>
-      <button class="tab-btn" data-view="obras">Obras</button>
+      <button class="tab-btn" data-view="obras" id="tabObras">Obras</button>
       <button class="tab-btn" data-view="equipamentos">Equipamentos</button>
       <button class="tab-btn" data-view="colaboradores">Colaboradores</button>
       <button class="tab-btn" data-view="equipes">Equipes</button>
@@ -628,6 +628,7 @@
           </div>
           <div class="checkline" style="margin-top:10px;"><input type="checkbox" id="userIsAdmin"><label for="userIsAdmin">Administrador (pode gerenciar usuários)</label></div>
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoFinanceiro"><label for="userAcessoFinanceiro">Acesso ao módulo Financeiro</label></div>
+          <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoObras" checked><label for="userAcessoObras">Acesso à aba Obras</label></div>
           <div class="form-actions">
             <button type="button" class="btn ghost" id="userCancelEdit" style="display:none">Cancelar edição</button>
             <button type="submit" class="btn primary" id="userSubmitBtn">Cadastrar usuário</button>
@@ -863,6 +864,7 @@
     var view = btn.getAttribute('data-view');
     if(view==='users' && !(state.currentUser && state.currentUser.is_admin)) return;
     if((view==='financeiro'||view==='financeiro-obra') && !financeiroCanAccess()) return;
+    if(view==='obras' && !(state.currentUser && (state.currentUser.is_admin || state.currentUser.acesso_obras !== false))) return;
     if(view==='tabelaprecos'){
       if(!financeiroCanAccess()) return;
       if(!state.tabelaPrecosUnlocked){
@@ -1048,6 +1050,7 @@
           document.getElementById('tabUsers').style.display = fresh.is_admin ? '' : 'none';
           document.getElementById('tabFinanceiro').style.display = (fresh.is_admin || fresh.acesso_financeiro) ? '' : 'none';
           document.getElementById('tabTabelaPrecos').style.display = (fresh.is_admin || fresh.acesso_financeiro) ? '' : 'none';
+          document.getElementById('tabObras').style.display = (fresh.is_admin || fresh.acesso_obras !== false) ? '' : 'none';
         }
       }
       if(state.view==='users'){ renderUserList(); }
@@ -1124,6 +1127,7 @@
     document.getElementById('tabUsers').style.display = profile.is_admin ? '' : 'none';
     document.getElementById('tabFinanceiro').style.display = (profile.is_admin || profile.acesso_financeiro) ? '' : 'none';
     document.getElementById('tabTabelaPrecos').style.display = (profile.is_admin || profile.acesso_financeiro) ? '' : 'none';
+    document.getElementById('tabObras').style.display = (profile.is_admin || profile.acesso_obras !== false) ? '' : 'none';
     updateUserBox();
   }
 
@@ -1214,10 +1218,11 @@
     var cargo = document.getElementById('userCargo').value;
     var isAdmin = document.getElementById('userIsAdmin').checked;
     var isFinanceiro = document.getElementById('userAcessoFinanceiro').checked;
+    var isObras = document.getElementById('userAcessoObras').checked;
     if(!login || !nome){ toast('Preencha usuário e nome.','error'); return; }
 
     if(editingUserId){
-      supabaseClient.from('profiles').update({ nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro }).eq('id', editingUserId)
+      supabaseClient.from('profiles').update({ nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro, acesso_obras:isObras }).eq('id', editingUserId)
         .then(function(res){
           if(res.error){ toast('Erro ao salvar usuário: '+res.error.message,'error'); return; }
           toast('Usuário atualizado.','ok');
@@ -1243,7 +1248,7 @@
         return Promise.reject(new Error('sem sessão'));
       }
       var newId = res.data.user.id;
-      return tempClient.from('profiles').insert({ id:newId, login:login, nome:nome, cargo:cargo, is_admin:false, acesso_financeiro:false }).then(function(res2){
+      return tempClient.from('profiles').insert({ id:newId, login:login, nome:nome, cargo:cargo, is_admin:false, acesso_financeiro:false, acesso_obras:isObras }).then(function(res2){
         if(res2.error){ toast('Usuário criado, mas houve erro ao salvar o perfil: '+res2.error.message,'error'); return Promise.reject(res2.error); }
         // acesso_financeiro (assim como is_admin) nunca pode ser definido pelo próprio novo
         // usuário no insert acima — só o admin que está criando a conta, com seu próprio
@@ -1268,7 +1273,7 @@
     list.innerHTML = state.profiles.map(function(u){
       var isSelf = state.currentUser && state.currentUser.id===u.id;
       return '<div class="obra-card" data-id="'+u.id+'">'+
-        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+(u.acesso_financeiro?'<span class="tag-financeiro">Financeiro</span>':'')+'</b>'+
+        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+(u.acesso_financeiro?'<span class="tag-financeiro">Financeiro</span>':'')+(u.acesso_obras===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Sem Obras</span>':'')+'</b>'+
           '<div class="meta">'+esc(u.login)+' · '+esc(u.cargo||'—')+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
@@ -1292,6 +1297,7 @@
         document.getElementById('userCargo').value = (CARGO_OPTS.indexOf(u.cargo)>-1) ? u.cargo : CARGO_OPTS[0];
         document.getElementById('userIsAdmin').checked = !!u.is_admin;
         document.getElementById('userAcessoFinanceiro').checked = !!u.acesso_financeiro;
+        document.getElementById('userAcessoObras').checked = (u.acesso_obras !== false);
         document.getElementById('userFormTitle').textContent = 'Editar usuário — '+u.nome;
         document.getElementById('userSubmitBtn').textContent = 'Salvar alterações';
         document.getElementById('userCancelEdit').style.display = '';
