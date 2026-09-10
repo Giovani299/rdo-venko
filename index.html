@@ -786,7 +786,9 @@
     financeiroItens: [],
     financeiroFilters: { categoria:'', unidade:'', dataIni:'', dataFim:'', busca:'' },
     financeiroEditId: null,
-    catalogoItens: []
+    catalogoItens: [],
+    obraServicosContratados: [],
+    obraServicosOpen: {}
   };
 
   var CLIMA_OPTS = ['Praticável','Parcialmente praticável','Impraticável'];
@@ -884,6 +886,9 @@
       custoUnitario:Number(row.custo_unitario), ativo:row.ativo!==false, ordem:Number(row.ordem)||0,
       createdAt:row.created_at, updatedAt:row.updated_at
     };
+  }
+  function mapObraServicoRow(row){
+    return { id:row.id, obraId:row.obra_id, catalogoItemId:row.catalogo_item_id, createdAt:row.created_at };
   }
   function mapDepartamentoRow(row){
     return { id:row.id, nome:row.nome, createdAt:row.created_at };
@@ -997,6 +1002,13 @@
       if(state.view==='financeiro-obra' && state.financeiroObraId) renderFinanceiroObra();
     });
   }
+  function loadObraServicosContratados(){
+    return supabaseClient.from('obra_servicos_contratados').select('*').then(function(res){
+      if(res.error){ return; }
+      state.obraServicosContratados = (res.data||[]).map(mapObraServicoRow);
+      if(state.view==='obras') renderObraList();
+    });
+  }
   function loadFinanceiroItens(obraId){
     return supabaseClient.from('financeiro_itens').select('*').eq('obra_id', obraId).then(function(res){
       if(res.error){ toast('Não foi possível carregar os dados financeiros desta obra.','error'); return; }
@@ -1020,6 +1032,7 @@
       .on('postgres_changes', {event:'*', schema:'public', table:'profiles'}, function(){ loadProfiles(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'financeiro_itens'}, function(){ if(state.financeiroObraId) loadFinanceiroItens(state.financeiroObraId); })
       .on('postgres_changes', {event:'*', schema:'public', table:'produtos_catalogo'}, function(){ loadCatalogoProdutos(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'obra_servicos_contratados'}, function(){ loadObraServicosContratados(); })
       .subscribe();
   }
 
@@ -1039,7 +1052,7 @@
       }
       setCurrentUser(res.data);
       seedExamplesIfEmpty();
-      loadClientes(); loadObras(); loadEquipamentos(); loadDepartamentos(); loadEquipes(); loadColaboradores(); loadRdos(); loadProfiles(); loadCatalogoProdutos();
+      loadClientes(); loadObras(); loadEquipamentos(); loadDepartamentos(); loadEquipes(); loadColaboradores(); loadRdos(); loadProfiles(); loadCatalogoProdutos(); loadObraServicosContratados();
       subscribeRealtime();
       toast('Bem-vindo, '+(res.data.nome||'').split(' ')[0]+'!','ok');
     });
@@ -1922,19 +1935,37 @@
       list.innerHTML = '<p class="empty-hint">Nenhuma obra cadastrada ainda.</p>';
       return;
     }
+    var canServ = financeiroCanAccess();
     list.innerHTML = state.obras.map(function(o){
       var rdoCount = state.rdos.filter(function(r){ return r.obraId===o.id; }).length;
-      return '<div class="obra-card" data-id="'+o.id+'">'+
+      var servCount = state.obraServicosContratados.filter(function(s){ return s.obraId===o.id; }).length;
+      var open = !!state.obraServicosOpen[o.id];
+      var card = '<div class="obra-card" data-id="'+o.id+'">'+
         '<div class="info"><b>'+esc(o.nome)+(o.exemplo?'<span class="tag-example">exemplo</span>':'')+'</b>'+
-          '<div class="meta">Cliente: '+esc(clienteNomeById(o.clienteId)||'—')+' · '+esc(o.endereco||'Endereço não informado')+(o.localidade?' · '+esc(o.localidade):'')+' · Resp.: '+esc(o.responsavelTecnico||'—')+' · '+rdoCount+' RDO(s)</div>'+
+          '<div class="meta">Cliente: '+esc(clienteNomeById(o.clienteId)||'—')+' · '+esc(o.endereco||'Endereço não informado')+(o.localidade?' · '+esc(o.localidade):'')+' · Resp.: '+esc(o.responsavelTecnico||'—')+' · '+rdoCount+' RDO(s)'+(canServ?' · '+servCount+' serviço(s) contratado(s)':'')+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
           '<span class="chip '+(o.status==='ativa'?'approved':'draft')+'">'+(o.status==='ativa'?'Ativa':'Concluída')+'</span>'+
+          (canServ?'<button class="btn ghost sm" data-servicos="'+o.id+'">'+(open?'Ocultar serviços':'Serviços contratados')+'</button>':'')+
           '<button class="btn ghost sm" data-toggle="'+o.id+'">'+(o.status==='ativa'?'Marcar concluída':'Reativar')+'</button>'+
           '<button class="btn danger sm" data-del="'+o.id+'">Excluir</button>'+
         '</div>'+
       '</div>';
+      var panel = (canServ && open) ? ('<div class="card obra-servicos-panel" id="obraServicosPanel-'+o.id+'" style="margin-top:-6px;">'+renderObraServicosChecklist(o.id)+'</div>') : '';
+      return card + panel;
     }).join('');
+    list.querySelectorAll('[data-servicos]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-servicos');
+        state.obraServicosOpen[id] = !state.obraServicosOpen[id];
+        renderObraList();
+      });
+    });
+    list.querySelectorAll('.obra-servicos-panel input[type=checkbox]').forEach(function(chk){
+      chk.addEventListener('change', function(){
+        toggleObraServico(chk.getAttribute('data-obra'), chk.getAttribute('data-item'), chk.checked);
+      });
+    });
     list.querySelectorAll('[data-toggle]').forEach(function(b){
       b.addEventListener('click', function(){
         var id = b.getAttribute('data-toggle');
@@ -1956,6 +1987,53 @@
           });
       });
     });
+  }
+
+  function renderObraServicosChecklist(obraId){
+    if(state.catalogoItens.length===0){
+      return '<p class="hint">Nenhum serviço cadastrado na tabela de preços ainda.</p>';
+    }
+    var contratados = {};
+    state.obraServicosContratados.filter(function(s){ return s.obraId===obraId; }).forEach(function(s){ contratados[s.catalogoItemId]=true; });
+    var groups = {}, order = [];
+    state.catalogoItens.forEach(function(it){
+      var key = it.categoriaNome || 'Sem categoria';
+      if(!groups[key]){ groups[key]=[]; order.push(key); }
+      groups[key].push(it);
+    });
+    var html = '<h2 style="font-size:15px;">Serviços contratados pelo cliente</h2>'+
+      '<p class="hint">Marque todos os serviços da tabela de preços que o cliente contratou para esta obra.</p>';
+    html += order.map(function(cat){
+      var items = groups[cat];
+      return '<div style="margin-bottom:14px;">'+
+        '<div class="fin-group-head"><span>'+esc(cat)+'</span></div>'+
+        '<div class="checklist-wrap">'+
+          items.map(function(it){
+            var checked = !!contratados[it.id];
+            return '<label class="checklist-item">'+
+              '<input type="checkbox" data-obra="'+obraId+'" data-item="'+it.id+'"'+(checked?' checked':'')+'>'+
+              '<span class="checklist-label">'+(it.itemNumero?esc(it.itemNumero)+' — ':'')+esc(it.descricao)+'</span>'+
+              '<span class="tag-example" style="background:transparent;">'+esc(it.unidade)+'</span>'+
+            '</label>';
+          }).join('')+
+        '</div>'+
+      '</div>';
+    }).join('');
+    return html;
+  }
+
+  function toggleObraServico(obraId, catalogoItemId, checked){
+    if(checked){
+      supabaseClient.from('obra_servicos_contratados').insert({ obra_id: obraId, catalogo_item_id: catalogoItemId }).then(function(res){
+        if(res.error){ toast('Erro ao marcar serviço: '+res.error.message,'error'); return; }
+        loadObraServicosContratados();
+      });
+    } else {
+      supabaseClient.from('obra_servicos_contratados').delete().eq('obra_id', obraId).eq('catalogo_item_id', catalogoItemId).then(function(res){
+        if(res.error){ toast('Erro ao desmarcar serviço: '+res.error.message,'error'); return; }
+        loadObraServicosContratados();
+      });
+    }
   }
 
   function populateObraSelect(){
