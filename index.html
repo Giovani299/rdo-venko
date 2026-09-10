@@ -1337,6 +1337,10 @@
     var u = state.currentUser;
     return !!(u && (u.is_admin || u.acesso_financeiro));
   }
+  function obrasCanAccess(){
+    var u = state.currentUser;
+    return !!(u && (u.is_admin || u.acesso_obras !== false));
+  }
 
   /* ---------------- tabela de preços (catálogo de serviços) ---------------- */
   function tabelaPrecosGroups(itens){
@@ -2059,7 +2063,7 @@
       list.innerHTML = '<p class="empty-hint">Nenhuma obra cadastrada ainda.</p>';
       return;
     }
-    var canServ = financeiroCanAccess();
+    var canServ = obrasCanAccess();
     list.innerHTML = state.obras.map(function(o){
       var rdoCount = state.rdos.filter(function(r){ return r.obraId===o.id; }).length;
       var servCount = state.obraServicosContratados.filter(function(s){ return s.obraId===o.id; }).length;
