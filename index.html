@@ -768,6 +768,47 @@
     });
   }
 
+  function openTabelaPrecosPasswordModal(onSuccess){
+    var TABELA_PRECOS_PASSWORD = 'Emerson@2026';
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div');
+    wrap.className = 'overlay';
+    wrap.innerHTML =
+      '<div class="modal">'+
+        '<h3>Acesso restrito</h3>'+
+        '<p>Digite a senha para acessar a Tabela de Preços.</p>'+
+        '<div class="field" style="margin-bottom:10px;"><label>Senha</label><input type="password" id="tabelaPrecosPass" autocomplete="off"></div>'+
+        '<div class="login-error" id="tabelaPrecosPassError" style="margin:0 0 10px;"></div>'+
+        '<div class="row">'+
+          '<button class="btn ghost" data-act="cancel">Cancelar</button>'+
+          '<button class="btn primary" data-act="ok">Entrar</button>'+
+        '</div>'+
+      '</div>';
+    root.appendChild(wrap);
+    var input = wrap.querySelector('#tabelaPrecosPass');
+    function trySubmit(){
+      var errEl = wrap.querySelector('#tabelaPrecosPassError');
+      if(input.value === TABELA_PRECOS_PASSWORD){
+        wrap.remove();
+        onSuccess();
+      } else {
+        errEl.textContent = 'Senha incorreta.';
+        input.value = '';
+        input.focus();
+      }
+    }
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap){ wrap.remove(); return; }
+      var act = e.target.getAttribute('data-act');
+      if(act==='cancel'){ wrap.remove(); return; }
+      if(act==='ok'){ trySubmit(); }
+    });
+    input.addEventListener('keydown', function(e){
+      if(e.key==='Enter'){ e.preventDefault(); trySubmit(); }
+    });
+    setTimeout(function(){ input.focus(); }, 0);
+  }
+
   /* ---------------- state ---------------- */
   var state = {
     view: 'dashboard',
@@ -793,7 +834,8 @@
     financeiroEditId: null,
     catalogoItens: [],
     obraServicosContratados: [],
-    obraServicosOpen: {}
+    obraServicosOpen: {},
+    tabelaPrecosUnlocked: false
   };
 
   var CLIMA_OPTS = ['Praticável','Parcialmente praticável','Impraticável'];
@@ -820,7 +862,18 @@
     var btn = e.target.closest('.tab-btn'); if(!btn) return;
     var view = btn.getAttribute('data-view');
     if(view==='users' && !(state.currentUser && state.currentUser.is_admin)) return;
-    if((view==='financeiro'||view==='financeiro-obra'||view==='tabelaprecos') && !financeiroCanAccess()) return;
+    if((view==='financeiro'||view==='financeiro-obra') && !financeiroCanAccess()) return;
+    if(view==='tabelaprecos'){
+      if(!financeiroCanAccess()) return;
+      if(!state.tabelaPrecosUnlocked){
+        openTabelaPrecosPasswordModal(function(){
+          state.tabelaPrecosUnlocked = true;
+          state.editId = null; state.photos = []; state.videos = [];
+          goto('tabelaprecos');
+        });
+        return;
+      }
+    }
     state.editId = null; state.photos = []; state.videos = [];
     goto(view);
   });
