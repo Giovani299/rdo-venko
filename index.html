@@ -438,6 +438,9 @@
       <div id="dbBanner"></div>
       <div class="kpi-row" id="kpiRow"></div>
       <div class="filters" id="filterBar"></div>
+      <div style="display:flex;justify-content:flex-end;margin:-6px 0 12px;">
+        <button class="btn ghost sm" id="btnExportCsv" type="button">⬇ Exportar CSV</button>
+      </div>
       <div class="table-wrap">
         <table class="rdo-list">
           <thead>
@@ -892,6 +895,37 @@
     if(g.getAttribute('data-goto')==='novo'){ state.editId=null; state.photos=[]; state.videos=[]; }
     goto(g.getAttribute('data-goto'));
   });
+
+  document.getElementById('btnExportCsv').addEventListener('click', function(){
+    exportRdoCsv(filteredRdos());
+  });
+  function csvField(v){
+    var s = String(v==null?'':v);
+    if(/[;"\n\r]/.test(s)){ s = '"'+s.replace(/"/g,'""')+'"'; }
+    return s;
+  }
+  function exportRdoCsv(rows){
+    var header = ['Data','Obra','Responsável','Clima','Ocorrências','Status'];
+    var lines = [header.map(csvField).join(';')];
+    rows.forEach(function(r){
+      var pendCount = (r.ocorrencias||[]).filter(function(o){ return o.tipo==='Pendência'; }).length;
+      var occText = pendCount>0 ? (pendCount+' pendência(s)') : ((r.ocorrencias||[]).length ? (r.ocorrencias.length+' registrada(s)') : '');
+      var climaTxt = (r.climaManha&&r.climaManha.condicao) || r.clima || '';
+      var statusTxt = STATUS_LABEL[r.status] || r.status || '';
+      var cols = [fmtDate(r.data), r.obraNome||'', r.responsavel||'', climaTxt, occText, statusTxt];
+      lines.push(cols.map(csvField).join(';'));
+    });
+    var csv = '\uFEFF' + lines.join('\r\n');
+    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'rdos_' + todayISO() + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }
 
   /* ---------------- example seed (first run only) ---------------- */
   function seedExamplesIfEmpty(){
