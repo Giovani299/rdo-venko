@@ -2086,7 +2086,7 @@
         '<div class="obra-actions">'+
           '<span class="chip '+(o.status==='ativa'?'approved':'draft')+'">'+(o.status==='ativa'?'Ativa':'Concluída')+'</span>'+
           (canServ?'<button class="btn ghost sm" data-servicos="'+o.id+'">'+(open?'Ocultar serviços':'Serviços contratados')+'</button>':'')+
-          (canQtd?'<button class="btn ghost sm" data-servpdf="'+o.id+'">⬇ Exportar PDF</button>':'')+
+          (canServ?'<button class="btn ghost sm" data-servpdf="'+o.id+'">⬇ Exportar PDF</button>':'')+
           '<button class="btn ghost sm" data-toggle="'+o.id+'">'+(o.status==='ativa'?'Marcar concluída':'Reativar')+'</button>'+
           '<button class="btn danger sm" data-del="'+o.id+'">Excluir</button>'+
         '</div>'+
@@ -3805,6 +3805,7 @@
 
   /* ---------------- obras: PDF de serviços contratados (com valores) ---------------- */
   function obraServicosContratadosPdfBodyHtml(obra, contratadosList){
+    var showValor = financeiroCanAccess();
     var geradoEm = new Date().toLocaleString('pt-BR');
     var groups = {}, order = [];
     contratadosList.forEach(function(row){
@@ -3828,8 +3829,8 @@
         '<div style="flex:1;padding:0 8px;">Serviço</div>' +
         '<div style="width:56px;flex:none;text-align:center;">Unid.</div>' +
         '<div style="width:70px;flex:none;text-align:right;">Qtd.</div>' +
-        '<div style="width:88px;flex:none;text-align:right;">Valor Unit.</div>' +
-        '<div style="width:96px;flex:none;text-align:right;">Valor Total</div>' +
+        (showValor ? '<div style="width:88px;flex:none;text-align:right;">Valor Unit.</div>' : '') +
+        (showValor ? '<div style="width:96px;flex:none;text-align:right;">Valor Total</div>' : '') +
       '</div>';
 
     var groupsHtml = order.map(function(cat){
@@ -3844,12 +3845,12 @@
           '<div style="flex:1;padding:0 8px;">'+(row.item.itemNumero?esc(row.item.itemNumero)+' — ':'')+esc(row.item.descricao)+'</div>' +
           '<div style="width:56px;flex:none;text-align:center;">'+esc(row.item.unidade)+'</div>' +
           '<div style="width:70px;flex:none;text-align:right;">'+(qtd!=null?fmtQtd(qtd):'—')+'</div>' +
-          '<div style="width:88px;flex:none;text-align:right;">'+fmtMoeda(valorUnit)+'</div>' +
-          '<div style="width:96px;flex:none;text-align:right;font-weight:bold;">'+(qtd!=null?fmtMoeda(valorTotal):'—')+'</div>' +
+          (showValor ? '<div style="width:88px;flex:none;text-align:right;">'+fmtMoeda(valorUnit)+'</div>' : '') +
+          (showValor ? '<div style="width:96px;flex:none;text-align:right;font-weight:bold;">'+(qtd!=null?fmtMoeda(valorTotal):'—')+'</div>' : '') +
         '</div>';
       }).join('');
       var head = '<div data-pdf-row="1" style="display:flex;justify-content:space-between;padding:7px 12px;font-weight:bold;font-size:10.5px;background:'+RDO_HEAD+';border-top:1px solid '+RDO_BORDER+';border-bottom:1px solid '+RDO_BORDER+';">' +
-        '<span>'+esc(cat)+'</span><span>'+fmtMoeda(subtotal)+'</span>' +
+        '<span>'+esc(cat)+'</span>'+(showValor?('<span>'+fmtMoeda(subtotal)+'</span>'):'') +
       '</div>';
       return head + rows;
     }).join('');
@@ -3858,12 +3859,12 @@
       rdoCard(rdoCardHead('Serviços contratados', contratadosList.length) + tableHeader + groupsHtml) :
       rdoCard(rdoCardHead('Serviços contratados', 0) + rdoEmptyMsg());
 
-    var totalCard = rdoCard(
+    var totalCard = showValor ? rdoCard(
       '<div data-pdf-row="1" style="display:flex;justify-content:space-between;align-items:center;padding:16px 18px;background:'+RDO_HEAD+';">' +
         '<span style="font-weight:bold;font-size:13px;text-transform:uppercase;letter-spacing:.3px;">VALOR TOTAL CONTRATADO</span>' +
         '<span style="font-weight:bold;font-size:17px;">'+fmtMoeda(totalGeral)+'</span>' +
       '</div>'
-    );
+    ) : '';
 
     return headCard + listaCard + totalCard;
   }
