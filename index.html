@@ -389,7 +389,8 @@
     /* Filtros (Painel/Financeiro): cada campo ocupa a linha toda, mais facil de tocar */
     .filters{gap:12px;}
     .filters .field{width:100%;}
-    .filters .field input, .filters .field select{min-width:0;}
+    .filters .field input, .filters .field select{min-width:0;padding:6px 9px;font-size:13px;}
+    .filters .date-ph{font-size:12.5px;left:9px;}
     .table-wrap{overflow-x:visible;border:none;box-shadow:none;background:transparent;}
     table.rdo-list, table.fin-list{min-width:0;width:100%;}
     table.rdo-list thead, table.fin-list thead{display:none;}
@@ -721,6 +722,16 @@
     return String(s==null?'':s).replace(/[&<>"']/g, function(c){
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
     });
+  }
+  function wireDatePlaceholder(inputId){
+    var input = document.getElementById(inputId);
+    if(!input) return;
+    var ph = input.parentNode ? input.parentNode.querySelector('.date-ph[data-for="'+inputId+'"]') : null;
+    if(!ph) return;
+    function sync(){ ph.style.display = input.value ? 'none' : 'block'; }
+    sync();
+    input.addEventListener('input', sync);
+    input.addEventListener('change', sync);
   }
   function todayISO(){ var d=new Date(); return d.toISOString().slice(0,10); }
   function fmtDate(iso){
@@ -1873,8 +1884,8 @@
       '<div class="filters" id="finFilterBar">'+
         '<div class="field"><label>Categoria</label><select id="finFCategoria"><option value="">Todas</option>'+categorias.map(function(c){return opt(c,f.categoria);}).join('')+'</select></div>'+
         '<div class="field"><label>Unidade</label><select id="finFUnidade"><option value="">Todas</option>'+unidades.map(function(c){return opt(c,f.unidade);}).join('')+'</select></div>'+
-        '<div class="field"><label>De</label><input type="date" id="finFDataIni" value="'+esc(f.dataIni)+'"></div>'+
-        '<div class="field"><label>Até</label><input type="date" id="finFDataFim" value="'+esc(f.dataFim)+'"></div>'+
+        '<div class="field"><label>De</label><div class="date-wrap"><input type="date" id="finFDataIni" value="'+esc(f.dataIni)+'"><span class="date-ph" data-for="finFDataIni">dd/mm/aaaa</span></div></div>'+
+        '<div class="field"><label>Até</label><div class="date-wrap"><input type="date" id="finFDataFim" value="'+esc(f.dataFim)+'"><span class="date-ph" data-for="finFDataFim">dd/mm/aaaa</span></div></div>'+
         '<div class="field grow"><label>Buscar</label><input type="text" id="finFBusca" placeholder="Produto, descrição…" value="'+esc(f.busca)+'"></div>'+
         (filtroAtivo ? '<button type="button" class="btn ghost sm" id="finFClear">Limpar filtros</button>' : '')+
       '</div>'+
@@ -2012,6 +2023,8 @@
     });
     var di = document.getElementById('finFDataIni'); if(di) di.addEventListener('change', function(){ state.financeiroFilters.dataIni = di.value; applyAndRender(); });
     var df = document.getElementById('finFDataFim'); if(df) df.addEventListener('change', function(){ state.financeiroFilters.dataFim = df.value; applyAndRender(); });
+    wireDatePlaceholder('finFDataIni');
+    wireDatePlaceholder('finFDataFim');
     var bs = document.getElementById('finFBusca');
     if(bs){
       bs.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); state.financeiroFilters.busca = bs.value; applyAndRender(); } });
@@ -2171,8 +2184,8 @@
     }).join('');
     document.getElementById('filterBar').innerHTML =
       '<div class="field"><label>Obra</label><select id="fObra">'+obraOpts+'</select></div>'+
-      '<div class="field"><label>De</label><input type="date" id="fDe" value="'+esc(f.dataIni)+'"></div>'+
-      '<div class="field"><label>Até</label><input type="date" id="fAte" value="'+esc(f.dataFim)+'"></div>'+
+      '<div class="field"><label>De</label><div class="date-wrap"><input type="date" id="fDe" value="'+esc(f.dataIni)+'"><span class="date-ph" data-for="fDe">dd/mm/aaaa</span></div></div>'+
+      '<div class="field"><label>Até</label><div class="date-wrap"><input type="date" id="fAte" value="'+esc(f.dataFim)+'"><span class="date-ph" data-for="fAte">dd/mm/aaaa</span></div></div>'+
       '<div class="field"><label>Responsável</label><input type="text" id="fResp" placeholder="nome" value="'+esc(f.responsavel)+'"></div>'+
       '<div class="field"><label>Status</label><select id="fStatus">'+statusOpts+'</select></div>'+
       '<div class="field grow"><label>Buscar</label><input type="text" id="fBusca" placeholder="texto nos comentários, ocorrências..." value="'+esc(f.busca)+'"></div>'+
@@ -2181,6 +2194,8 @@
     document.getElementById('fObra').addEventListener('change', function(e){ f.obraId=e.target.value; renderRdoTable(); });
     document.getElementById('fDe').addEventListener('change', function(e){ f.dataIni=e.target.value; renderRdoTable(); });
     document.getElementById('fAte').addEventListener('change', function(e){ f.dataFim=e.target.value; renderRdoTable(); });
+    wireDatePlaceholder('fDe');
+    wireDatePlaceholder('fAte');
     document.getElementById('fResp').addEventListener('input', function(e){ f.responsavel=e.target.value; renderRdoTable(); });
     document.getElementById('fStatus').addEventListener('change', function(e){ f.status=e.target.value; renderRdoTable(); });
     document.getElementById('fBusca').addEventListener('input', function(e){ f.busca=e.target.value; renderRdoTable(); });
