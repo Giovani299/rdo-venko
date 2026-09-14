@@ -295,9 +295,10 @@
     background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
     padding:14px 16px;box-shadow:var(--shadow-sm);display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:10px;flex-wrap:wrap;
   }
-  .obra-card .info b{font-size:15px;}
-  .obra-card .info .meta{color:var(--steel);font-size:12.5px;margin-top:3px;}
-  .obra-actions{display:flex;gap:8px;align-items:center;}
+  .obra-card .info{min-width:0;}
+  .obra-card .info b{font-size:15px;overflow-wrap:anywhere;}
+  .obra-card .info .meta{color:var(--steel);font-size:12.5px;margin-top:3px;overflow-wrap:anywhere;}
+  .obra-actions{display:flex;gap:8px;align-items:center;max-width:100%;}
 
   /* ---------- Modal / Toast ---------- */
   .overlay{position:fixed;inset:0;background:rgba(20,19,15,.5);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
@@ -3333,7 +3334,7 @@
         '<h2><span class="idx">4</span>Mão de obra</h2>'+
         '<p class="hint">Marque os colaboradores presentes na obra hoje — preenchido automaticamente ao selecionar as equipes acima (pode ajustar se faltou alguém, ou adicionar avulso).</p>'+
         '<div id="moContainer">'+maoDeObraChecklistHtml(rdo.maoDeObra, moNomesFor(rdo.equipesDia))+'</div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:16px;">'+
+        '<div class="grid3" style="margin-top:16px;">'+
           '<div class="field"><label>Gestão — ADM</label><input type="number" min="0" step="1" id="rdoGestaoAdm" value="'+esc(rdo.gestao&&rdo.gestao.adm!=null?rdo.gestao.adm:'')+'"></div>'+
           '<div class="field"><label>Gestão — ENG</label><input type="number" min="0" step="1" id="rdoGestaoEng" value="'+esc(rdo.gestao&&rdo.gestao.eng!=null?rdo.gestao.eng:'')+'"></div>'+
           '<div class="field"><label>Total (Gestão)</label><input type="text" id="rdoGestaoTotal" value="'+((parseFloat(rdo.gestao&&rdo.gestao.adm)||0)+(parseFloat(rdo.gestao&&rdo.gestao.eng)||0))+'" readonly></div>'+
