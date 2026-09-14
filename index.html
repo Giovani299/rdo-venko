@@ -132,6 +132,13 @@
     border:1px solid var(--line);background:var(--paper);color:var(--ink);
     padding:8px 9px;border-radius:7px;min-width:120px;
   }
+  /* Placeholder "dd/mm/aaaa" sobre os campos de data (o navegador não respeita o atributo placeholder em type=date) */
+  .date-wrap{position:relative;}
+  .date-wrap input[type="date"]{width:100%;}
+  .date-ph{
+    position:absolute;left:10px;top:50%;transform:translateY(-50%);
+    color:var(--steel);font-size:13px;pointer-events:none;
+  }
   .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--focus);}
   .field.grow{flex:1;min-width:180px;}
   .field.grow input{width:100%;}
@@ -306,6 +313,11 @@
   .modal h3{font-size:18px;margin-bottom:8px;}
   .modal p{color:var(--ink-soft);font-size:13.5px;margin:0 0 16px;}
   .modal .row{display:flex;justify-content:flex-end;gap:10px;}
+  .pending-list{display:flex;flex-direction:column;gap:10px;max-height:320px;overflow-y:auto;margin-bottom:14px;}
+  .pending-item{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;}
+  .pending-item-info{display:flex;flex-direction:column;gap:2px;font-size:13px;}
+  .pending-item-info .pi-sub{color:var(--ink-soft);font-size:12px;}
+  .pending-item-actions{display:flex;gap:6px;flex-wrap:wrap;}
   .lightbox{position:fixed;inset:0;background:rgba(10,10,9,.86);display:flex;align-items:center;justify-content:center;z-index:110;padding:24px;cursor:zoom-out;}
   .lightbox img{max-width:100%;max-height:100%;border-radius:6px;}
 
@@ -386,7 +398,7 @@
   .print-only{display:none;}
   /* ---------- Mobile: tabelas viram cartões empilhados (sem rolagem lateral) ---------- */
   @media (max-width:680px){
-    /* Filtros (Painel/Financeiro): cada campo ocupa a linha toda, mais facil de tocar */
+    /* Filtros (Painel/Financeiro): cada campo ocupa a linha toda, mais fácil de tocar */
     .filters{gap:12px;}
     .filters .field{width:100%;}
     .filters .field input, .filters .field select{min-width:0;padding:6px 9px;font-size:13px;}
@@ -420,6 +432,15 @@
     table.fin-list tr.fin-group-row td::before{content:none;}
     .fin-total-row{flex-wrap:wrap;text-align:right;padding:12px 14px;}
     .footer-note{padding:10px 0 4px;}
+    /* Nova RDO: botões de Salvar/Enviar sempre visíveis, sem precisar rolar até o fim do formulário */
+    #view-novo{padding-bottom:88px;}
+    .form-actions.dock-mobile{
+      position:fixed;left:0;right:0;bottom:0;z-index:35;margin:0;
+      background:var(--surface);border-top:1px solid var(--line);
+      padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+      box-shadow:0 -4px 14px rgba(20,20,18,.12);
+    }
+    .form-actions.dock-mobile .hint{flex-basis:100%;order:-1;margin:0 0 6px;}
     /* Cabeçalho: garante 100% de largura no celular e evita qualquer vazamento horizontal */
     html, body{overflow-x:hidden;}
     .topbar{width:100%;max-width:100%;box-sizing:border-box;}
@@ -913,7 +934,8 @@
     obraServicosContratados: [],
     obraServicosOpen: {},
     tabelaPrecosUnlocked: false,
-    pendingRdos: []
+    pendingRdos: [],
+    editingPendingItem: null // {id, isEdit, rdoId} quando está editando uma RDO pendente (ainda não sincronizada)
   };
 
   var CLIMA_OPTS = ['Praticável','Parcialmente praticável','Impraticável'];
@@ -1002,6 +1024,21 @@
       }catch(e){}
     });
   }
+  function pendingUpdate(id, entry){
+    // Atualiza uma RDO pendente já existente na fila (em vez de duplicar) — usado quando o
+    // usuário edita uma RDO pendente antes de confirmar o envio.
+    return openOfflineDb().then(function(db){
+      if(!db) return false;
+      return new Promise(function(resolve){
+        try{
+          var tx = db.transaction('pendingRdos','readwrite');
+          tx.objectStore('pendingRdos').put(Object.assign({}, entry, {id:id}));
+          tx.oncomplete = function(){ resolve(true); };
+          tx.onerror = function(){ resolve(false); };
+        }catch(e){ resolve(false); }
+      });
+    });
+  }
   function looksOffline(err){
     if(!navigator.onLine) return true;
     var msg = (err && (err.message || err.error_description || String(err))) || '';
@@ -1031,7 +1068,13 @@
     var b = document.getElementById('dbBanner');
     if(!b) return;
     if(count>0){
-      b.innerHTML = '<div class="banner-pending">⏳ '+count+' RDO'+(count>1?'s':'')+' salva'+(count>1?'s':'')+' neste dispositivo, aguardando conexão para sincronizar.</div>';
+      b.innerHTML = '<div class="banner-pending">⏳ '+count+' RDO'+(count>1?'s':'')+' salva'+(count>1?'s':'')+' neste dispositivo, aguardando sua confirmação para enviar. '+
+        '<button type="button" class="btn ghost sm" id="btnReviewPending" style="margin-left:8px;">Revisar agora</button></div>';
+      var btn = document.getElementById('btnReviewPending');
+      if(btn) btn.addEventListener('click', function(){
+        if(!navigator.onLine){ toast('Sem conexão agora. Tente novamente quando estiver online.','error'); return; }
+        pendingGetAll().then(function(items){ if(items.length) showPendingReviewModal(items); });
+      });
     } else if(b.querySelector('.banner-pending')){
       b.innerHTML = '';
     }
@@ -1043,58 +1086,166 @@
       renderPendingBanner(items.length);
     });
   }
-  var syncingPending = false;
-  function trySyncPendingRdos(){
-    if(syncingPending || !navigator.onLine || !supabaseClient) return Promise.resolve();
-    syncingPending = true;
-    // Antes de tentar sincronizar, confirma que a sessão ainda é válida. Se o token expirou
-    // (ex.: dispositivo ficou dias sem internet), NÃO tenta enviar agora — evita que um erro de
-    // autenticação seja confundido com "dado inválido" e a RDO pendente seja apagada da fila.
-    // Ela continua salva neste dispositivo e será enviada assim que a pessoa logar de novo.
+  // Envia UMA RDO pendente para o Supabase. Nunca é chamada sozinha em segundo plano — só a
+  // partir de uma ação explícita da pessoa (botão "Enviar agora"/"Enviar todas agora" no modal
+  // de revisão, ou ao salvar depois de editar uma RDO pendente). Retorna {ok:true} ou
+  // {ok:false, reason:'offline'|'auth'|'error', message?}.
+  function syncOnePendingItem(item){
+    if(!navigator.onLine || !supabaseClient) return Promise.resolve({ok:false, reason:'offline'});
     return supabaseClient.auth.getSession().then(function(sessRes){
       var hasSession = !!(sessRes && sessRes.data && sessRes.data.session);
-      if(!hasSession){ syncingPending=false; return; }
+      if(!hasSession) return {ok:false, reason:'auth'};
+      var op = item.isEdit
+        ? supabaseClient.from('rdos').update(item.payload).eq('id', item.rdoId)
+        : supabaseClient.from('rdos').insert(Object.assign({exemplo:false}, item.payload));
+      return op.then(function(res){
+        if(res.error){
+          if(looksAuthError(res.error)) return {ok:false, reason:'auth'};
+          if(looksOffline(res.error)) return {ok:false, reason:'offline'};
+          return {ok:false, reason:'error', message: res.error.message};
+        }
+        return pendingRemove(item.id).then(function(){ return {ok:true}; });
+      });
+    }).catch(function(err){
+      if(looksAuthError(err)) return {ok:false, reason:'auth'};
+      if(looksOffline(err)) return {ok:false, reason:'offline'};
+      return {ok:false, reason:'error', message: (err && err.message) || String(err)};
+    });
+  }
+  // Chamada quando a conexão/sessão volta (login ou evento 'online'). Nunca envia nada sozinha:
+  // se houver RDO(s) pendente(s) e a sessão estiver válida, abre o modal de revisão para a
+  // pessoa decidir — enviar agora, editar antes ou deixar pendente.
+  var pendingModalOpen = false;
+  function maybeReviewPendingRdos(){
+    if(!navigator.onLine || !supabaseClient) return Promise.resolve();
+    return supabaseClient.auth.getSession().then(function(sessRes){
+      var hasSession = !!(sessRes && sessRes.data && sessRes.data.session);
+      if(!hasSession) return;
       return pendingGetAll().then(function(items){
-        if(!items.length){ syncingPending=false; return; }
-        var okCount = 0;
-        var keptCount = 0;
-        var chain = Promise.resolve();
-        items.forEach(function(item){
-          chain = chain.then(function(){
-            var op = item.isEdit
-              ? supabaseClient.from('rdos').update(item.payload).eq('id', item.rdoId)
-              : supabaseClient.from('rdos').insert(Object.assign({exemplo:false}, item.payload));
-            return op.then(function(res){
-              if(res.error){
-                if(looksAuthError(res.error)){
-                  keptCount++;
-                  return; // mantém na fila — não é um dado inválido, é sessão expirada
-                }
-                if(!looksOffline(res.error)){
-                  return pendingRemove(item.id).then(function(){
-                    toast('Uma RDO pendente não pôde ser sincronizada ('+res.error.message+'). Foi removida da fila — revise e salve novamente.','error');
-                  });
-                }
-                return;
-              }
-              okCount++;
-              return pendingRemove(item.id);
-            }).catch(function(){ /* mantém na fila, tenta de novo depois */ });
+        if(items.length) showPendingReviewModal(items);
+      });
+    }).catch(function(){});
+  }
+  function pendingItemSummaryHtml(it){
+    var p = it.payload;
+    var tipoTxt = p.status==='enviado' ? 'estava marcada para enviar para aprovação' : 'estava salva como rascunho';
+    return '<div class="pending-item" data-id="'+it.id+'">'+
+        '<div class="pending-item-info">'+
+          '<b>'+esc(p.obra_nome||'—')+'</b>'+
+          '<span>'+fmtDate(p.data)+' · '+esc(p.responsavel||'—')+'</span>'+
+          '<span class="pi-sub">Quando foi preenchida, '+tipoTxt+'.</span>'+
+        '</div>'+
+        '<div class="pending-item-actions">'+
+          '<button type="button" class="btn ghost sm" data-act="edit" data-id="'+it.id+'">Editar</button>'+
+          '<button type="button" class="btn ghost sm" data-act="discard" data-id="'+it.id+'">Excluir</button>'+
+          '<button type="button" class="btn primary sm" data-act="send" data-id="'+it.id+'">Enviar agora</button>'+
+        '</div>'+
+      '</div>';
+  }
+  function showPendingReviewModal(initialItems){
+    if(pendingModalOpen || !initialItems || !initialItems.length) return;
+    pendingModalOpen = true;
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div');
+    wrap.className = 'overlay';
+
+    function render(items){
+      wrap.innerHTML =
+        '<div class="modal" style="max-width:560px;">'+
+          '<h3>RDO'+(items.length>1?'s':'')+' pendente'+(items.length>1?'s':'')+' neste dispositivo</h3>'+
+          '<p>'+(items.length===1 ? 'Há 1 RDO salva neste aparelho que ainda não foi enviada.' : ('Há '+items.length+' RDOs salvas neste aparelho que ainda não foram enviadas.'))+' O que você quer fazer com cada uma?</p>'+
+          '<div class="pending-list">'+items.map(pendingItemSummaryHtml).join('')+'</div>'+
+          '<div class="row">'+
+            (items.length>1 ? '<button type="button" class="btn ghost" data-act="sendall">Enviar todas agora</button>' : '')+
+            '<button type="button" class="btn ghost" data-act="later">Decidir depois</button>'+
+          '</div>'+
+        '</div>';
+    }
+    render(initialItems);
+    root.appendChild(wrap);
+
+    function closeModal(){ wrap.remove(); pendingModalOpen = false; }
+    function refreshList(){
+      return pendingGetAll().then(function(fresh){
+        if(!fresh.length){ closeModal(); refreshPendingRdos(); return; }
+        render(fresh);
+      });
+    }
+
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap){ closeModal(); return; }
+      var btn = e.target.closest('button[data-act]'); if(!btn) return;
+      var act = btn.getAttribute('data-act');
+      var id = btn.getAttribute('data-id') ? Number(btn.getAttribute('data-id')) : null;
+
+      if(act==='later'){ closeModal(); return; }
+
+      if(act==='discard'){
+        confirmModal({ title:'Excluir rascunho pendente', msg:'Esta RDO será excluída deste dispositivo e NÃO será enviada. Deseja continuar?', okLabel:'Excluir', danger:true })
+          .then(function(ok){
+            if(!ok) return;
+            pendingRemove(id).then(function(){ toast('Rascunho pendente excluído.','ok'); refreshPendingRdos(); refreshList(); });
+          });
+        return;
+      }
+
+      if(act==='edit'){
+        pendingGetAll().then(function(fresh){
+          var item = fresh.find(function(x){ return x.id===id; });
+          if(!item) return;
+          closeModal();
+          openPendingRdoForEdit(item);
+        });
+        return;
+      }
+
+      if(act==='send'){
+        btn.disabled = true; btn.textContent = 'Enviando…';
+        pendingGetAll().then(function(fresh){
+          var item = fresh.find(function(x){ return x.id===id; });
+          if(!item) return refreshList();
+          return syncOnePendingItem(item).then(function(result){
+            if(result.ok){ toast('RDO sincronizada com sucesso.','ok'); loadRdos(); }
+            else if(result.reason==='auth'){ toast('Sua sessão expirou — faça login novamente para enviar esta RDO.','error'); }
+            else if(result.reason==='offline'){ toast('Sem conexão no momento. Tente novamente quando estiver online.','error'); }
+            else { toast('Não foi possível enviar: '+result.message+'. Foi removida da fila — edite e salve novamente, se precisar.','error'); }
+            refreshPendingRdos();
+            return refreshList();
           });
         });
-        return chain.then(function(){
-          syncingPending = false;
-          if(okCount>0){
-            toast(okCount===1 ? 'RDO sincronizada com sucesso.' : (okCount+' RDOs sincronizadas com sucesso.'), 'ok');
-            loadRdos();
-          }
-          if(keptCount>0){
-            toast((keptCount===1 ? 'Sua sessão expirou — 1 RDO pendente ' : ('Sua sessão expirou — '+keptCount+' RDOs pendentes ')) + 'continua salva neste dispositivo. Faça login novamente para sincronizar.','error');
-          }
-          refreshPendingRdos();
+        return;
+      }
+
+      if(act==='sendall'){
+        btn.disabled = true; btn.textContent = 'Enviando…';
+        pendingGetAll().then(function(fresh){
+          var okCount = 0, failCount = 0;
+          var chain = Promise.resolve();
+          fresh.forEach(function(item){
+            chain = chain.then(function(){
+              return syncOnePendingItem(item).then(function(result){
+                if(result.ok) okCount++; else failCount++;
+              });
+            });
+          });
+          return chain.then(function(){
+            if(okCount>0){ toast(okCount===1 ? 'RDO sincronizada com sucesso.' : (okCount+' RDOs sincronizadas com sucesso.'),'ok'); loadRdos(); }
+            if(failCount>0){ toast('Algumas RDOs continuam pendentes — confira a lista.','error'); }
+            refreshPendingRdos();
+            return refreshList();
+          });
         });
-      });
-    }).catch(function(){ syncingPending=false; });
+        return;
+      }
+    });
+  }
+  function openPendingRdoForEdit(item){
+    var mapped = pendingAsRdoRows([item])[0];
+    mapped.status = 'rascunho'; // uma RDO pendente nunca foi enviada de verdade — sempre pode ser editada livremente
+    state.editingPendingItem = { id:item.id, isEdit:!!item.isEdit, rdoId:item.rdoId||null };
+    state.editId = mapped.id;
+    goto('novo');
+    renderRdoForm(mapped);
   }
   function updateOnlineBanner(){
     var el = document.getElementById('offlineBanner');
@@ -1102,14 +1253,12 @@
   }
   window.addEventListener('online', function(){
     updateOnlineBanner();
-    toast('Conexão restabelecida — sincronizando…','ok');
-    trySyncPendingRdos();
+    if(state.currentUser){ maybeReviewPendingRdos(); }
   });
   window.addEventListener('offline', function(){
     updateOnlineBanner();
-    toast('Sem conexão. Você pode continuar preenchendo RDOs — elas serão enviadas automaticamente quando a internet voltar.','error');
+    toast('Sem conexão. Você pode continuar preenchendo RDOs — elas ficam salvas neste dispositivo até você confirmar o envio.','error');
   });
-  setInterval(trySyncPendingRdos, 25000);
 
   /* ---------------- instalar como app (PWA) ---------------- */
   var deferredInstallPrompt = null;
@@ -1173,19 +1322,19 @@
       if(!state.tabelaPrecosUnlocked){
         openTabelaPrecosPasswordModal(function(){
           state.tabelaPrecosUnlocked = true;
-          state.editId = null; state.photos = []; state.videos = [];
+          state.editId = null; state.editingPendingItem = null; state.photos = []; state.videos = [];
           goto('tabelaprecos');
         });
         return;
       }
     }
-    state.editId = null; state.photos = []; state.videos = [];
+    state.editId = null; state.editingPendingItem = null; state.photos = []; state.videos = [];
     goto(view);
   });
   document.addEventListener('click', function(e){
     var g = e.target.closest('[data-goto]'); if(!g) return;
     e.preventDefault();
-    if(g.getAttribute('data-goto')==='novo'){ state.editId=null; state.photos=[]; state.videos=[]; }
+    if(g.getAttribute('data-goto')==='novo'){ state.editId=null; state.editingPendingItem=null; state.photos=[]; state.videos=[]; }
     goto(g.getAttribute('data-goto'));
   });
 
@@ -1503,7 +1652,7 @@
       loadClientes(); loadObras(); loadEquipamentos(); loadDepartamentos(); loadEquipes(); loadColaboradores(); loadRdos(); loadProfiles(); loadCatalogoProdutos(); loadObraServicosContratados();
       subscribeRealtime();
       refreshPendingRdos();
-      trySyncPendingRdos();
+      maybeReviewPendingRdos();
       toast('Bem-vindo, '+(res.data.nome||'').split(' ')[0]+'!','ok');
     });
   }
@@ -1538,7 +1687,7 @@
   function logout(){
     supabaseClient.auth.signOut().then(function(){
       state.currentUser = null;
-      state.editId = null; state.photos = []; state.videos = [];
+      state.editId = null; state.editingPendingItem = null; state.photos = []; state.videos = [];
       document.getElementById('app').style.display = 'none';
       document.getElementById('loginScreen').style.display = 'flex';
       document.getElementById('loginForm').reset();
@@ -2289,7 +2438,11 @@
       tr.addEventListener('click', function(){
         var id = tr.getAttribute('data-id');
         if(String(id).indexOf('pending-')===0){
-          toast('Esta RDO ainda não foi sincronizada. Aguarde a conexão para ver os detalhes completos.','error');
+          var pendId = Number(String(id).slice('pending-'.length));
+          pendingGetAll().then(function(items){
+            var item = items.find(function(x){ return x.id===pendId; });
+            if(item) openPendingRdoForEdit(item);
+          });
           return;
         }
         state.detailId = id;
@@ -3354,9 +3507,13 @@
     var editing = !!rdoOrNull;
     var rdo = rdoOrNull ? JSON.parse(JSON.stringify(rdoOrNull)) : blankRdo();
     var isLockedEdit = editing && rdo.status !== 'rascunho';
+    // Capturado uma vez ao abrir o formulário: se não-nulo, esta edição é de uma RDO ainda
+    // pendente (nunca chegou a ser enviada de verdade), então salvar aqui atualiza a fila local
+    // (ou tenta enviar, se a pessoa confirmar) em vez de fazer update num id que não existe.
+    var pendingEditItem = state.editingPendingItem;
     state.photos = editing ? (rdo.fotos||[]).map(function(u){ return {dataUrl:u}; }) : [];
     state.videos = editing ? (rdo.videos||[]).map(function(v){ return (typeof v==='string') ? {url:v,name:''} : v; }) : [];
-    document.getElementById('novoTitle').textContent = editing ? 'Editar RDO — '+fmtDate(rdo.data) : 'Nova RDO';
+    document.getElementById('novoTitle').textContent = pendingEditItem ? 'Editar RDO pendente — '+fmtDate(rdo.data) : (editing ? 'Editar RDO — '+fmtDate(rdo.data) : 'Nova RDO');
 
     var form = document.getElementById('rdoForm');
     form.innerHTML =
@@ -3441,7 +3598,7 @@
         '<p class="hint" style="margin-top:12px;">A assinatura de Cliente e VENKO é adicionada apenas no PDF, no momento da impressão.</p>'+
       '</div>'+
 
-      '<div class="form-actions">'+
+      '<div class="form-actions dock-mobile">'+
         '<span class="hint">'+(isLockedEdit ? 'Esta RDO está com status "'+esc(STATUS_LABEL[rdo.status]||rdo.status)+'" — salvar aqui mantém esse status, só atualiza o conteúdo.' : 'Rascunho fica visível só como pendente para você continuar depois.')+'</span>'+
         (editing && !isLockedEdit ? '<button type="button" class="btn danger" id="btnDeleteRdo">Excluir</button>' : '') +
         (isLockedEdit
@@ -3526,9 +3683,21 @@
 
     if(editing && !isLockedEdit){
       document.getElementById('btnDeleteRdo').addEventListener('click', function(){
-        confirmModal({ title:'Excluir RDO', msg:'Este rascunho será excluído permanentemente. Deseja continuar?', okLabel:'Excluir', danger:true })
+        var msg = pendingEditItem
+          ? 'Esta RDO pendente será excluída deste dispositivo e NÃO será enviada. Deseja continuar?'
+          : 'Este rascunho será excluído permanentemente. Deseja continuar?';
+        confirmModal({ title:'Excluir RDO', msg: msg, okLabel:'Excluir', danger:true })
           .then(function(ok){
             if(!ok) return;
+            if(pendingEditItem){
+              pendingRemove(pendingEditItem.id).then(function(){
+                toast('RDO pendente excluída deste dispositivo.','ok');
+                state.editId = null; state.editingPendingItem = null;
+                refreshPendingRdos();
+                goto('dashboard');
+              });
+              return;
+            }
             if(!navigator.onLine){ toast('Excluir exige conexão com a internet. Tente novamente quando estiver online.','error'); return; }
             supabaseClient.from('rdos').delete().eq('id', rdo.id).then(function(res){
               if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
@@ -3592,10 +3761,16 @@
         return;
       }
 
+      // Se está editando uma RDO pendente, ela continua na fila com os dados atualizados (não
+      // duplica); senão é uma RDO nova sendo salva localmente pela primeira vez.
       function queueOfflineRdo(){
-        return pendingAdd({ payload: payload, isEdit: !!editing, rdoId: editing ? rdo.id : null, queuedAt: Date.now() }).then(function(){
-          toast('Sem conexão — RDO salva neste dispositivo e será enviada automaticamente quando a internet voltar.','ok');
-          state.editId = null; state.photos = []; state.videos = [];
+        var entry = { payload: payload, isEdit: pendingEditItem ? pendingEditItem.isEdit : !!editing, rdoId: pendingEditItem ? pendingEditItem.rdoId : (editing ? rdo.id : null), queuedAt: Date.now() };
+        var savePromise = pendingEditItem ? pendingUpdate(pendingEditItem.id, entry) : pendingAdd(entry);
+        return savePromise.then(function(){
+          toast(pendingEditItem
+            ? 'RDO atualizada — continua salva neste dispositivo até você confirmar o envio.'
+            : 'Sem conexão — RDO salva neste dispositivo. Você poderá confirmar o envio quando a internet voltar.', 'ok');
+          state.editId = null; state.editingPendingItem = null; state.photos = []; state.videos = [];
           refreshPendingRdos();
           goto('dashboard');
         });
@@ -3606,24 +3781,31 @@
         return;
       }
 
-      var promise = editing
-        ? supabaseClient.from('rdos').update(payload).eq('id', rdo.id).select().single()
+      var effIsEdit = pendingEditItem ? pendingEditItem.isEdit : editing;
+      var effId = pendingEditItem ? pendingEditItem.rdoId : (editing ? rdo.id : null);
+      var promise = effIsEdit
+        ? supabaseClient.from('rdos').update(payload).eq('id', effId).select().single()
         : supabaseClient.from('rdos').insert(Object.assign({exemplo:false}, payload)).select().single();
 
       promise.then(function(res){
         if(res.error){
           // Sessão expirada (token venceu, ex.: dispositivo ficou muito tempo sem internet) é
-          // tratada igual a "sem conexão": a RDO fica salva neste dispositivo e será enviada
-          // sozinha assim que a pessoa logar de novo — em vez de perder o que foi preenchido.
+          // tratada igual a "sem conexão": a RDO fica salva neste dispositivo e a pessoa poderá
+          // confirmar o envio de novo, depois de logar — em vez de perder o que foi preenchido.
           if(looksOffline(res.error) || looksAuthError(res.error)){ return queueOfflineRdo(); }
           toast('Erro ao salvar: '+res.error.message,'error'); return;
         }
         toast(isLockedEdit ? 'Alterações salvas.' : (wantsSend ? 'RDO enviada para aprovação.' : 'Rascunho salvo.'), 'ok');
-        var newId = res.data ? res.data.id : rdo.id;
+        var newId = res.data ? res.data.id : effId;
         state.editId = null; state.photos = []; state.videos = [];
-        loadRdos().then(function(){
-          if(wantsSend || isLockedEdit){ state.detailId = newId; goto('detail'); }
-          else{ goto('dashboard'); }
+        var cleanup = pendingEditItem ? pendingRemove(pendingEditItem.id) : Promise.resolve();
+        state.editingPendingItem = null;
+        cleanup.then(function(){
+          refreshPendingRdos();
+          loadRdos().then(function(){
+            if(wantsSend || isLockedEdit){ state.detailId = newId; goto('detail'); }
+            else{ goto('dashboard'); }
+          });
         });
       }).catch(function(err){
         if(looksOffline(err) || looksAuthError(err)){ return queueOfflineRdo(); }
@@ -3669,7 +3851,7 @@
       img.addEventListener('click', function(){ openLightbox(img.src); });
     });
     var editBtn = document.getElementById('btnEditRdo');
-    if(editBtn) editBtn.addEventListener('click', function(){ state.editId=r.id; goto('novo'); renderRdoForm(r); });
+    if(editBtn) editBtn.addEventListener('click', function(){ state.editId=r.id; state.editingPendingItem=null; goto('novo'); renderRdoForm(r); });
     document.getElementById('btnExportPdf').addEventListener('click', function(){ exportRdoPdf(r); });
 
     if(r.status==='enviado' && !r.aprovacao){
