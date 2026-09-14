@@ -196,8 +196,8 @@
   @media (max-width:680px){
     .topbar{flex-direction:column;align-items:stretch;gap:10px;padding:12px 16px;}
     .brand{justify-content:space-between;}
-    .tabs{margin-left:0;flex:none;width:100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px;}
-    .tab-btn{flex:0 0 auto;}
+    .tabs{margin-left:0;flex:none;width:100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px;scroll-snap-type:x proximity;}
+    .tab-btn{flex:0 0 auto;padding:7px 11px;font-size:12.5px;scroll-snap-align:start;}
     .user-box{margin-left:0;padding-left:0;border-left:none;border-top:1px solid var(--line);padding-top:10px;width:100%;justify-content:space-between;}
   }
   .field.full{grid-column:1/-1;}
@@ -383,6 +383,38 @@
   }
   .fin-preview-row b{color:var(--ink);font-size:16px;font-variant-numeric:tabular-nums;}
   .print-only{display:none;}
+  /* ---------- Mobile: tabelas viram cartões empilhados (sem rolagem lateral) ---------- */
+  @media (max-width:680px){
+    .table-wrap{overflow-x:visible;border:none;box-shadow:none;background:transparent;}
+    table.rdo-list, table.fin-list{min-width:0;width:100%;}
+    table.rdo-list thead, table.fin-list thead{display:none;}
+    table.rdo-list tbody, table.fin-list tbody,
+    table.rdo-list tr, table.fin-list tr{display:block;}
+    table.rdo-list tbody tr:not(.empty-row),
+    table.fin-list tbody tr:not(.fin-group-row){
+      background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+      box-shadow:var(--shadow-sm);margin-bottom:10px;padding:2px 14px;
+    }
+    table.rdo-list tbody tr:last-child, table.fin-list tbody tr:last-child{margin-bottom:0;}
+    table.rdo-list td, table.fin-list td{
+      display:flex;justify-content:space-between;align-items:center;gap:14px;text-align:right;
+      padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:13px;white-space:normal;
+    }
+    table.rdo-list td:last-child, table.fin-list td:last-child{border-bottom:none;}
+    table.rdo-list td::before, table.fin-list td::before{
+      content:attr(data-label);flex:0 0 auto;text-align:left;font-weight:700;color:var(--steel);
+      font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;margin-right:auto;
+    }
+    table.rdo-list tr.empty-row td, table.fin-list tr.empty-row td{display:block;text-align:left;padding:18px 2px;}
+    table.rdo-list tr.empty-row td::before, table.fin-list tr.empty-row td::before{content:none;}
+    /* cabeçalho de categoria e linha de total: ocupam a largura toda, sem virar "cartão" */
+    table.fin-list tr.fin-group-row{margin:16px 0 6px;}
+    table.fin-list tr.fin-group-row:first-child{margin-top:0;}
+    table.fin-list tr.fin-group-row td{display:flex;border-bottom:none;padding:0;}
+    table.fin-list tr.fin-group-row td::before{content:none;}
+    .fin-total-row{flex-wrap:wrap;text-align:right;padding:12px 14px;}
+    .footer-note{padding:10px 0 4px;}
+  }
   @media print{
     body *{ visibility:hidden; }
     #finPrintArea, #finPrintArea *{ visibility:visible; }
@@ -1656,13 +1688,13 @@
     var rowsHtml = '';
     g.order.forEach(function(cat){
       var list = g.groups[cat];
-      rowsHtml += '<tr><td colspan="4" class="fin-group-head"><span>'+esc(cat)+'</span><span>'+list.length+' '+(list.length>1?'itens':'item')+'</span></td></tr>';
+      rowsHtml += '<tr class="fin-group-row"><td colspan="4" class="fin-group-head"><span>'+esc(cat)+'</span><span>'+list.length+' '+(list.length>1?'itens':'item')+'</span></td></tr>';
       list.forEach(function(it){
         rowsHtml += '<tr>'+
-          '<td>'+esc(it.descricao)+'</td>'+
-          '<td>1</td>'+
-          '<td>'+esc(it.unidade)+'</td>'+
-          '<td class="num"><b>'+fmtMoeda(it.custoUnitario)+'</b></td>'+
+          '<td data-label="Serviço">'+esc(it.descricao)+'</td>'+
+          '<td data-label="Quantidade">1</td>'+
+          '<td data-label="Unidade">'+esc(it.unidade)+'</td>'+
+          '<td class="num" data-label="Valor Unitário"><b>'+fmtMoeda(it.custoUnitario)+'</b></td>'+
         '</tr>';
       });
     });
@@ -1897,14 +1929,14 @@
     }
     var rowsHtml = '';
     consolidado.grupos.forEach(function(g){
-      rowsHtml += '<tr><td colspan="5" class="fin-group-head"><span>'+esc(g.categoria)+'</span><span>'+fmtMoeda(g.subtotal)+'</span></td></tr>';
+      rowsHtml += '<tr class="fin-group-row"><td colspan="5" class="fin-group-head"><span>'+esc(g.categoria)+'</span><span>'+fmtMoeda(g.subtotal)+'</span></td></tr>';
       g.itens.forEach(function(it){
         rowsHtml += '<tr>'+
-          '<td>'+esc(it.produtoServico)+(it.count>1?' <span class="fin-count-badge">'+it.count+' lançamentos</span>':'')+'</td>'+
-          '<td>'+esc(it.unidade)+'</td>'+
-          '<td class="num">'+fmtQtd(it.quantidade)+'</td>'+
-          '<td class="num">'+fmtMoeda(it.valorUnitario)+'</td>'+
-          '<td class="num"><b>'+fmtMoeda(it.valorTotal)+'</b></td>'+
+          '<td data-label="Produto/Serviço">'+esc(it.produtoServico)+(it.count>1?' <span class="fin-count-badge">'+it.count+' lançamentos</span>':'')+'</td>'+
+          '<td data-label="Unidade">'+esc(it.unidade)+'</td>'+
+          '<td class="num" data-label="Quantidade">'+fmtQtd(it.quantidade)+'</td>'+
+          '<td class="num" data-label="Valor Unitário">'+fmtMoeda(it.valorUnitario)+'</td>'+
+          '<td class="num" data-label="Valor Total"><b>'+fmtMoeda(it.valorTotal)+'</b></td>'+
         '</tr>';
       });
     });
@@ -1926,17 +1958,17 @@
     var n = 0;
     grupos.forEach(function(g){
       var subtotal = sumMoeda(g.itens, function(it){return it.valorTotal;});
-      rowsHtml += '<tr><td colspan="7" class="fin-group-head"><span>'+esc(g.categoria)+' · '+g.itens.length+' item'+(g.itens.length>1?'ns':'')+'</span><span>'+fmtMoeda(subtotal)+'</span></td></tr>';
+      rowsHtml += '<tr class="fin-group-row"><td colspan="7" class="fin-group-head"><span>'+esc(g.categoria)+' · '+g.itens.length+' item'+(g.itens.length>1?'ns':'')+'</span><span>'+fmtMoeda(subtotal)+'</span></td></tr>';
       g.itens.forEach(function(it){
         n++;
         rowsHtml += '<tr data-id="'+it.id+'">'+
-          '<td>'+n+'</td>'+
-          '<td>'+esc(it.produtoServico)+(it.descricao?'<div style="color:var(--steel);font-size:11.5px;">'+esc(it.descricao)+'</div>':'')+'</td>'+
-          '<td>'+esc(it.unidade)+'</td>'+
-          '<td class="num">'+fmtQtd(it.quantidade)+'</td>'+
-          '<td class="num">'+fmtMoeda(it.valorUnitario)+'</td>'+
-          '<td class="num"><b>'+fmtMoeda(it.valorTotal)+'</b></td>'+
-          '<td style="text-align:right;white-space:nowrap;">'+
+          '<td data-label="Item">'+n+'</td>'+
+          '<td data-label="Produto/Serviço">'+esc(it.produtoServico)+(it.descricao?'<div style="color:var(--steel);font-size:11.5px;">'+esc(it.descricao)+'</div>':'')+'</td>'+
+          '<td data-label="Unidade">'+esc(it.unidade)+'</td>'+
+          '<td class="num" data-label="Quantidade">'+fmtQtd(it.quantidade)+'</td>'+
+          '<td class="num" data-label="Valor Unitário">'+fmtMoeda(it.valorUnitario)+'</td>'+
+          '<td class="num" data-label="Valor Total"><b>'+fmtMoeda(it.valorTotal)+'</b></td>'+
+          '<td style="text-align:right;" data-label="Ações">'+
             '<button type="button" class="btn ghost sm" data-edit="'+it.id+'">Editar</button> '+
             '<button type="button" class="btn danger sm" data-del="'+it.id+'">Excluir</button>'+
           '</td>'+
@@ -2173,12 +2205,12 @@
       var occText = pendCount>0 ? '<span class="tag-stop">⚠ '+pendCount+' pendência(s)</span>' : ((r.ocorrencias||[]).length ? (r.ocorrencias.length+' registrada(s)') : '—');
       var climaTxt = (r.climaManha&&r.climaManha.condicao) || r.clima || '—';
       return '<tr data-id="'+r.id+'">'+
-        '<td class="mono-num">'+fmtDate(r.data)+'</td>'+
-        '<td>'+esc(r.obraNome)+(r.exemplo?'<span class="tag-example">exemplo</span>':'')+'</td>'+
-        '<td>'+esc(r.responsavel||'—')+'</td>'+
-        '<td>'+esc(climaTxt)+'</td>'+
-        '<td>'+occText+'</td>'+
-        '<td>'+statusChip(r.status)+'</td>'+
+        '<td class="mono-num" data-label="Data">'+fmtDate(r.data)+'</td>'+
+        '<td data-label="Obra">'+esc(r.obraNome)+(r.exemplo?'<span class="tag-example">exemplo</span>':'')+'</td>'+
+        '<td data-label="Responsável">'+esc(r.responsavel||'—')+'</td>'+
+        '<td data-label="Clima">'+esc(climaTxt)+'</td>'+
+        '<td data-label="Ocorrências">'+occText+'</td>'+
+        '<td data-label="Status">'+statusChip(r.status)+'</td>'+
       '</tr>';
     }).join('');
     body.querySelectorAll('tr[data-id]').forEach(function(tr){
