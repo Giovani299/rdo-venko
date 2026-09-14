@@ -469,7 +469,7 @@
     <nav class="tabs" id="tabs">
       <button class="tab-btn active" data-view="dashboard">Painel</button>
       <button class="tab-btn" data-view="novo">Nova RDO</button>
-      <button class="tab-btn" data-view="clientes">Clientes</button>
+      <button class="tab-btn" data-view="clientes" id="tabClientes">Clientes</button>
       <button class="tab-btn" data-view="obras" id="tabObras">Obras</button>
       <button class="tab-btn" data-view="equipamentos">Equipamentos</button>
       <button class="tab-btn" data-view="colaboradores">Colaboradores</button>
@@ -1143,6 +1143,7 @@
     if(view==='users' && !(state.currentUser && state.currentUser.is_admin)) return;
     if((view==='financeiro'||view==='financeiro-obra') && !financeiroCanAccess()) return;
     if(view==='obras' && !(state.currentUser && (state.currentUser.is_admin || state.currentUser.acesso_obras !== false))) return;
+    if(view==='clientes' && !obrasGestaoCanAccess()) return;
     if(view==='tabelaprecos'){
       if(!financeiroCanAccess()) return;
       if(!state.tabelaPrecosUnlocked){
@@ -1388,6 +1389,7 @@
           var podeGestaoObras = (fresh.is_admin || fresh.acesso_obras_gestao !== false);
           var clienteFormCard = document.getElementById('clienteFormCard'); if(clienteFormCard) clienteFormCard.style.display = podeGestaoObras ? '' : 'none';
           var obraFormCard = document.getElementById('obraFormCard'); if(obraFormCard) obraFormCard.style.display = podeGestaoObras ? '' : 'none';
+          document.getElementById('tabClientes').style.display = podeGestaoObras ? '' : 'none';
         }
       }
       if(state.view==='users'){ renderUserList(); }
@@ -1493,6 +1495,7 @@
     var podeGestaoObrasLogin = (profile.is_admin || profile.acesso_obras_gestao !== false);
     var clienteFormCardLogin = document.getElementById('clienteFormCard'); if(clienteFormCardLogin) clienteFormCardLogin.style.display = podeGestaoObrasLogin ? '' : 'none';
     var obraFormCardLogin = document.getElementById('obraFormCard'); if(obraFormCardLogin) obraFormCardLogin.style.display = podeGestaoObrasLogin ? '' : 'none';
+    document.getElementById('tabClientes').style.display = podeGestaoObrasLogin ? '' : 'none';
     updateUserBox();
   }
 
