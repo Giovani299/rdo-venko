@@ -526,7 +526,7 @@
           <p>Cadastro das empresas atendidas pela Venko — cadastre o cliente antes de registrar uma obra para ele.</p>
         </div>
       </div>
-      <div class="card">
+      <div class="card" id="clienteFormCard">
         <h2><span class="idx">+</span>Cadastrar cliente</h2>
         <form id="clienteForm">
           <div class="grid4">
@@ -551,7 +551,7 @@
           <p>Cadastro dos canteiros acompanhados pela Venko — toda obra pertence a um cliente.</p>
         </div>
       </div>
-      <div class="card">
+      <div class="card" id="obraFormCard">
         <h2><span class="idx">+</span>Cadastrar obra</h2>
         <form id="obraForm">
           <div class="grid4">
@@ -694,6 +694,7 @@
           <div class="checkline" style="margin-top:10px;"><input type="checkbox" id="userIsAdmin"><label for="userIsAdmin">Administrador (pode gerenciar usuários)</label></div>
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoFinanceiro"><label for="userAcessoFinanceiro">Acesso ao módulo Financeiro</label></div>
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoObras" checked><label for="userAcessoObras">Acesso à aba Obras</label></div>
+          <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoObrasGestao" checked><label for="userAcessoObrasGestao">Pode cadastrar/editar/excluir clientes e obras (desmarque para deixar só visualizar e lançar serviços contratados)</label></div>
           <div class="form-actions">
             <button type="button" class="btn ghost" id="userCancelEdit" style="display:none">Cancelar edição</button>
             <button type="submit" class="btn primary" id="userSubmitBtn">Cadastrar usuário</button>
@@ -1384,6 +1385,9 @@
           document.getElementById('tabFinanceiro').style.display = (fresh.is_admin || fresh.acesso_financeiro) ? '' : 'none';
           document.getElementById('tabTabelaPrecos').style.display = (fresh.is_admin || fresh.acesso_financeiro) ? '' : 'none';
           document.getElementById('tabObras').style.display = (fresh.is_admin || fresh.acesso_obras !== false) ? '' : 'none';
+          var podeGestaoObras = (fresh.is_admin || fresh.acesso_obras_gestao !== false);
+          var clienteFormCard = document.getElementById('clienteFormCard'); if(clienteFormCard) clienteFormCard.style.display = podeGestaoObras ? '' : 'none';
+          var obraFormCard = document.getElementById('obraFormCard'); if(obraFormCard) obraFormCard.style.display = podeGestaoObras ? '' : 'none';
         }
       }
       if(state.view==='users'){ renderUserList(); }
@@ -1486,6 +1490,9 @@
     document.getElementById('tabFinanceiro').style.display = (profile.is_admin || profile.acesso_financeiro) ? '' : 'none';
     document.getElementById('tabTabelaPrecos').style.display = (profile.is_admin || profile.acesso_financeiro) ? '' : 'none';
     document.getElementById('tabObras').style.display = (profile.is_admin || profile.acesso_obras !== false) ? '' : 'none';
+    var podeGestaoObrasLogin = (profile.is_admin || profile.acesso_obras_gestao !== false);
+    var clienteFormCardLogin = document.getElementById('clienteFormCard'); if(clienteFormCardLogin) clienteFormCardLogin.style.display = podeGestaoObrasLogin ? '' : 'none';
+    var obraFormCardLogin = document.getElementById('obraFormCard'); if(obraFormCardLogin) obraFormCardLogin.style.display = podeGestaoObrasLogin ? '' : 'none';
     updateUserBox();
   }
 
@@ -1577,10 +1584,11 @@
     var isAdmin = document.getElementById('userIsAdmin').checked;
     var isFinanceiro = document.getElementById('userAcessoFinanceiro').checked;
     var isObras = document.getElementById('userAcessoObras').checked;
+    var isObrasGestao = document.getElementById('userAcessoObrasGestao').checked;
     if(!login || !nome){ toast('Preencha usuário e nome.','error'); return; }
 
     if(editingUserId){
-      supabaseClient.from('profiles').update({ nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro, acesso_obras:isObras }).eq('id', editingUserId)
+      supabaseClient.from('profiles').update({ nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao }).eq('id', editingUserId)
         .then(function(res){
           if(res.error){ toast('Erro ao salvar usuário: '+res.error.message,'error'); return; }
           toast('Usuário atualizado.','ok');
@@ -1606,7 +1614,7 @@
         return Promise.reject(new Error('sem sessão'));
       }
       var newId = res.data.user.id;
-      return tempClient.from('profiles').insert({ id:newId, login:login, nome:nome, cargo:cargo, is_admin:false, acesso_financeiro:false, acesso_obras:isObras }).then(function(res2){
+      return tempClient.from('profiles').insert({ id:newId, login:login, nome:nome, cargo:cargo, is_admin:false, acesso_financeiro:false, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao }).then(function(res2){
         if(res2.error){ toast('Usuário criado, mas houve erro ao salvar o perfil: '+res2.error.message,'error'); return Promise.reject(res2.error); }
         // acesso_financeiro (assim como is_admin) nunca pode ser definido pelo próprio novo
         // usuário no insert acima — só o admin que está criando a conta, com seu próprio
@@ -1631,7 +1639,7 @@
     list.innerHTML = state.profiles.map(function(u){
       var isSelf = state.currentUser && state.currentUser.id===u.id;
       return '<div class="obra-card" data-id="'+u.id+'">'+
-        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+(u.acesso_financeiro?'<span class="tag-financeiro">Financeiro</span>':'')+(u.acesso_obras===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Sem Obras</span>':'')+'</b>'+
+        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+(u.acesso_financeiro?'<span class="tag-financeiro">Financeiro</span>':'')+(u.acesso_obras===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Sem Obras</span>':'')+(!u.is_admin && u.acesso_obras!==false && u.acesso_obras_gestao===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Obras só visualizar</span>':'')+'</b>'+
           '<div class="meta">'+esc(u.login)+' · '+esc(u.cargo||'—')+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
@@ -1656,6 +1664,7 @@
         document.getElementById('userIsAdmin').checked = !!u.is_admin;
         document.getElementById('userAcessoFinanceiro').checked = !!u.acesso_financeiro;
         document.getElementById('userAcessoObras').checked = (u.acesso_obras !== false);
+        document.getElementById('userAcessoObrasGestao').checked = (u.acesso_obras_gestao !== false);
         document.getElementById('userFormTitle').textContent = 'Editar usuário — '+u.nome;
         document.getElementById('userSubmitBtn').textContent = 'Salvar alterações';
         document.getElementById('userCancelEdit').style.display = '';
@@ -1695,6 +1704,10 @@
   function obrasCanAccess(){
     var u = state.currentUser;
     return !!(u && (u.is_admin || u.acesso_obras !== false));
+  }
+  function obrasGestaoCanAccess(){
+    var u = state.currentUser;
+    return !!(u && (u.is_admin || u.acesso_obras_gestao !== false));
   }
 
   /* ---------------- tabela de preços (catálogo de serviços) ---------------- */
@@ -2296,6 +2309,7 @@
   })();
   document.getElementById('clienteForm').addEventListener('submit', function(e){
     e.preventDefault();
+    if(!obrasGestaoCanAccess()){ toast('Você não tem permissão para cadastrar/editar clientes.','error'); return; }
     var nomeEmpresa = document.getElementById('clienteNomeEmpresa').value.trim();
     var cnpj = formatCnpj(document.getElementById('clienteCnpj').value);
     var email = document.getElementById('clienteEmail').value.trim();
@@ -2331,6 +2345,7 @@
       list.innerHTML = '<p class="empty-hint">Nenhum cliente cadastrado ainda.</p>';
       return;
     }
+    var canGestao = obrasGestaoCanAccess();
     list.innerHTML = state.clientes.map(function(c){
       var obrasCount = state.obras.filter(function(o){ return o.clienteId===c.id; }).length;
       return '<div class="obra-card" data-id="'+c.id+'">'+
@@ -2338,9 +2353,9 @@
           '<div class="meta">'+esc(c.cnpj)+' · '+esc(c.email)+' · '+esc(c.telefone)+' · '+obrasCount+' obra(s)</div>'+
         '</div>'+
         '<div class="obra-actions">'+
-          '<button class="btn ghost sm" data-nova-obra="'+c.id+'">+ Nova obra</button>'+
-          '<button class="btn ghost sm" data-edit="'+c.id+'">Editar</button>'+
-          '<button class="btn danger sm" data-del="'+c.id+'">Excluir</button>'+
+          (canGestao?'<button class="btn ghost sm" data-nova-obra="'+c.id+'">+ Nova obra</button>':'')+
+          (canGestao?'<button class="btn ghost sm" data-edit="'+c.id+'">Editar</button>':'')+
+          (canGestao?'<button class="btn danger sm" data-del="'+c.id+'">Excluir</button>':'')+
         '</div>'+
       '</div>';
     }).join('');
@@ -2400,6 +2415,7 @@
   }
   document.getElementById('obraForm').addEventListener('submit', function(e){
     e.preventDefault();
+    if(!obrasGestaoCanAccess()){ toast('Você não tem permissão para cadastrar/editar obras.','error'); return; }
     var nome = document.getElementById('obraNome').value.trim();
     var clienteId = document.getElementById('obraCliente').value;
     if(!clienteId){ toast('Selecione o cliente responsável pela obra.','error'); return; }
@@ -2429,6 +2445,7 @@
     }
     var canServ = obrasCanAccess();
     var canQtd = financeiroCanAccess();
+    var canGestao = obrasGestaoCanAccess();
     list.innerHTML = state.obras.map(function(o){
       var rdoCount = state.rdos.filter(function(r){ return r.obraId===o.id; }).length;
       var servCount = state.obraServicosContratados.filter(function(s){ return s.obraId===o.id; }).length;
@@ -2441,8 +2458,8 @@
           '<span class="chip '+(o.status==='ativa'?'approved':'draft')+'">'+(o.status==='ativa'?'Ativa':'Concluída')+'</span>'+
           (canServ?'<button class="btn ghost sm" data-servicos="'+o.id+'">'+(open?'Ocultar serviços':'Serviços contratados')+'</button>':'')+
           (canServ?'<button class="btn ghost sm" data-servpdf="'+o.id+'">⬇ Exportar PDF</button>':'')+
-          '<button class="btn ghost sm" data-toggle="'+o.id+'">'+(o.status==='ativa'?'Marcar concluída':'Reativar')+'</button>'+
-          '<button class="btn danger sm" data-del="'+o.id+'">Excluir</button>'+
+          (canGestao?'<button class="btn ghost sm" data-toggle="'+o.id+'">'+(o.status==='ativa'?'Marcar concluída':'Reativar')+'</button>':'')+
+          (canGestao?'<button class="btn danger sm" data-del="'+o.id+'">Excluir</button>':'')+
         '</div>'+
       '</div>';
       var panel = (canServ && open) ? ('<div class="card obra-servicos-panel" id="obraServicosPanel-'+o.id+'" style="margin-top:-6px;">'+renderObraServicosChecklist(o.id)+'</div>') : '';
