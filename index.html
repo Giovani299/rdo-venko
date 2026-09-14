@@ -1007,6 +1007,14 @@
     var msg = (err && (err.message || err.error_description || String(err))) || '';
     return /failed to fetch|load failed|network ?error|networkerror|err_internet|err_name_not_resolved|err_connection/i.test(msg);
   }
+  function looksAuthError(err){
+    // Sessão expirada/inválida (ex.: token venceu enquanto o dispositivo ficou muito tempo
+    // sem internet). Isso NÃO é culpa do usuário nem motivo para descartar a RDO pendente —
+    // ela deve continuar na fila até a pessoa logar de novo e a sincronização ser tentada outra vez.
+    var msg = (err && (err.message || err.error_description || String(err))) || '';
+    var status = err && (err.status || err.statusCode);
+    return status === 401 || /jwt|token|not authenticated|unauthoriz|permission denied|refresh_token/i.test(msg);
+  }
   function pendingAsRdoRows(items){
     return items.map(function(it){
       var mapped = mapRdoRow(Object.assign({}, it.payload, {
@@ -1039,36 +1047,52 @@
   function trySyncPendingRdos(){
     if(syncingPending || !navigator.onLine || !supabaseClient) return Promise.resolve();
     syncingPending = true;
-    return pendingGetAll().then(function(items){
-      if(!items.length){ syncingPending=false; return; }
-      var okCount = 0;
-      var chain = Promise.resolve();
-      items.forEach(function(item){
-        chain = chain.then(function(){
-          var op = item.isEdit
-            ? supabaseClient.from('rdos').update(item.payload).eq('id', item.rdoId)
-            : supabaseClient.from('rdos').insert(Object.assign({exemplo:false}, item.payload));
-          return op.then(function(res){
-            if(res.error){
-              if(!looksOffline(res.error)){
-                return pendingRemove(item.id).then(function(){
-                  toast('Uma RDO pendente não pôde ser sincronizada ('+res.error.message+'). Foi removida da fila — revise e salve novamente.','error');
-                });
+    // Antes de tentar sincronizar, confirma que a sessão ainda é válida. Se o token expirou
+    // (ex.: dispositivo ficou dias sem internet), NÃO tenta enviar agora — evita que um erro de
+    // autenticação seja confundido com "dado inválido" e a RDO pendente seja apagada da fila.
+    // Ela continua salva neste dispositivo e será enviada assim que a pessoa logar de novo.
+    return supabaseClient.auth.getSession().then(function(sessRes){
+      var hasSession = !!(sessRes && sessRes.data && sessRes.data.session);
+      if(!hasSession){ syncingPending=false; return; }
+      return pendingGetAll().then(function(items){
+        if(!items.length){ syncingPending=false; return; }
+        var okCount = 0;
+        var keptCount = 0;
+        var chain = Promise.resolve();
+        items.forEach(function(item){
+          chain = chain.then(function(){
+            var op = item.isEdit
+              ? supabaseClient.from('rdos').update(item.payload).eq('id', item.rdoId)
+              : supabaseClient.from('rdos').insert(Object.assign({exemplo:false}, item.payload));
+            return op.then(function(res){
+              if(res.error){
+                if(looksAuthError(res.error)){
+                  keptCount++;
+                  return; // mantém na fila — não é um dado inválido, é sessão expirada
+                }
+                if(!looksOffline(res.error)){
+                  return pendingRemove(item.id).then(function(){
+                    toast('Uma RDO pendente não pôde ser sincronizada ('+res.error.message+'). Foi removida da fila — revise e salve novamente.','error');
+                  });
+                }
+                return;
               }
-              return;
-            }
-            okCount++;
-            return pendingRemove(item.id);
-          }).catch(function(){ /* mantém na fila, tenta de novo depois */ });
+              okCount++;
+              return pendingRemove(item.id);
+            }).catch(function(){ /* mantém na fila, tenta de novo depois */ });
+          });
         });
-      });
-      return chain.then(function(){
-        syncingPending = false;
-        if(okCount>0){
-          toast(okCount===1 ? 'RDO sincronizada com sucesso.' : (okCount+' RDOs sincronizadas com sucesso.'), 'ok');
-          loadRdos();
-        }
-        refreshPendingRdos();
+        return chain.then(function(){
+          syncingPending = false;
+          if(okCount>0){
+            toast(okCount===1 ? 'RDO sincronizada com sucesso.' : (okCount+' RDOs sincronizadas com sucesso.'), 'ok');
+            loadRdos();
+          }
+          if(keptCount>0){
+            toast((keptCount===1 ? 'Sua sessão expirou — 1 RDO pendente ' : ('Sua sessão expirou — '+keptCount+' RDOs pendentes ')) + 'continua salva neste dispositivo. Faça login novamente para sincronizar.','error');
+          }
+          refreshPendingRdos();
+        });
       });
     }).catch(function(){ syncingPending=false; });
   }
@@ -3588,7 +3612,10 @@
 
       promise.then(function(res){
         if(res.error){
-          if(looksOffline(res.error)){ return queueOfflineRdo(); }
+          // Sessão expirada (token venceu, ex.: dispositivo ficou muito tempo sem internet) é
+          // tratada igual a "sem conexão": a RDO fica salva neste dispositivo e será enviada
+          // sozinha assim que a pessoa logar de novo — em vez de perder o que foi preenchido.
+          if(looksOffline(res.error) || looksAuthError(res.error)){ return queueOfflineRdo(); }
           toast('Erro ao salvar: '+res.error.message,'error'); return;
         }
         toast(isLockedEdit ? 'Alterações salvas.' : (wantsSend ? 'RDO enviada para aprovação.' : 'Rascunho salvo.'), 'ok');
@@ -3599,7 +3626,7 @@
           else{ goto('dashboard'); }
         });
       }).catch(function(err){
-        if(looksOffline(err)){ return queueOfflineRdo(); }
+        if(looksOffline(err) || looksAuthError(err)){ return queueOfflineRdo(); }
         toast('Erro ao salvar: '+(err && err.message ? err.message : err),'error');
       });
     };
