@@ -172,6 +172,9 @@
   .chip.sent{color:var(--status-sent);background:var(--status-sent-bg);}
   .chip.approved{color:var(--status-approved);background:var(--status-approved-bg);}
   .chip.rejected{color:var(--status-rejected);background:var(--status-rejected-bg);}
+  .chip.pending-offline{color:var(--status-stopped);background:var(--status-stopped-bg);}
+  .offline-banner{background:var(--status-stopped-bg);color:var(--status-stopped-deep,var(--status-stopped));border-bottom:1px solid var(--status-stopped);padding:9px 16px;font:600 13px/1.4 Inter,sans-serif;text-align:center;}
+  .banner-pending{background:var(--status-stopped-bg);color:var(--status-stopped-deep,var(--status-stopped));border:1px solid var(--status-stopped);border-radius:var(--radius);padding:9px 14px;font:600 13px/1.4 Inter,sans-serif;margin-bottom:12px;}
   .tag-stop{color:var(--status-stopped);font-weight:700;font-size:11.5px;}
   .tag-example{
     font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;color:var(--venko-yellow-deep);
@@ -391,6 +394,7 @@
 </style>
 </head>
 <body>
+<div id="offlineBanner" class="offline-banner" style="display:none">📴 Sem conexão — você pode continuar preenchendo RDOs, elas serão enviadas quando a internet voltar.</div>
 <div id="loginScreen">
   <div class="login-card">
     <img class="login-logo" id="loginLogo" alt="Venko">
@@ -410,6 +414,7 @@
     <div class="brand">
       <img class="brand-logo" id="brandLogo" alt="Venko">
       <span class="brand-tag">RDO · Relatório Diário de Obra</span>
+      <button type="button" id="btnInstallApp" class="btn ghost sm" style="display:none;margin-left:10px;">📲 Instalar app</button>
     </div>
     <nav class="tabs" id="tabs">
       <button class="tab-btn active" data-view="dashboard">Painel</button>
@@ -846,7 +851,8 @@
     catalogoItens: [],
     obraServicosContratados: [],
     obraServicosOpen: {},
-    tabelaPrecosUnlocked: false
+    tabelaPrecosUnlocked: false,
+    pendingRdos: []
   };
 
   var CLIMA_OPTS = ['Praticável','Parcialmente praticável','Impraticável'];
@@ -855,7 +861,208 @@
   var TEAM_STATUS_OPTS = ['Em andamento','Parcialmente concluído','Concluído'];
   var CONCLUIDO_TIPO_OPTS = ['Concluído','Pendente'];
   var CARGO_OPTS = ['Administrador','Gerente de Operação','Engenheiro(a) de Obras','Encarregado de Obra','Encarregado de Obra Júnior','Encarregado de Manutenção','Técnico de Segurança','Operador de Máquina','Pedreiro','Servente','Encanador','Cliente','Outro'];
-  var STATUS_LABEL = { rascunho:'Rascunho', enviado:'Aguardando aprovação', aprovado:'Aprovado', rejeitado:'Rejeitado' };
+  var STATUS_LABEL = { rascunho:'Rascunho', enviado:'Aguardando aprovação', aprovado:'Aprovado', rejeitado:'Rejeitado', pendente_offline:'Pendente (offline)' };
+
+  /* ---------------- suporte offline (PWA) ---------------- */
+  var OFFLINE_DB_NAME = 'rdoVenkoOffline';
+  var OFFLINE_DB_VERSION = 1;
+  var offlineDbPromise = null;
+  function openOfflineDb(){
+    if(!('indexedDB' in window)) return Promise.resolve(null);
+    if(offlineDbPromise) return offlineDbPromise;
+    offlineDbPromise = new Promise(function(resolve){
+      var req;
+      try{ req = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION); }
+      catch(e){ resolve(null); return; }
+      req.onupgradeneeded = function(){
+        var db = req.result;
+        if(!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', {keyPath:'k'});
+        if(!db.objectStoreNames.contains('pendingRdos')) db.createObjectStore('pendingRdos', {keyPath:'id', autoIncrement:true});
+      };
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror = function(){ resolve(null); };
+    });
+    return offlineDbPromise;
+  }
+  function cacheSet(key, value){
+    openOfflineDb().then(function(db){
+      if(!db) return;
+      try{
+        var tx = db.transaction('cache','readwrite');
+        tx.objectStore('cache').put({k:key, v:value, t:Date.now()});
+      }catch(e){}
+    });
+  }
+  function cacheGet(key){
+    return openOfflineDb().then(function(db){
+      if(!db) return null;
+      return new Promise(function(resolve){
+        try{
+          var tx = db.transaction('cache','readonly');
+          var req = tx.objectStore('cache').get(key);
+          req.onsuccess = function(){ resolve(req.result ? req.result.v : null); };
+          req.onerror = function(){ resolve(null); };
+        }catch(e){ resolve(null); }
+      });
+    });
+  }
+  function pendingAdd(entry){
+    return openOfflineDb().then(function(db){
+      if(!db) return null;
+      return new Promise(function(resolve){
+        try{
+          var tx = db.transaction('pendingRdos','readwrite');
+          var req = tx.objectStore('pendingRdos').add(entry);
+          req.onsuccess = function(){ resolve(req.result); };
+          req.onerror = function(){ resolve(null); };
+        }catch(e){ resolve(null); }
+      });
+    });
+  }
+  function pendingGetAll(){
+    return openOfflineDb().then(function(db){
+      if(!db) return [];
+      return new Promise(function(resolve){
+        try{
+          var tx = db.transaction('pendingRdos','readonly');
+          var req = tx.objectStore('pendingRdos').getAll();
+          req.onsuccess = function(){ resolve(req.result||[]); };
+          req.onerror = function(){ resolve([]); };
+        }catch(e){ resolve([]); }
+      });
+    });
+  }
+  function pendingRemove(id){
+    return openOfflineDb().then(function(db){
+      if(!db) return;
+      try{
+        var tx = db.transaction('pendingRdos','readwrite');
+        tx.objectStore('pendingRdos').delete(id);
+      }catch(e){}
+    });
+  }
+  function looksOffline(err){
+    if(!navigator.onLine) return true;
+    var msg = (err && (err.message || err.error_description || String(err))) || '';
+    return /failed to fetch|load failed|network ?error|networkerror|err_internet|err_name_not_resolved|err_connection/i.test(msg);
+  }
+  function pendingAsRdoRows(items){
+    return items.map(function(it){
+      var mapped = mapRdoRow(Object.assign({}, it.payload, {
+        id: 'pending-'+it.id,
+        created_at: new Date(it.queuedAt).toISOString(),
+        updated_at: new Date(it.queuedAt).toISOString()
+      }));
+      mapped.status = 'pendente_offline';
+      mapped._pendingId = it.id;
+      return mapped;
+    });
+  }
+  function renderPendingBanner(count){
+    var b = document.getElementById('dbBanner');
+    if(!b) return;
+    if(count>0){
+      b.innerHTML = '<div class="banner-pending">⏳ '+count+' RDO'+(count>1?'s':'')+' salva'+(count>1?'s':'')+' neste dispositivo, aguardando conexão para sincronizar.</div>';
+    } else if(b.querySelector('.banner-pending')){
+      b.innerHTML = '';
+    }
+  }
+  function refreshPendingRdos(){
+    return pendingGetAll().then(function(items){
+      state.pendingRdos = pendingAsRdoRows(items);
+      if(state.view==='dashboard') renderRdoTable();
+      renderPendingBanner(items.length);
+    });
+  }
+  var syncingPending = false;
+  function trySyncPendingRdos(){
+    if(syncingPending || !navigator.onLine || !supabaseClient) return Promise.resolve();
+    syncingPending = true;
+    return pendingGetAll().then(function(items){
+      if(!items.length){ syncingPending=false; return; }
+      var okCount = 0;
+      var chain = Promise.resolve();
+      items.forEach(function(item){
+        chain = chain.then(function(){
+          var op = item.isEdit
+            ? supabaseClient.from('rdos').update(item.payload).eq('id', item.rdoId)
+            : supabaseClient.from('rdos').insert(Object.assign({exemplo:false}, item.payload));
+          return op.then(function(res){
+            if(res.error){
+              if(!looksOffline(res.error)){
+                return pendingRemove(item.id).then(function(){
+                  toast('Uma RDO pendente não pôde ser sincronizada ('+res.error.message+'). Foi removida da fila — revise e salve novamente.','error');
+                });
+              }
+              return;
+            }
+            okCount++;
+            return pendingRemove(item.id);
+          }).catch(function(){ /* mantém na fila, tenta de novo depois */ });
+        });
+      });
+      return chain.then(function(){
+        syncingPending = false;
+        if(okCount>0){
+          toast(okCount===1 ? 'RDO sincronizada com sucesso.' : (okCount+' RDOs sincronizadas com sucesso.'), 'ok');
+          loadRdos();
+        }
+        refreshPendingRdos();
+      });
+    }).catch(function(){ syncingPending=false; });
+  }
+  function updateOnlineBanner(){
+    var el = document.getElementById('offlineBanner');
+    if(el) el.style.display = navigator.onLine ? 'none' : '';
+  }
+  window.addEventListener('online', function(){
+    updateOnlineBanner();
+    toast('Conexão restabelecida — sincronizando…','ok');
+    trySyncPendingRdos();
+  });
+  window.addEventListener('offline', function(){
+    updateOnlineBanner();
+    toast('Sem conexão. Você pode continuar preenchendo RDOs — elas serão enviadas automaticamente quando a internet voltar.','error');
+  });
+  setInterval(trySyncPendingRdos, 25000);
+
+  /* ---------------- instalar como app (PWA) ---------------- */
+  var deferredInstallPrompt = null;
+  function isStandaloneApp(){
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  }
+  function isIosDevice(){
+    return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  }
+  function showIosInstallTip(){
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div');
+    wrap.className = 'overlay';
+    wrap.innerHTML =
+      '<div class="modal">'+
+        '<h3>Instalar o RDO Venko</h3>'+
+        '<p>No iPhone/iPad: toque no ícone de compartilhar '+
+        '<b>(o quadrado com uma seta para cima)</b> na barra do Safari e depois em '+
+        '<b>"Adicionar à Tela de Início"</b>. O app passa a abrir direto da tela inicial, em tela cheia.</p>'+
+        '<div class="row"><button class="btn primary" data-act="ok">Entendi</button></div>'+
+      '</div>';
+    root.appendChild(wrap);
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap || e.target.getAttribute('data-act')==='ok'){ wrap.remove(); }
+    });
+  }
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    var btn = document.getElementById('btnInstallApp');
+    if(btn && !isStandaloneApp()) btn.style.display = '';
+  });
+  window.addEventListener('appinstalled', function(){
+    deferredInstallPrompt = null;
+    var btn = document.getElementById('btnInstallApp');
+    if(btn) btn.style.display = 'none';
+    toast('App instalado com sucesso!','ok');
+  });
 
   /* ---------------- navigation ---------------- */
   function goto(view){
@@ -1021,9 +1228,13 @@
   }
   function loadObras(){
     return supabaseClient.from('obras').select('*').then(function(res){
-      if(res.error){ toast('Não foi possível carregar as obras.','error'); return; }
+      if(res.error){
+        if(looksOffline(res.error)) return cacheGet('obras').then(function(c){ if(c){ state.obras=c; renderAll(); } });
+        toast('Não foi possível carregar as obras.','error'); return;
+      }
       state.obras = (res.data||[]).map(mapObraRow);
       state.obras.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+      cacheSet('obras', state.obras);
       renderAll();
     });
   }
@@ -1041,42 +1252,63 @@
   }
   function loadEquipamentos(){
     return supabaseClient.from('equipamentos').select('*').then(function(res){
-      if(res.error){ toast('Não foi possível carregar os equipamentos.','error'); return; }
+      if(res.error){
+        if(looksOffline(res.error)) return cacheGet('equipamentos').then(function(c){ if(c){ state.equipamentos=c; renderAll(); } });
+        toast('Não foi possível carregar os equipamentos.','error'); return;
+      }
       state.equipamentos = (res.data||[]).map(mapEquipamentoRow);
       state.equipamentos.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+      cacheSet('equipamentos', state.equipamentos);
       renderAll();
     });
   }
   function loadDepartamentos(){
     return supabaseClient.from('departamentos').select('*').then(function(res){
-      if(res.error){ toast('Não foi possível carregar os departamentos.','error'); return; }
+      if(res.error){
+        if(looksOffline(res.error)) return cacheGet('departamentos').then(function(c){ if(c){ state.departamentos=c; renderAll(); } });
+        toast('Não foi possível carregar os departamentos.','error'); return;
+      }
       state.departamentos = (res.data||[]).map(mapDepartamentoRow);
       state.departamentos.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+      cacheSet('departamentos', state.departamentos);
       renderAll();
     });
   }
   function loadEquipes(){
     return supabaseClient.from('equipes').select('*').then(function(res){
-      if(res.error){ toast('Não foi possível carregar as equipes.','error'); return; }
+      if(res.error){
+        if(looksOffline(res.error)) return cacheGet('equipes').then(function(c){ if(c){ state.equipes=c; renderAll(); } });
+        toast('Não foi possível carregar as equipes.','error'); return;
+      }
       state.equipes = (res.data||[]).map(mapEquipeRow);
       state.equipes.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+      cacheSet('equipes', state.equipes);
       renderAll();
     });
   }
   function loadColaboradores(){
     return supabaseClient.from('colaboradores').select('*').then(function(res){
-      if(res.error){ toast('Não foi possível carregar os colaboradores.','error'); return; }
+      if(res.error){
+        if(looksOffline(res.error)) return cacheGet('colaboradores').then(function(c){ if(c){ state.colaboradores=c; renderAll(); } });
+        toast('Não foi possível carregar os colaboradores.','error'); return;
+      }
       state.colaboradores = (res.data||[]).map(mapColaboradorRow);
       state.colaboradores.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+      cacheSet('colaboradores', state.colaboradores);
       renderAll();
     });
   }
   function loadRdos(){
     return supabaseClient.from('rdos').select('*').then(function(res){
-      if(res.error){ toast('Não foi possível carregar as RDOs.','error'); return; }
+      if(res.error){
+        if(looksOffline(res.error)) return cacheGet('rdos').then(function(c){ if(c){ state.rdos=c; renderAll(); } refreshPendingRdos(); });
+        toast('Não foi possível carregar as RDOs.','error'); return;
+      }
       state.rdos = (res.data||[]).map(mapRdoRow);
       state.rdos.sort(function(a,b){ return (b.data||'').localeCompare(a.data||'') || (new Date(b.createdAt)-new Date(a.createdAt)); });
+      cacheSet('rdos', state.rdos);
       renderAll();
+      refreshPendingRdos();
     });
   }
   function loadProfiles(){
@@ -1102,9 +1334,13 @@
       ? supabaseClient.from('produtos_catalogo').select('*').eq('ativo', true)
       : supabaseClient.rpc('produtos_catalogo_checklist');
     return query.then(function(res){
-      if(res.error){ return; }
+      if(res.error){
+        if(looksOffline(res.error)) return cacheGet('catalogoItens').then(function(c){ if(c){ state.catalogoItens=c; if(state.view==='financeiro-obra' && state.financeiroObraId) renderFinanceiroObra(); } });
+        return;
+      }
       state.catalogoItens = (res.data||[]).map(mapCatalogoItemRow);
       state.catalogoItens.sort(function(a,b){ return (a.ordem-b.ordem) || (a.categoriaNome||'').localeCompare(b.categoriaNome||''); });
+      cacheSet('catalogoItens', state.catalogoItens);
       if(state.view==='financeiro-obra' && state.financeiroObraId) renderFinanceiroObra();
     });
   }
@@ -1156,13 +1392,28 @@
   function loadProfileAndEnter(userId){
     return supabaseClient.from('profiles').select('*').eq('id', userId).maybeSingle().then(function(res){
       if(res.error || !res.data){
+        if(looksOffline(res.error)){
+          return cacheGet('currentProfile-'+userId).then(function(cached){
+            if(cached){
+              setCurrentUser(cached);
+              refreshPendingRdos();
+              updateOnlineBanner();
+              toast('Sem conexão — abrindo com os últimos dados salvos neste dispositivo.','ok');
+              return;
+            }
+            toast('Sem conexão e nenhum dado salvo neste dispositivo ainda. Conecte-se à internet pelo menos uma vez para poder usar o app offline depois.','error');
+          });
+        }
         toast('Sua conta ainda não tem um perfil configurado neste sistema. Peça para um administrador te cadastrar em Usuários.','error');
         return supabaseClient.auth.signOut();
       }
+      cacheSet('currentProfile-'+userId, res.data);
       setCurrentUser(res.data);
       seedExamplesIfEmpty();
       loadClientes(); loadObras(); loadEquipamentos(); loadDepartamentos(); loadEquipes(); loadColaboradores(); loadRdos(); loadProfiles(); loadCatalogoProdutos(); loadObraServicosContratados();
       subscribeRealtime();
+      refreshPendingRdos();
+      trySyncPendingRdos();
       toast('Bem-vindo, '+(res.data.nome||'').split(' ')[0]+'!','ok');
     });
   }
@@ -1892,7 +2143,7 @@
 
   function filteredRdos(){
     var f = state.filters;
-    return state.rdos.filter(function(r){
+    return state.rdos.concat(state.pendingRdos||[]).filter(function(r){
       if(f.obraId && r.obraId!==f.obraId) return false;
       if(f.dataIni && r.data < f.dataIni) return false;
       if(f.dataFim && r.data > f.dataFim) return false;
@@ -1932,14 +2183,19 @@
     }).join('');
     body.querySelectorAll('tr[data-id]').forEach(function(tr){
       tr.addEventListener('click', function(){
-        state.detailId = tr.getAttribute('data-id');
+        var id = tr.getAttribute('data-id');
+        if(String(id).indexOf('pending-')===0){
+          toast('Esta RDO ainda não foi sincronizada. Aguarde a conexão para ver os detalhes completos.','error');
+          return;
+        }
+        state.detailId = id;
         goto('detail');
       });
     });
   }
 
   function statusChip(status){
-    var cls = { rascunho:'draft', enviado:'sent', aprovado:'approved', rejeitado:'rejected' }[status] || 'draft';
+    var cls = { rascunho:'draft', enviado:'sent', aprovado:'approved', rejeitado:'rejected', pendente_offline:'pending-offline' }[status] || 'draft';
     return '<span class="chip '+cls+'">'+ (STATUS_LABEL[status]||status) +'</span>';
   }
 
@@ -3134,6 +3390,10 @@
       }
       e.target.value = '';
       if(!files.length) return;
+      if(!navigator.onLine){
+        toast('Sem conexão: vídeos exigem internet para enviar. Salve o RDO sem vídeo e anexe depois, quando estiver online.','error');
+        return;
+      }
 
       var placeholders = files.map(function(f){ return {name:f.name, uploading:true}; });
       state.videos = state.videos.concat(placeholders);
@@ -3161,6 +3421,7 @@
         confirmModal({ title:'Excluir RDO', msg:'Este rascunho será excluído permanentemente. Deseja continuar?', okLabel:'Excluir', danger:true })
           .then(function(ok){
             if(!ok) return;
+            if(!navigator.onLine){ toast('Excluir exige conexão com a internet. Tente novamente quando estiver online.','error'); return; }
             supabaseClient.from('rdos').delete().eq('id', rdo.id).then(function(res){
               if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
               toast('Rascunho excluído.','ok'); state.editId=null;
@@ -3223,12 +3484,29 @@
         return;
       }
 
+      function queueOfflineRdo(){
+        return pendingAdd({ payload: payload, isEdit: !!editing, rdoId: editing ? rdo.id : null, queuedAt: Date.now() }).then(function(){
+          toast('Sem conexão — RDO salva neste dispositivo e será enviada automaticamente quando a internet voltar.','ok');
+          state.editId = null; state.photos = []; state.videos = [];
+          refreshPendingRdos();
+          goto('dashboard');
+        });
+      }
+
+      if(!navigator.onLine){
+        queueOfflineRdo();
+        return;
+      }
+
       var promise = editing
         ? supabaseClient.from('rdos').update(payload).eq('id', rdo.id).select().single()
         : supabaseClient.from('rdos').insert(Object.assign({exemplo:false}, payload)).select().single();
 
       promise.then(function(res){
-        if(res.error){ toast('Erro ao salvar: '+res.error.message,'error'); return; }
+        if(res.error){
+          if(looksOffline(res.error)){ return queueOfflineRdo(); }
+          toast('Erro ao salvar: '+res.error.message,'error'); return;
+        }
         toast(isLockedEdit ? 'Alterações salvas.' : (wantsSend ? 'RDO enviada para aprovação.' : 'Rascunho salvo.'), 'ok');
         var newId = res.data ? res.data.id : rdo.id;
         state.editId = null; state.photos = []; state.videos = [];
@@ -3236,6 +3514,9 @@
           if(wantsSend || isLockedEdit){ state.detailId = newId; goto('detail'); }
           else{ goto('dashboard'); }
         });
+      }).catch(function(err){
+        if(looksOffline(err)){ return queueOfflineRdo(); }
+        toast('Erro ao salvar: '+(err && err.message ? err.message : err),'error');
       });
     };
   }
@@ -3944,6 +4225,20 @@
   bootAuth();
   renderRdoForm(null);
   goto('dashboard');
+  updateOnlineBanner();
+  refreshPendingRdos();
+  var btnInstallApp = document.getElementById('btnInstallApp');
+  if(btnInstallApp){
+    if(isIosDevice() && !isStandaloneApp()) btnInstallApp.style.display = '';
+    btnInstallApp.addEventListener('click', function(){
+      if(deferredInstallPrompt){
+        deferredInstallPrompt.prompt();
+        deferredInstallPrompt.userChoice.then(function(){ deferredInstallPrompt = null; });
+        return;
+      }
+      showIosInstallTip();
+    });
+  }
 })();
 </script>
 <script>
