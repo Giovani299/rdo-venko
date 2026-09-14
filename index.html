@@ -386,6 +386,10 @@
   .print-only{display:none;}
   /* ---------- Mobile: tabelas viram cartões empilhados (sem rolagem lateral) ---------- */
   @media (max-width:680px){
+    /* Filtros (Painel/Financeiro): cada campo ocupa a linha toda, mais facil de tocar */
+    .filters{gap:12px;}
+    .filters .field{width:100%;}
+    .filters .field input, .filters .field select{min-width:0;}
     .table-wrap{overflow-x:visible;border:none;box-shadow:none;background:transparent;}
     table.rdo-list, table.fin-list{min-width:0;width:100%;}
     table.rdo-list thead, table.fin-list thead{display:none;}
