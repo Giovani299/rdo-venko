@@ -423,6 +423,18 @@
       box-shadow:0 -4px 14px rgba(20,20,18,.12);
     }
     .form-actions.dock-mobile .hint{flex-basis:100%;order:-1;margin:0 0 6px;}
+    /* Cabeçalho: garante 100% de largura no celular e evita qualquer vazamento horizontal */
+    html, body{overflow-x:hidden;}
+    .topbar{width:100%;max-width:100%;box-sizing:border-box;}
+    .brand{width:100%;flex-wrap:wrap;row-gap:6px;}
+    .user-box{
+      margin-left:0;padding-left:0;border-left:none;
+      border-top:1px solid var(--line);padding-top:10px;
+      width:100%;max-width:100%;box-sizing:border-box;justify-content:space-between;
+    }
+    /* Cartões (Obras/Clientes/Equipamentos/Colaboradores/Equipes): ações quebram linha, nunca cortam */
+    .obra-card{flex-direction:column;align-items:stretch;}
+    .obra-actions{flex-wrap:wrap;width:100%;}
   }
   @media print{
     body *{ visibility:hidden; }
