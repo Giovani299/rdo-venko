@@ -2763,6 +2763,7 @@
   var mapaLayerGroup = null;
   var mapaTempLayerGroup = null;
   var mapaCurrentRenderedObraId = null;
+  var mapaViewFitted = false;
 
   function mapMarcacaoRow(row){
     return {
@@ -2813,6 +2814,8 @@
     state.mapaMode = null;
     state.mapaRamalPoints = [];
     state.mapaEditId = null;
+    state.mapaMarcacoes = [];
+    mapaViewFitted = false;
     goto('mapa-obra');
     loadMapaMarcacoes(obraId);
   }
@@ -2820,7 +2823,7 @@
   function loadMapaMarcacoes(obraId){
     return supabaseClient.from('mapa_marcacoes').select('*').eq('obra_id', obraId).then(function(res){
       if(res.error){
-        if(looksOffline(res.error)) return cacheGet('mapaMarcacoes-'+obraId).then(function(c){ if(c){ state.mapaMarcacoes=c; if(state.view==='mapa-obra' && state.mapaObraId===obraId) renderAll(); } });
+        if(looksOffline(res.error)) return cacheGet('mapaMarcacoes-'+obraId).then(function(c){ if(c){ state.mapaMarcacoes=c; if(state.view==='mapa-obra' && state.mapaObraId===obraId) renderAll(); fitMapaViewParaMarcacoes(obraId); } });
         toast('Não foi possível carregar as marcações do mapa.','error');
         return;
       }
@@ -2828,7 +2831,26 @@
       state.mapaMarcacoes = (res.data||[]).map(mapMarcacaoRow);
       cacheSet('mapaMarcacoes-'+obraId, state.mapaMarcacoes);
       if(state.view==='mapa-obra') renderAll();
+      fitMapaViewParaMarcacoes(obraId);
     });
+  }
+
+  function fitMapaViewParaMarcacoes(obraId){
+    if(mapaViewFitted || !leafletMapInstance || state.mapaObraId!==obraId) return;
+    var pts = [];
+    state.mapaMarcacoes.forEach(function(m){
+      (m.geom||[]).forEach(function(p){ if(p && typeof p.lat==='number' && typeof p.lng==='number') pts.push([p.lat,p.lng]); });
+    });
+    if(pts.length===1){
+      leafletMapInstance.setView(pts[0], 17);
+      mapaViewFitted = true;
+    } else if(pts.length>1){
+      leafletMapInstance.fitBounds(pts, { padding:[40,40], maxZoom:18 });
+      mapaViewFitted = true;
+    } else {
+      var obraAtual = state.obras.find(function(o){ return o.id===obraId; });
+      if(obraAtual){ geocodeObraEndereco(obraAtual); mapaViewFitted = true; }
+    }
   }
 
   function renderMapaObraList(){
@@ -2905,7 +2927,8 @@
     mapaTempLayerGroup = L.layerGroup().addTo(leafletMapInstance);
     leafletMapInstance.on('click', onMapaClick);
     setTimeout(function(){ if(leafletMapInstance) leafletMapInstance.invalidateSize(); }, 30);
-    geocodeObraEndereco(obra);
+    // a centralização/zoom do mapa é decidida em fitMapaViewParaMarcacoes, chamada
+    // quando as marcações desta obra terminam de carregar (ver loadMapaMarcacoes)
   }
 
   function geocodeObraEndereco(obra){
