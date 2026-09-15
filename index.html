@@ -2770,6 +2770,7 @@
       obraId: row.obra_id,
       tipo: row.tipo,
       rua: row.rua || '',
+      numeroServico: row.numero_servico || '',
       status: row.status || 'processando',
       observacao: row.observacao || '',
       geom: row.geom || [],
@@ -3002,7 +3003,7 @@
         var icon = L.divIcon({ className:'', html:pinHtml, iconSize:[22,28], iconAnchor:[11,24] });
         var marker = L.marker([m.geom[0].lat, m.geom[0].lng], { icon: icon }).addTo(mapaLayerGroup);
         if(canGestao){ marker.on('click', function(){ abrirModalMarcacao(m); }); }
-        else { marker.bindPopup('<b>'+esc(m.rua||'PV')+'</b><br>'+statusMapLabel(m.status)+(m.observacao?'<br>'+esc(m.observacao):'')); }
+        else { marker.bindPopup('<b>'+esc(m.rua||'PV')+'</b>'+(m.numeroServico?' · Nº '+esc(m.numeroServico):'')+'<br>'+statusMapLabel(m.status)+(m.observacao?'<br>'+esc(m.observacao):'')); }
       } else if(m.tipo==='ramal' && m.geom && m.geom.length>1){
         var latlngs = m.geom.map(function(p){ return [p.lat,p.lng]; });
         var tubeDark = shadeColor(color, -35);
@@ -3010,7 +3011,7 @@
         L.polyline(latlngs, { color: tubeDark, weight:9, opacity:0.92, lineCap:'round', lineJoin:'round', interactive:false }).addTo(mapaLayerGroup);
         var line = L.polyline(latlngs, { color: tubeLight, weight:3, opacity:0.95, lineCap:'round', lineJoin:'round' }).addTo(mapaLayerGroup);
         if(canGestao){ line.on('click', function(){ abrirModalMarcacao(m); }); }
-        else { line.bindPopup('<b>'+esc(m.rua||'Ramal')+'</b><br>'+statusMapLabel(m.status)+(m.observacao?'<br>'+esc(m.observacao):'')); }
+        else { line.bindPopup('<b>'+esc(m.rua||'Ramal')+'</b>'+(m.numeroServico?' · Nº '+esc(m.numeroServico):'')+'<br>'+statusMapLabel(m.status)+(m.observacao?'<br>'+esc(m.observacao):'')); }
       }
     });
   }
@@ -3028,6 +3029,7 @@
       return '<div class="marcacao-row" data-id="'+m.id+'">'+
         '<span class="rua">'+esc(m.rua||'(sem rua informada)')+'</span>'+
         '<span class="tag-example" style="background:transparent;">'+(m.tipo==='pv'?'PV':'Ramal')+'</span>'+
+        (m.numeroServico?'<span class="tag-example" style="background:transparent;">Nº '+esc(m.numeroServico)+'</span>':'')+
         (canGestao
           ? ('<select class="status-select" data-statusid="'+m.id+'">'+
               '<option value="processando"'+(m.status==='processando'?' selected':'')+'>Processando</option>'+
@@ -3064,6 +3066,7 @@
       '<div class="modal">'+
         '<h3>'+(isEdit ? 'Editar marcação' : (m.tipo==='pv' ? 'Novo PV' : 'Novo ramal'))+'</h3>'+
         '<div class="field" style="margin-bottom:10px;"><label>Rua</label><input type="text" id="marcRua" value="'+esc(m.rua||'')+'" placeholder="Nome da rua"></div>'+
+        '<div class="field" style="margin-bottom:10px;"><label>Número do serviço</label><input type="text" id="marcNumServico" value="'+esc(m.numeroServico||'')+'" placeholder="Ex: OS-1234"></div>'+
         '<div class="field" style="margin-bottom:10px;"><label>Status</label>'+
           '<select id="marcStatus">'+
             '<option value="processando"'+((m.status||'processando')==='processando'?' selected':'')+'>Processando</option>'+
@@ -3088,11 +3091,12 @@
       if(act==='del'){ wrap.remove(); excluirMarcacao(m.id); return; }
       if(act==='ok'){
         var rua = document.getElementById('marcRua').value.trim();
+        var numeroServico = document.getElementById('marcNumServico').value.trim();
         var status = document.getElementById('marcStatus').value;
         var obs = document.getElementById('marcObs').value.trim();
         wrap.remove();
-        if(isEdit){ atualizarMarcacao(m.id, { rua:rua, status:status, observacao:obs }); }
-        else { criarMarcacao({ tipo:m.tipo, geom:m.geom, rua:rua, status:status, observacao:obs }); }
+        if(isEdit){ atualizarMarcacao(m.id, { rua:rua, numeroServico:numeroServico, status:status, observacao:obs }); }
+        else { criarMarcacao({ tipo:m.tipo, geom:m.geom, rua:rua, numeroServico:numeroServico, status:status, observacao:obs }); }
       }
     });
     setTimeout(function(){ var el=document.getElementById('marcRua'); if(el) el.focus(); }, 0);
@@ -3103,6 +3107,7 @@
       obra_id: state.mapaObraId,
       tipo: vals.tipo,
       rua: vals.rua || null,
+      numero_servico: vals.numeroServico || null,
       status: vals.status || 'processando',
       observacao: vals.observacao || null,
       geom: vals.geom,
@@ -3119,6 +3124,7 @@
   function atualizarMarcacao(id, vals){
     supabaseClient.from('mapa_marcacoes').update({
       rua: vals.rua || null,
+      numero_servico: vals.numeroServico || null,
       status: vals.status,
       observacao: vals.observacao || null,
       updated_at: new Date().toISOString()
