@@ -336,6 +336,9 @@
   .marcacao-row select.status-select{border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px;background:var(--surface);color:var(--ink);}
   .map-pin{width:18px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);}
   .btn.mode-active{box-shadow:0 0 0 2px var(--focus) inset;}
+  .map-pin3d-wrap{position:relative;width:22px;height:28px;}
+  .map-pin3d-shadow{position:absolute;left:3px;bottom:0;width:16px;height:6px;border-radius:50%;background:rgba(20,19,15,.4);filter:blur(1px);}
+  .map-pin3d{position:absolute;left:2px;top:2px;width:18px;height:18px;border-radius:50%;border:1px solid rgba(255,255,255,.55);box-shadow:0 3px 4px rgba(20,19,15,.45), inset -2px -3px 4px rgba(0,0,0,.28), inset 2px 2px 3px rgba(255,255,255,.5);}
   .modal h3{font-size:18px;margin-bottom:8px;}
   .modal p{color:var(--ink-soft);font-size:13.5px;margin:0 0 16px;}
   .modal .row{display:flex;justify-content:flex-end;gap:10px;}
@@ -518,7 +521,7 @@
       <button class="tab-btn" data-view="novo">Nova RDO</button>
       <button class="tab-btn" data-view="clientes" id="tabClientes">Clientes</button>
       <button class="tab-btn" data-view="obras" id="tabObras">Obras</button>
-      <button class="tab-btn" data-view="mapa" id="tabMapa" style="display:none">Mapa</button>
+      <button class="tab-btn" data-view="mapa" id="tabMapa" style="display:none">Mapeamento</button>
       <button class="tab-btn" data-view="equipamentos">Equipamentos</button>
       <button class="tab-btn" data-view="colaboradores">Colaboradores</button>
       <button class="tab-btn" data-view="equipes">Equipes</button>
@@ -623,7 +626,7 @@
     <section id="view-mapa" class="view">
       <div class="page-head">
         <div>
-          <h1>Mapa da obra</h1>
+          <h1>Mapeamento da obra</h1>
           <p>Mapeamento de rede de esgoto — poços de visita (PVs) e ramais, por rua, com status de execução.</p>
         </div>
       </div>
@@ -632,7 +635,7 @@
 
     <section id="view-mapa-obra" class="view">
       <div class="page-head">
-        <button class="btn ghost" data-goto="mapa">← Voltar ao Mapa</button>
+        <button class="btn ghost" data-goto="mapa">← Voltar ao Mapeamento</button>
       </div>
       <div id="mapaObraContent"></div>
     </section>
@@ -2695,7 +2698,7 @@
           '<span class="chip '+(o.status==='ativa'?'approved':'draft')+'">'+(o.status==='ativa'?'Ativa':'Concluída')+'</span>'+
           (canServ?'<button class="btn ghost sm" data-servicos="'+o.id+'">'+(open?'Ocultar serviços':'Serviços contratados')+'</button>':'')+
           (canServ?'<button class="btn ghost sm" data-servpdf="'+o.id+'">⬇ Exportar PDF</button>':'')+
-          (canServ?'<button class="btn ghost sm" data-mapa="'+o.id+'">🗺 Mapa</button>':'')+
+          (canServ?'<button class="btn ghost sm" data-mapa="'+o.id+'">🗺 Mapeamento</button>':'')+
           (canGestao?'<button class="btn ghost sm" data-toggle="'+o.id+'">'+(o.status==='ativa'?'Marcar concluída':'Reativar')+'</button>':'')+
           (canGestao?'<button class="btn danger sm" data-del="'+o.id+'">Excluir</button>':'')+
         '</div>'+
@@ -2791,6 +2794,16 @@
     if(status==='parado') return 'map-parado';
     if(status==='concluido') return 'map-concluido';
     return 'map-processando';
+  }
+  function shadeColor(hex, percent){
+    hex = String(hex).replace('#','');
+    if(hex.length===3){ hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2]; }
+    var num = parseInt(hex,16);
+    var amt = Math.round(2.55*percent);
+    var r = Math.max(0,Math.min(255,(num>>16)+amt));
+    var g = Math.max(0,Math.min(255,((num>>8)&0x00FF)+amt));
+    var b = Math.max(0,Math.min(255,(num&0x0000FF)+amt));
+    return '#'+(0x1000000+r*0x10000+g*0x100+b).toString(16).slice(1);
   }
 
   function abrirMapaObra(obraId){
@@ -2981,13 +2994,21 @@
     state.mapaMarcacoes.forEach(function(m){
       var color = statusMapColor(m.status);
       if(m.tipo==='pv' && m.geom && m.geom[0]){
-        var icon = L.divIcon({ className:'', html:'<div class="map-pin" style="background:'+color+';"></div>', iconSize:[18,18], iconAnchor:[9,18] });
+        var light = shadeColor(color, 35);
+        var pinHtml = '<div class="map-pin3d-wrap">'+
+          '<div class="map-pin3d-shadow"></div>'+
+          '<div class="map-pin3d" style="background:radial-gradient(circle at 35% 28%, '+light+', '+color+' 60%, '+shadeColor(color,-25)+' 100%);"></div>'+
+        '</div>';
+        var icon = L.divIcon({ className:'', html:pinHtml, iconSize:[22,28], iconAnchor:[11,24] });
         var marker = L.marker([m.geom[0].lat, m.geom[0].lng], { icon: icon }).addTo(mapaLayerGroup);
         if(canGestao){ marker.on('click', function(){ abrirModalMarcacao(m); }); }
         else { marker.bindPopup('<b>'+esc(m.rua||'PV')+'</b><br>'+statusMapLabel(m.status)+(m.observacao?'<br>'+esc(m.observacao):'')); }
       } else if(m.tipo==='ramal' && m.geom && m.geom.length>1){
         var latlngs = m.geom.map(function(p){ return [p.lat,p.lng]; });
-        var line = L.polyline(latlngs, { color: color, weight:6, opacity:0.85 }).addTo(mapaLayerGroup);
+        var tubeDark = shadeColor(color, -35);
+        var tubeLight = shadeColor(color, 45);
+        L.polyline(latlngs, { color: tubeDark, weight:9, opacity:0.92, lineCap:'round', lineJoin:'round', interactive:false }).addTo(mapaLayerGroup);
+        var line = L.polyline(latlngs, { color: tubeLight, weight:3, opacity:0.95, lineCap:'round', lineJoin:'round' }).addTo(mapaLayerGroup);
         if(canGestao){ line.on('click', function(){ abrirModalMarcacao(m); }); }
         else { line.bindPopup('<b>'+esc(m.rua||'Ramal')+'</b><br>'+statusMapLabel(m.status)+(m.observacao?'<br>'+esc(m.observacao):'')); }
       }
