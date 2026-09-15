@@ -8,6 +8,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="config.js"></script>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#FFFFFF">
@@ -40,6 +42,13 @@
     --status-rejected-bg:#FBE7E6;
     --status-stopped:#C97317;
     --status-stopped-bg:#FBEEDD;
+    --map-amarelo:#EEC512;
+    --map-amarelo-ink:#8A6D00;
+    --map-amarelo-bg:#FBF1C7;
+    --map-cinza:#75798A;
+    --map-cinza-bg:#EAEBEF;
+    --map-verde:#2E8F4E;
+    --map-verde-bg:#E4F3E9;
     --shadow-sm:0 1px 2px rgba(35,35,32,.07);
     --shadow-md:0 6px 20px rgba(35,35,32,.10);
     --radius:10px;
@@ -180,6 +189,9 @@
   .chip.approved{color:var(--status-approved);background:var(--status-approved-bg);}
   .chip.rejected{color:var(--status-rejected);background:var(--status-rejected-bg);}
   .chip.pending-offline{color:var(--status-stopped);background:var(--status-stopped-bg);}
+  .chip.map-processando{color:var(--map-amarelo-ink);background:var(--map-amarelo-bg);}
+  .chip.map-parado{color:var(--map-cinza);background:var(--map-cinza-bg);}
+  .chip.map-concluido{color:var(--map-verde);background:var(--map-verde-bg);}
   .offline-banner{background:var(--status-stopped-bg);color:var(--status-stopped-deep,var(--status-stopped));border-bottom:1px solid var(--status-stopped);padding:9px 16px;font:600 13px/1.4 Inter,sans-serif;text-align:center;}
   .banner-pending{background:var(--status-stopped-bg);color:var(--status-stopped-deep,var(--status-stopped));border:1px solid var(--status-stopped);border-radius:var(--radius);padding:9px 14px;font:600 13px/1.4 Inter,sans-serif;margin-bottom:12px;}
   .tag-stop{color:var(--status-stopped);font-weight:700;font-size:11.5px;}
@@ -310,6 +322,20 @@
   /* ---------- Modal / Toast ---------- */
   .overlay{position:fixed;inset:0;background:rgba(20,19,15,.5);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
   .modal{background:var(--surface);border-radius:12px;box-shadow:var(--shadow-md);max-width:420px;width:100%;padding:22px;border:1px solid var(--line);}
+  .map-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;}
+  .map-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--ink-soft);margin-left:auto;}
+  .map-legend-item{display:flex;align-items:center;gap:6px;}
+  .map-legend-dot{width:11px;height:11px;border-radius:50%;display:inline-block;flex:0 0 auto;}
+  #leafletMap{height:520px;width:100%;border-radius:var(--radius);border:1px solid var(--line);margin-bottom:16px;z-index:1;background:var(--surface-2);}
+  .map-hint-banner{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--ink);}
+  .map-draw-actions{display:flex;gap:8px;align-items:center;}
+  .marcacao-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line-soft);}
+  .marcacao-row:last-child{border-bottom:none;}
+  .marcacao-row .rua{font-weight:700;min-width:140px;}
+  .marcacao-row .obs{color:var(--ink-soft);font-size:12.5px;flex:1 1 200px;}
+  .marcacao-row select.status-select{border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px;background:var(--surface);color:var(--ink);}
+  .map-pin{width:18px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);}
+  .btn.mode-active{box-shadow:0 0 0 2px var(--focus) inset;}
   .modal h3{font-size:18px;margin-bottom:8px;}
   .modal p{color:var(--ink-soft);font-size:13.5px;margin:0 0 16px;}
   .modal .row{display:flex;justify-content:flex-end;gap:10px;}
@@ -492,6 +518,7 @@
       <button class="tab-btn" data-view="novo">Nova RDO</button>
       <button class="tab-btn" data-view="clientes" id="tabClientes">Clientes</button>
       <button class="tab-btn" data-view="obras" id="tabObras">Obras</button>
+      <button class="tab-btn" data-view="mapa" id="tabMapa" style="display:none">Mapa</button>
       <button class="tab-btn" data-view="equipamentos">Equipamentos</button>
       <button class="tab-btn" data-view="colaboradores">Colaboradores</button>
       <button class="tab-btn" data-view="equipes">Equipes</button>
@@ -591,6 +618,23 @@
         </form>
       </div>
       <div id="obraList"></div>
+    </section>
+
+    <section id="view-mapa" class="view">
+      <div class="page-head">
+        <div>
+          <h1>Mapa da obra</h1>
+          <p>Mapeamento de rede de esgoto — poços de visita (PVs) e ramais, por rua, com status de execução.</p>
+        </div>
+      </div>
+      <div id="mapaObraList"></div>
+    </section>
+
+    <section id="view-mapa-obra" class="view">
+      <div class="page-head">
+        <button class="btn ghost" data-goto="mapa">← Voltar ao Mapa</button>
+      </div>
+      <div id="mapaObraContent"></div>
     </section>
 
     <section id="view-equipamentos" class="view">
@@ -935,7 +979,12 @@
     obraServicosOpen: {},
     tabelaPrecosUnlocked: false,
     pendingRdos: [],
-    editingPendingItem: null // {id, isEdit, rdoId} quando está editando uma RDO pendente (ainda não sincronizada)
+    editingPendingItem: null, // {id, isEdit, rdoId} quando está editando uma RDO pendente (ainda não sincronizada)
+    mapaObraId: null,
+    mapaMarcacoes: [],
+    mapaMode: null,       // null | 'pv' | 'ramal'
+    mapaRamalPoints: [],  // pontos em construção de um ramal ainda não salvo
+    mapaEditId: null
   };
 
   var CLIMA_OPTS = ['Praticável','Parcialmente praticável','Impraticável'];
@@ -1307,7 +1356,9 @@
       b.classList.toggle('active', b.getAttribute('data-view')===view);
     });
     if(view==='novo' && state.editId===null){ renderRdoForm(null); }
+    if(view==='mapa'){ state.mapaMode=null; state.mapaRamalPoints=[]; if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers(); updateMapaModeUI(); }
     renderAll();
+    if(view==='mapa-obra'){ setTimeout(function(){ if(leafletMapInstance) leafletMapInstance.invalidateSize(); }, 30); }
     window.scrollTo({top:0, behavior:'instant'});
   }
   document.getElementById('tabs').addEventListener('click', function(e){
@@ -1316,6 +1367,7 @@
     if(view==='users' && !(state.currentUser && state.currentUser.is_admin)) return;
     if((view==='financeiro'||view==='financeiro-obra') && !financeiroCanAccess()) return;
     if(view==='obras' && !(state.currentUser && (state.currentUser.is_admin || state.currentUser.acesso_obras !== false))) return;
+    if((view==='mapa'||view==='mapa-obra') && !obrasCanAccess()) return;
     if(view==='clientes' && !obrasGestaoCanAccess()) return;
     if(view==='tabelaprecos'){
       if(!financeiroCanAccess()) return;
@@ -1559,6 +1611,7 @@
           document.getElementById('tabFinanceiro').style.display = (fresh.is_admin || fresh.acesso_financeiro) ? '' : 'none';
           document.getElementById('tabTabelaPrecos').style.display = (fresh.is_admin || fresh.acesso_financeiro) ? '' : 'none';
           document.getElementById('tabObras').style.display = (fresh.is_admin || fresh.acesso_obras !== false) ? '' : 'none';
+          document.getElementById('tabMapa').style.display = (fresh.is_admin || fresh.acesso_obras !== false) ? '' : 'none';
           var podeGestaoObras = (fresh.is_admin || fresh.acesso_obras_gestao !== false);
           var clienteFormCard = document.getElementById('clienteFormCard'); if(clienteFormCard) clienteFormCard.style.display = podeGestaoObras ? '' : 'none';
           var obraFormCard = document.getElementById('obraFormCard'); if(obraFormCard) obraFormCard.style.display = podeGestaoObras ? '' : 'none';
@@ -1617,6 +1670,7 @@
       .on('postgres_changes', {event:'*', schema:'public', table:'financeiro_itens'}, function(){ if(state.financeiroObraId) loadFinanceiroItens(state.financeiroObraId); })
       .on('postgres_changes', {event:'*', schema:'public', table:'produtos_catalogo'}, function(){ loadCatalogoProdutos(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'obra_servicos_contratados'}, function(){ loadObraServicosContratados(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'mapa_marcacoes'}, function(){ if(state.mapaObraId) loadMapaMarcacoes(state.mapaObraId); })
       .subscribe();
   }
 
@@ -1665,6 +1719,7 @@
     document.getElementById('tabFinanceiro').style.display = (profile.is_admin || profile.acesso_financeiro) ? '' : 'none';
     document.getElementById('tabTabelaPrecos').style.display = (profile.is_admin || profile.acesso_financeiro) ? '' : 'none';
     document.getElementById('tabObras').style.display = (profile.is_admin || profile.acesso_obras !== false) ? '' : 'none';
+    document.getElementById('tabMapa').style.display = (profile.is_admin || profile.acesso_obras !== false) ? '' : 'none';
     var podeGestaoObrasLogin = (profile.is_admin || profile.acesso_obras_gestao !== false);
     var clienteFormCardLogin = document.getElementById('clienteFormCard'); if(clienteFormCardLogin) clienteFormCardLogin.style.display = podeGestaoObrasLogin ? '' : 'none';
     var obraFormCardLogin = document.getElementById('obraFormCard'); if(obraFormCardLogin) obraFormCardLogin.style.display = podeGestaoObrasLogin ? '' : 'none';
@@ -2332,6 +2387,8 @@
     if(state.view==='dashboard'){ renderKpis(); renderFilters(); renderRdoTable(); }
     if(state.view==='clientes'){ renderClienteList(); }
     if(state.view==='obras'){ populateObraClienteSelect(); renderObraList(); }
+    if(state.view==='mapa'){ renderMapaObraList(); }
+    if(state.view==='mapa-obra' && state.mapaObraId){ renderMapaObraContent(); }
     if(state.view==='equipamentos'){ renderEquipamentoList(); }
     if(state.view==='colaboradores'){ populateColaboradorFormSelects(); renderDepartamentoList(); renderColaboradorList(); }
     if(state.view==='equipes'){ renderEquipeList(); }
@@ -2638,6 +2695,7 @@
           '<span class="chip '+(o.status==='ativa'?'approved':'draft')+'">'+(o.status==='ativa'?'Ativa':'Concluída')+'</span>'+
           (canServ?'<button class="btn ghost sm" data-servicos="'+o.id+'">'+(open?'Ocultar serviços':'Serviços contratados')+'</button>':'')+
           (canServ?'<button class="btn ghost sm" data-servpdf="'+o.id+'">⬇ Exportar PDF</button>':'')+
+          (canServ?'<button class="btn ghost sm" data-mapa="'+o.id+'">🗺 Mapa</button>':'')+
           (canGestao?'<button class="btn ghost sm" data-toggle="'+o.id+'">'+(o.status==='ativa'?'Marcar concluída':'Reativar')+'</button>':'')+
           (canGestao?'<button class="btn danger sm" data-del="'+o.id+'">Excluir</button>':'')+
         '</div>'+
@@ -2669,6 +2727,11 @@
         exportObraServicosPdf(b.getAttribute('data-servpdf'));
       });
     });
+    list.querySelectorAll('[data-mapa]').forEach(function(b){
+      b.addEventListener('click', function(){
+        abrirMapaObra(b.getAttribute('data-mapa'));
+      });
+    });
     list.querySelectorAll('[data-toggle]').forEach(function(b){
       b.addEventListener('click', function(){
         var id = b.getAttribute('data-toggle');
@@ -2690,6 +2753,378 @@
           });
       });
     });
+  }
+
+  /* ---------------- mapa da obra (rede de esgoto: PVs e ramais) ---------------- */
+  var leafletMapInstance = null;
+  var mapaLayerGroup = null;
+  var mapaTempLayerGroup = null;
+  var mapaCurrentRenderedObraId = null;
+
+  function mapMarcacaoRow(row){
+    return {
+      id: row.id,
+      obraId: row.obra_id,
+      tipo: row.tipo,
+      rua: row.rua || '',
+      status: row.status || 'processando',
+      observacao: row.observacao || '',
+      geom: row.geom || [],
+      createdBy: row.created_by,
+      createdByNome: row.created_by_nome || '',
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
+
+  function statusMapColor(status){
+    if(status==='parado') return '#75798A';
+    if(status==='concluido') return '#2E8F4E';
+    return '#EEC512';
+  }
+  function statusMapLabel(status){
+    if(status==='parado') return 'Parado';
+    if(status==='concluido') return 'Concluído';
+    return 'Processando';
+  }
+  function statusMapClass(status){
+    if(status==='parado') return 'map-parado';
+    if(status==='concluido') return 'map-concluido';
+    return 'map-processando';
+  }
+
+  function abrirMapaObra(obraId){
+    state.mapaObraId = obraId;
+    state.mapaMode = null;
+    state.mapaRamalPoints = [];
+    state.mapaEditId = null;
+    goto('mapa-obra');
+    loadMapaMarcacoes(obraId);
+  }
+
+  function loadMapaMarcacoes(obraId){
+    return supabaseClient.from('mapa_marcacoes').select('*').eq('obra_id', obraId).then(function(res){
+      if(res.error){
+        if(looksOffline(res.error)) return cacheGet('mapaMarcacoes-'+obraId).then(function(c){ if(c){ state.mapaMarcacoes=c; if(state.view==='mapa-obra' && state.mapaObraId===obraId) renderAll(); } });
+        toast('Não foi possível carregar as marcações do mapa.','error');
+        return;
+      }
+      if(state.mapaObraId!==obraId) return;
+      state.mapaMarcacoes = (res.data||[]).map(mapMarcacaoRow);
+      cacheSet('mapaMarcacoes-'+obraId, state.mapaMarcacoes);
+      if(state.view==='mapa-obra') renderAll();
+    });
+  }
+
+  function renderMapaObraList(){
+    var list = document.getElementById('mapaObraList');
+    if(!list) return;
+    if(state.obras.length===0){
+      list.innerHTML = '<p class="empty-hint">Nenhuma obra cadastrada ainda.</p>';
+      return;
+    }
+    list.innerHTML = state.obras.map(function(o){
+      return '<div class="obra-card" data-id="'+o.id+'" style="cursor:pointer;">'+
+        '<div class="info"><b>'+esc(o.nome)+(o.exemplo?'<span class="tag-example">exemplo</span>':'')+'</b>'+
+          '<div class="meta">Cliente: '+esc(clienteNomeById(o.clienteId)||'—')+' · '+esc(o.endereco||'Endereço não informado')+(o.localidade?' · '+esc(o.localidade):'')+'</div>'+
+        '</div>'+
+        '<div class="obra-actions"><span class="chip '+(o.status==='ativa'?'approved':'draft')+'">'+(o.status==='ativa'?'Ativa':'Concluída')+'</span></div>'+
+      '</div>';
+    }).join('');
+    list.querySelectorAll('[data-id]').forEach(function(card){
+      card.addEventListener('click', function(){ abrirMapaObra(card.getAttribute('data-id')); });
+    });
+  }
+
+  function renderMapaObraContent(){
+    var obra = state.obras.find(function(o){ return o.id===state.mapaObraId; });
+    var content = document.getElementById('mapaObraContent');
+    if(!content) return;
+    if(!obra){
+      content.innerHTML = '<p class="empty-hint">Obra não encontrada.</p>';
+      mapaCurrentRenderedObraId = null;
+      return;
+    }
+    var canGestao = obrasGestaoCanAccess();
+    if(mapaCurrentRenderedObraId !== state.mapaObraId){
+      var legendHtml =
+        '<div class="map-legend">'+
+          '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-amarelo);"></span>Processando</span>'+
+          '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-cinza);"></span>Parado</span>'+
+          '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-verde);"></span>Concluído</span>'+
+        '</div>';
+      content.innerHTML =
+        '<h1 style="margin-bottom:2px;">'+esc(obra.nome)+'</h1>'+
+        '<p class="hint" style="margin-bottom:14px;">Cliente: '+esc(clienteNomeById(obra.clienteId)||'—')+(obra.endereco?' · '+esc(obra.endereco):'')+(obra.localidade?' · '+esc(obra.localidade):'')+'</p>'+
+        (canGestao ?
+          ('<div class="map-toolbar">'+
+            '<button type="button" class="btn ghost sm" id="btnMapaAddPv">+ PV</button>'+
+            '<button type="button" class="btn ghost sm" id="btnMapaAddRamal">+ Ramal</button>'+
+            '<div class="map-draw-actions" id="mapaDrawActions" style="display:none;">'+
+              '<span class="hint" style="margin:0;">Clique no mapa para marcar os pontos do ramal.</span>'+
+              '<button type="button" class="btn primary sm" id="btnMapaFinalizarRamal">Concluir ramal</button>'+
+              '<button type="button" class="btn ghost sm" id="btnMapaCancelarRamal">Cancelar</button>'+
+            '</div>'+
+            legendHtml+
+          '</div>')
+          : ('<div class="map-toolbar">'+legendHtml+'</div>')
+        )+
+        '<div id="leafletMap"></div>'+
+        '<div class="card"><h2 style="font-size:15px;">Marcações</h2><div id="mapaMarcacoesList"></div></div>';
+      mapaCurrentRenderedObraId = state.mapaObraId;
+      initLeafletMap(obra);
+      if(canGestao) wireMapaToolbarEvents();
+    }
+    renderMapaMarkersOnMap();
+    renderMapaMarcacoesList();
+  }
+
+  function initLeafletMap(obra){
+    if(leafletMapInstance){ leafletMapInstance.remove(); leafletMapInstance=null; }
+    leafletMapInstance = L.map('leafletMap', { center:[-23.5505,-46.6333], zoom:15 });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(leafletMapInstance);
+    mapaLayerGroup = L.layerGroup().addTo(leafletMapInstance);
+    mapaTempLayerGroup = L.layerGroup().addTo(leafletMapInstance);
+    leafletMapInstance.on('click', onMapaClick);
+    setTimeout(function(){ if(leafletMapInstance) leafletMapInstance.invalidateSize(); }, 30);
+    geocodeObraEndereco(obra);
+  }
+
+  function geocodeObraEndereco(obra){
+    var query = [obra.endereco, obra.localidade].filter(Boolean).join(', ');
+    if(!query) return;
+    fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(query))
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(list){
+        if(list && list[0] && leafletMapInstance){
+          leafletMapInstance.setView([parseFloat(list[0].lat), parseFloat(list[0].lon)], 17);
+        }
+      })
+      .catch(function(){ /* sem geocodificação — mapa fica no centro padrão */ });
+  }
+
+  function onMapaClick(e){
+    if(!obrasGestaoCanAccess()) return;
+    if(state.mapaMode==='pv'){
+      state.mapaMode = null;
+      updateMapaModeUI();
+      abrirModalMarcacao({ tipo:'pv', geom:[{lat:e.latlng.lat, lng:e.latlng.lng}] });
+    } else if(state.mapaMode==='ramal'){
+      state.mapaRamalPoints.push({lat:e.latlng.lat, lng:e.latlng.lng});
+      drawTempRamal();
+    }
+  }
+
+  function drawTempRamal(){
+    if(!mapaTempLayerGroup) return;
+    mapaTempLayerGroup.clearLayers();
+    if(state.mapaRamalPoints.length===0) return;
+    var latlngs = state.mapaRamalPoints.map(function(p){ return [p.lat,p.lng]; });
+    L.polyline(latlngs, { color:'#2B6CB0', weight:4, dashArray:'6 6' }).addTo(mapaTempLayerGroup);
+    state.mapaRamalPoints.forEach(function(p){
+      L.circleMarker([p.lat,p.lng], { radius:4, color:'#2B6CB0', fillColor:'#2B6CB0', fillOpacity:1 }).addTo(mapaTempLayerGroup);
+    });
+  }
+
+  function cancelarRamal(){
+    state.mapaMode = null;
+    state.mapaRamalPoints = [];
+    updateMapaModeUI();
+    if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
+  }
+
+  function updateMapaModeUI(){
+    var btnPv = document.getElementById('btnMapaAddPv');
+    var btnRamal = document.getElementById('btnMapaAddRamal');
+    var actions = document.getElementById('mapaDrawActions');
+    if(btnPv) btnPv.classList.toggle('mode-active', state.mapaMode==='pv');
+    if(btnRamal) btnRamal.classList.toggle('mode-active', state.mapaMode==='ramal');
+    if(actions) actions.style.display = (state.mapaMode==='ramal') ? 'flex' : 'none';
+  }
+
+  function wireMapaToolbarEvents(){
+    var btnPv = document.getElementById('btnMapaAddPv');
+    var btnRamal = document.getElementById('btnMapaAddRamal');
+    var btnFinalizar = document.getElementById('btnMapaFinalizarRamal');
+    var btnCancelar = document.getElementById('btnMapaCancelarRamal');
+    if(btnPv) btnPv.addEventListener('click', function(){
+      state.mapaMode = (state.mapaMode==='pv') ? null : 'pv';
+      state.mapaRamalPoints = [];
+      if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
+      updateMapaModeUI();
+    });
+    if(btnRamal) btnRamal.addEventListener('click', function(){
+      if(state.mapaMode==='ramal'){ cancelarRamal(); return; }
+      state.mapaMode = 'ramal';
+      state.mapaRamalPoints = [];
+      updateMapaModeUI();
+    });
+    if(btnFinalizar) btnFinalizar.addEventListener('click', function(){
+      if(state.mapaRamalPoints.length<2){ toast('Marque pelo menos 2 pontos para o ramal.','error'); return; }
+      var geom = state.mapaRamalPoints.slice();
+      state.mapaMode = null;
+      state.mapaRamalPoints = [];
+      updateMapaModeUI();
+      if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
+      abrirModalMarcacao({ tipo:'ramal', geom: geom });
+    });
+    if(btnCancelar) btnCancelar.addEventListener('click', cancelarRamal);
+  }
+
+  function renderMapaMarkersOnMap(){
+    if(!mapaLayerGroup) return;
+    mapaLayerGroup.clearLayers();
+    var canGestao = obrasGestaoCanAccess();
+    state.mapaMarcacoes.forEach(function(m){
+      var color = statusMapColor(m.status);
+      if(m.tipo==='pv' && m.geom && m.geom[0]){
+        var icon = L.divIcon({ className:'', html:'<div class="map-pin" style="background:'+color+';"></div>', iconSize:[18,18], iconAnchor:[9,18] });
+        var marker = L.marker([m.geom[0].lat, m.geom[0].lng], { icon: icon }).addTo(mapaLayerGroup);
+        if(canGestao){ marker.on('click', function(){ abrirModalMarcacao(m); }); }
+        else { marker.bindPopup('<b>'+esc(m.rua||'PV')+'</b><br>'+statusMapLabel(m.status)+(m.observacao?'<br>'+esc(m.observacao):'')); }
+      } else if(m.tipo==='ramal' && m.geom && m.geom.length>1){
+        var latlngs = m.geom.map(function(p){ return [p.lat,p.lng]; });
+        var line = L.polyline(latlngs, { color: color, weight:6, opacity:0.85 }).addTo(mapaLayerGroup);
+        if(canGestao){ line.on('click', function(){ abrirModalMarcacao(m); }); }
+        else { line.bindPopup('<b>'+esc(m.rua||'Ramal')+'</b><br>'+statusMapLabel(m.status)+(m.observacao?'<br>'+esc(m.observacao):'')); }
+      }
+    });
+  }
+
+  function renderMapaMarcacoesList(){
+    var wrap = document.getElementById('mapaMarcacoesList');
+    if(!wrap) return;
+    if(state.mapaMarcacoes.length===0){
+      wrap.innerHTML = '<p class="empty-hint">Nenhuma marcação registrada ainda nesta obra.</p>';
+      return;
+    }
+    var canGestao = obrasGestaoCanAccess();
+    var ordenadas = state.mapaMarcacoes.slice().sort(function(a,b){ return (a.rua||'').localeCompare(b.rua||''); });
+    wrap.innerHTML = ordenadas.map(function(m){
+      return '<div class="marcacao-row" data-id="'+m.id+'">'+
+        '<span class="rua">'+esc(m.rua||'(sem rua informada)')+'</span>'+
+        '<span class="tag-example" style="background:transparent;">'+(m.tipo==='pv'?'PV':'Ramal')+'</span>'+
+        (canGestao
+          ? ('<select class="status-select" data-statusid="'+m.id+'">'+
+              '<option value="processando"'+(m.status==='processando'?' selected':'')+'>Processando</option>'+
+              '<option value="parado"'+(m.status==='parado'?' selected':'')+'>Parado</option>'+
+              '<option value="concluido"'+(m.status==='concluido'?' selected':'')+'>Concluído</option>'+
+            '</select>')
+          : ('<span class="chip '+statusMapClass(m.status)+'">'+statusMapLabel(m.status)+'</span>')
+        )+
+        '<span class="obs">'+esc(m.observacao||'')+'</span>'+
+        (canGestao ? ('<button type="button" class="btn ghost sm" data-editmarc="'+m.id+'">Editar</button><button type="button" class="btn danger sm" data-delmarc="'+m.id+'">Excluir</button>') : '')+
+      '</div>';
+    }).join('');
+    wrap.querySelectorAll('[data-statusid]').forEach(function(sel){
+      sel.addEventListener('change', function(){ atualizarStatusMarcacao(sel.getAttribute('data-statusid'), sel.value); });
+    });
+    wrap.querySelectorAll('[data-editmarc]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-editmarc');
+        var m = state.mapaMarcacoes.find(function(x){ return x.id===id; });
+        if(m) abrirModalMarcacao(m);
+      });
+    });
+    wrap.querySelectorAll('[data-delmarc]').forEach(function(b){
+      b.addEventListener('click', function(){ excluirMarcacao(b.getAttribute('data-delmarc')); });
+    });
+  }
+
+  function abrirModalMarcacao(m){
+    var isEdit = !!m.id;
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div');
+    wrap.className = 'overlay';
+    wrap.innerHTML =
+      '<div class="modal">'+
+        '<h3>'+(isEdit ? 'Editar marcação' : (m.tipo==='pv' ? 'Novo PV' : 'Novo ramal'))+'</h3>'+
+        '<div class="field" style="margin-bottom:10px;"><label>Rua</label><input type="text" id="marcRua" value="'+esc(m.rua||'')+'" placeholder="Nome da rua"></div>'+
+        '<div class="field" style="margin-bottom:10px;"><label>Status</label>'+
+          '<select id="marcStatus">'+
+            '<option value="processando"'+((m.status||'processando')==='processando'?' selected':'')+'>Processando</option>'+
+            '<option value="parado"'+(m.status==='parado'?' selected':'')+'>Parado</option>'+
+            '<option value="concluido"'+(m.status==='concluido'?' selected':'')+'>Concluído</option>'+
+          '</select>'+
+        '</div>'+
+        '<div class="field" style="margin-bottom:14px;"><label>Observação</label><textarea id="marcObs" rows="2" style="width:100%;font-family:inherit;padding:8px;border:1px solid var(--line);border-radius:7px;">'+esc(m.observacao||'')+'</textarea></div>'+
+        '<div class="row" style="justify-content:space-between;">'+
+          (isEdit ? '<button class="btn danger" data-act="del">Excluir</button>' : '<span></span>')+
+          '<div style="display:flex;gap:8px;">'+
+            '<button class="btn ghost" data-act="cancel">Cancelar</button>'+
+            '<button class="btn primary" data-act="ok">Salvar</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+    root.appendChild(wrap);
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap){ wrap.remove(); return; }
+      var act = e.target.getAttribute('data-act');
+      if(act==='cancel'){ wrap.remove(); return; }
+      if(act==='del'){ wrap.remove(); excluirMarcacao(m.id); return; }
+      if(act==='ok'){
+        var rua = document.getElementById('marcRua').value.trim();
+        var status = document.getElementById('marcStatus').value;
+        var obs = document.getElementById('marcObs').value.trim();
+        wrap.remove();
+        if(isEdit){ atualizarMarcacao(m.id, { rua:rua, status:status, observacao:obs }); }
+        else { criarMarcacao({ tipo:m.tipo, geom:m.geom, rua:rua, status:status, observacao:obs }); }
+      }
+    });
+    setTimeout(function(){ var el=document.getElementById('marcRua'); if(el) el.focus(); }, 0);
+  }
+
+  function criarMarcacao(vals){
+    var payload = {
+      obra_id: state.mapaObraId,
+      tipo: vals.tipo,
+      rua: vals.rua || null,
+      status: vals.status || 'processando',
+      observacao: vals.observacao || null,
+      geom: vals.geom,
+      created_by: state.currentUser ? state.currentUser.id : null,
+      created_by_nome: state.currentUser ? state.currentUser.nome : null
+    };
+    supabaseClient.from('mapa_marcacoes').insert(payload).then(function(res){
+      if(res.error){ toast('Erro ao salvar marcação: '+res.error.message,'error'); return; }
+      toast('Marcação salva.','ok');
+      loadMapaMarcacoes(state.mapaObraId);
+    });
+  }
+
+  function atualizarMarcacao(id, vals){
+    supabaseClient.from('mapa_marcacoes').update({
+      rua: vals.rua || null,
+      status: vals.status,
+      observacao: vals.observacao || null,
+      updated_at: new Date().toISOString()
+    }).eq('id', id).then(function(res){
+      if(res.error){ toast('Erro ao atualizar: '+res.error.message,'error'); return; }
+      toast('Marcação atualizada.','ok');
+      loadMapaMarcacoes(state.mapaObraId);
+    });
+  }
+
+  function atualizarStatusMarcacao(id, status){
+    supabaseClient.from('mapa_marcacoes').update({ status: status, updated_at: new Date().toISOString() }).eq('id', id).then(function(res){
+      if(res.error){ toast('Erro ao atualizar status: '+res.error.message,'error'); return; }
+      loadMapaMarcacoes(state.mapaObraId);
+    });
+  }
+
+  function excluirMarcacao(id){
+    confirmModal({ title:'Excluir marcação', msg:'Isso remove este ponto/ramal do mapa. Deseja continuar?', okLabel:'Excluir', danger:true })
+      .then(function(ok){
+        if(!ok) return;
+        supabaseClient.from('mapa_marcacoes').delete().eq('id', id).then(function(res){
+          if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
+          toast('Marcação removida.','ok');
+          loadMapaMarcacoes(state.mapaObraId);
+        });
+      });
   }
 
   function renderObraServicosChecklist(obraId){
