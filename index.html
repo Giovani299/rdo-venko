@@ -2906,18 +2906,19 @@
   });
 
   function mapaServicoOptionsHtml(obraId, selectedId){
-    var contratados = (state.obraServicosContratados||[]).filter(function(x){ return x.obraId===obraId; });
-    var opts = contratados.map(function(c){
-      var item = (state.catalogoItens||[]).find(function(p){ return p.id===c.catalogoItemId; });
-      if(!item) return null;
-      var label = (item.categoriaNumero?item.categoriaNumero+' - ':'')+(item.descricao||item.categoriaNome||'Serviço');
-      return { id: item.id, label: label };
-    }).filter(Boolean);
-    opts.sort(function(a,b){ return a.label.localeCompare(b.label); });
-    return opts.map(function(o){
-      return '<option value="'+o.id+'"'+(selectedId===o.id?' selected':'')+'>'+esc(o.label)+'</option>';
-    }).join('');
+    var itens = (state.catalogoItens||[]).filter(function(p){ return p.ativo!==false; });
+    var g = tabelaPrecosGroups(itens);
+    var html = '';
+    g.order.forEach(function(cat){
+      html += '<optgroup label="'+esc(cat)+'">';
+      g.groups[cat].forEach(function(item){
+        html += '<option value="'+item.id+'"'+(selectedId===item.id?' selected':'')+'>'+esc(item.descricao||cat)+'</option>';
+      });
+      html += '</optgroup>';
+    });
+    return html;
   }
+  
   function refreshMapaFiltroServico(){
     var sel = document.getElementById('mapaFiltroServico');
     if(!sel) return;
