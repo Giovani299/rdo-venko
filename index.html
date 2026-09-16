@@ -45,10 +45,12 @@
     --map-amarelo:#FFC400;
     --map-amarelo-ink:#7A5900;
     --map-amarelo-bg:#FFF3CC;
-    --map-cinza:#75798A;
-    --map-cinza-bg:#EAEBEF;
+    --map-vermelho:#C6433F;
+    --map-vermelho-bg:#FBE7E6;
     --map-verde:#2E8F4E;
     --map-verde-bg:#E4F3E9;
+    --map-canvas:#DDE0E5;
+    --map-canvas-dot:#C7CBD1;
     --shadow-sm:0 1px 2px rgba(35,35,32,.07);
     --shadow-md:0 6px 20px rgba(35,35,32,.10);
     --radius:10px;
@@ -190,7 +192,7 @@
   .chip.rejected{color:var(--status-rejected);background:var(--status-rejected-bg);}
   .chip.pending-offline{color:var(--status-stopped);background:var(--status-stopped-bg);}
   .chip.map-processando{color:var(--map-amarelo-ink);background:var(--map-amarelo-bg);}
-  .chip.map-parado{color:var(--map-cinza);background:var(--map-cinza-bg);}
+  .chip.map-parado{color:var(--map-vermelho);background:var(--map-vermelho-bg);}
   .chip.map-concluido{color:var(--map-verde);background:var(--map-verde-bg);}
   .offline-banner{background:var(--status-stopped-bg);color:var(--status-stopped-deep,var(--status-stopped));border-bottom:1px solid var(--status-stopped);padding:9px 16px;font:600 13px/1.4 Inter,sans-serif;text-align:center;}
   .banner-pending{background:var(--status-stopped-bg);color:var(--status-stopped-deep,var(--status-stopped));border:1px solid var(--status-stopped);border-radius:var(--radius);padding:9px 14px;font:600 13px/1.4 Inter,sans-serif;margin-bottom:12px;}
@@ -326,7 +328,11 @@
   .map-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--ink-soft);margin-left:auto;}
   .map-legend-item{display:flex;align-items:center;gap:6px;}
   .map-legend-dot{width:11px;height:11px;border-radius:50%;display:inline-block;flex:0 0 auto;}
-  #leafletMap{height:520px;width:100%;border-radius:var(--radius);border:1px solid var(--line);margin-bottom:16px;z-index:1;background:var(--surface-2);}
+  #leafletMap{height:520px;width:100%;border-radius:var(--radius);border:1px solid var(--line);margin-bottom:16px;z-index:1;background-color:var(--map-canvas);background-image:radial-gradient(circle, var(--map-canvas-dot) 1px, transparent 1px);background-size:22px 22px;}
+  .leaflet-tooltip.map-pin-label{background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:6px;box-shadow:0 1px 3px rgba(20,19,15,.18);padding:2px 7px;font:600 10.5px/1.35 Inter,sans-serif;color:var(--ink);white-space:nowrap;pointer-events:none;}
+  .leaflet-tooltip.map-pin-label b{font-weight:800;}
+  .leaflet-tooltip.map-pin-label .num{color:var(--ink-soft);font-weight:500;margin-left:3px;}
+  .leaflet-tooltip-top.map-pin-label::before,.leaflet-tooltip-bottom.map-pin-label::before,.leaflet-tooltip-left.map-pin-label::before,.leaflet-tooltip-right.map-pin-label::before{display:none;}
   .map-hint-banner{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--ink);}
   .map-draw-actions{display:flex;gap:8px;align-items:center;}
   .marcacao-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line-soft);}
@@ -2784,7 +2790,7 @@
   }
 
   function statusMapColor(status){
-    if(status==='parado') return '#75798A';
+    if(status==='parado') return '#C6433F';
     if(status==='concluido') return '#2E8F4E';
     return '#FFC400';
   }
@@ -2887,7 +2893,7 @@
       var legendHtml =
         '<div class="map-legend">'+
           '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-amarelo);"></span>Processando</span>'+
-          '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-cinza);"></span>Parado</span>'+
+          '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-vermelho);"></span>Parado</span>'+
           '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-verde);"></span>Concluído</span>'+
         '</div>';
       content.innerHTML =
@@ -2918,11 +2924,7 @@
 
   function initLeafletMap(obra){
     if(leafletMapInstance){ leafletMapInstance.remove(); leafletMapInstance=null; }
-    leafletMapInstance = L.map('leafletMap', { center:[-23.5505,-46.6333], zoom:15 });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(leafletMapInstance);
+    leafletMapInstance = L.map('leafletMap', { center:[-23.5505,-46.6333], zoom:15, maxZoom:19, attributionControl:false });
     mapaLayerGroup = L.layerGroup().addTo(leafletMapInstance);
     mapaTempLayerGroup = L.layerGroup().addTo(leafletMapInstance);
     leafletMapInstance.on('click', onMapaClick);
@@ -3012,6 +3014,12 @@
     if(btnCancelar) btnCancelar.addEventListener('click', cancelarRamal);
   }
 
+  function mapaPinLabelHtml(m){
+    var principal = esc(m.rua || m.nomeLocal || '(sem endereço)');
+    var numero = m.numeroServico ? ('<span class="num">Nº '+esc(m.numeroServico)+'</span>') : '';
+    return '<b>'+principal+'</b>'+(numero?(' '+numero):'');
+  }
+
   function renderMapaMarkersOnMap(){
     if(!mapaLayerGroup) return;
     mapaLayerGroup.clearLayers();
@@ -3026,6 +3034,7 @@
         '</div>';
         var icon = L.divIcon({ className:'', html:pinHtml, iconSize:[22,28], iconAnchor:[11,24] });
         var marker = L.marker([m.geom[0].lat, m.geom[0].lng], { icon: icon }).addTo(mapaLayerGroup);
+        marker.bindTooltip(mapaPinLabelHtml(m), { permanent:true, direction:'top', offset:[0,-4], className:'map-pin-label', interactive:false });
         if(canGestao){ marker.on('click', function(){ abrirModalMarcacao(m); }); }
         else { marker.bindPopup('<b>'+esc(m.nomeLocal||m.rua||'PV')+'</b>'+(m.nomeLocal&&m.rua?'<br>'+esc(m.rua):'')+(m.numeroServico?' · Nº '+esc(m.numeroServico):'')+'<br>'+statusMapLabel(m.status)+(m.observacao?'<br>'+esc(m.observacao):'')); }
       } else if(m.tipo==='ramal' && m.geom && m.geom.length>1){
@@ -3034,6 +3043,7 @@
         var tubeLight = shadeColor(color, 45);
         L.polyline(latlngs, { color: tubeDark, weight:9, opacity:0.92, lineCap:'round', lineJoin:'round', interactive:false }).addTo(mapaLayerGroup);
         var line = L.polyline(latlngs, { color: tubeLight, weight:3, opacity:0.95, lineCap:'round', lineJoin:'round' }).addTo(mapaLayerGroup);
+        line.bindTooltip(mapaPinLabelHtml(m), { permanent:true, direction:'center', className:'map-pin-label', interactive:false });
         if(canGestao){ line.on('click', function(){ abrirModalMarcacao(m); }); }
         else { line.bindPopup('<b>'+esc(m.nomeLocal||m.rua||'Ramal')+'</b>'+(m.nomeLocal&&m.rua?'<br>'+esc(m.rua):'')+(m.numeroServico?' · Nº '+esc(m.numeroServico):'')+'<br>'+statusMapLabel(m.status)+(m.observacao?'<br>'+esc(m.observacao):'')); }
       }
