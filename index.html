@@ -325,6 +325,12 @@
   .overlay{position:fixed;inset:0;background:rgba(20,19,15,.5);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
   .modal{background:var(--surface);border-radius:12px;box-shadow:var(--shadow-md);max-width:420px;width:100%;padding:22px;border:1px solid var(--line);}
   .map-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;}
+  .map-toolbar-servicos{max-height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:12px;background:var(--surface-2);}
+  .mapa-servico-grupo{margin-bottom:10px;}
+  .mapa-servico-grupo:last-child{margin-bottom:0;}
+  .mapa-servico-grupo-titulo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-soft);margin-bottom:6px;}
+  .mapa-servico-grupo-botoes{display:flex;flex-wrap:wrap;gap:6px;}
+  .mapa-btn-servico.mode-active{background:var(--venko-yellow);border-color:var(--venko-yellow);color:var(--ink);}
   .map-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--ink-soft);margin-left:auto;}
   .map-legend-item{display:flex;align-items:center;gap:6px;}
   .map-legend-dot{width:11px;height:11px;border-radius:50%;display:inline-block;flex:0 0 auto;}
@@ -2826,6 +2832,7 @@
     state.mapaObraId = obraId;
     state.mapaMode = null;
     state.mapaRamalPoints = [];
+    state.mapaDesenhoCatalogoItemId = null;
     state.mapaEditId = null;
     state.mapaMarcacoes = [];
     state.mapaFiltroServico = 'all';
@@ -2905,6 +2912,34 @@
     }
   });
 
+  function mapaServicoTipoGeom(item){
+    var desc = (item.descricao||'').toLowerCase();
+    var cat = (item.categoriaNome||'').toLowerCase();
+    if(desc.indexOf('horizontal')>-1) return 'ramal';
+    if(desc.indexOf('vertical')>-1) return 'pv';
+    if(cat.indexOf('tubulação')>-1 || cat.indexOf('tubulacao')>-1 || cat.indexOf('ramal')>-1 || desc.indexOf('tubulação')>-1 || desc.indexOf('tubulacao')>-1 || desc.indexOf('ramal')>-1){
+      return 'ramal';
+    }
+    return 'pv';
+  }
+  function mapaServicoBotoesHtml(){
+    var itens = (state.catalogoItens||[]).filter(function(p){ return p.ativo!==false; });
+    if(!itens.length) return '<span class="hint" style="margin:0;">Nenhum serviço cadastrado na tabela de preços.</span>';
+    var g = tabelaPrecosGroups(itens);
+    var html = '';
+    g.order.forEach(function(cat){
+      html += '<div class="mapa-servico-grupo">';
+      html += '<div class="mapa-servico-grupo-titulo">'+esc(cat)+'</div>';
+      html += '<div class="mapa-servico-grupo-botoes">';
+      g.groups[cat].forEach(function(item){
+        var tipo = mapaServicoTipoGeom(item);
+        html += '<button type="button" class="btn ghost sm mapa-btn-servico" data-catalogo-item-id="'+item.id+'" data-geom-tipo="'+tipo+'" title="'+esc(item.descricao||cat)+'">'+esc(item.descricao||cat)+'</button>';
+      });
+      html += '</div></div>';
+    });
+    return html;
+  }
+
   function mapaServicoOptionsHtml(obraId, selectedId){
     var itens = (state.catalogoItens||[]).filter(function(p){ return p.ativo!==false; });
     var g = tabelaPrecosGroups(itens);
@@ -2949,11 +2984,10 @@
         '<h1 style="margin-bottom:2px;">'+esc(obra.nome)+'</h1>'+
         '<p class="hint" style="margin-bottom:14px;">Cliente: '+esc(clienteNomeById(obra.clienteId)||'—')+(obra.endereco?' · '+esc(obra.endereco):'')+(obra.localidade?' · '+esc(obra.localidade):'')+'</p>'+
         (canGestao ?
-          ('<div class="map-toolbar">'+
-            '<button type="button" class="btn ghost sm" id="btnMapaAddPv">+ PV</button>'+
-            '<button type="button" class="btn ghost sm" id="btnMapaAddRamal">+ Ramal</button>'+
+          ('<div class="map-toolbar-servicos" id="mapaToolbarServicos">'+mapaServicoBotoesHtml()+'</div>'+
+            '<div class="map-toolbar">'+
             '<div class="map-draw-actions" id="mapaDrawActions" style="display:none;">'+
-              '<span class="hint" style="margin:0;">Clique no mapa para marcar os pontos do ramal.</span>'+
+              '<span class="hint" style="margin:0;">Clique no mapa para marcar os pontos do ramal</span>'+
               '<button type="button" class="btn primary sm" id="btnMapaFinalizarRamal">Concluir ramal</button>'+
               '<button type="button" class="btn ghost sm" id="btnMapaCancelarRamal">Cancelar</button>'+
             '</div>'+
@@ -3019,9 +3053,11 @@
   function onMapaClick(e){
     if(!obrasGestaoCanAccess()) return;
     if(state.mapaMode==='pv'){
+      var catalogoItemId = state.mapaDesenhoCatalogoItemId||null;
       state.mapaMode = null;
+      state.mapaDesenhoCatalogoItemId = null;
       updateMapaModeUI();
-      abrirModalMarcacao({ tipo:'pv', geom:[{lat:e.latlng.lat, lng:e.latlng.lng}] });
+      abrirModalMarcacao({ tipo:'pv', geom:[{lat:e.latlng.lat, lng:e.latlng.lng}], catalogoItemId: catalogoItemId });
     } else if(state.mapaMode==='ramal'){
       state.mapaRamalPoints.push({lat:e.latlng.lat, lng:e.latlng.lng});
       drawTempRamal();
@@ -3042,48 +3078,49 @@
   function cancelarRamal(){
     state.mapaMode = null;
     state.mapaRamalPoints = [];
+    state.mapaDesenhoCatalogoItemId = null;
     updateMapaModeUI();
     if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
   }
 
   function updateMapaModeUI(){
-    var btnPv = document.getElementById('btnMapaAddPv');
-    var btnRamal = document.getElementById('btnMapaAddRamal');
+    var btns = document.querySelectorAll('.mapa-btn-servico');
+    btns.forEach(function(b){
+      var active = !!(state.mapaMode && state.mapaDesenhoCatalogoItemId && b.getAttribute('data-catalogo-item-id')===state.mapaDesenhoCatalogoItemId);
+      b.classList.toggle('mode-active', active);
+    });
     var actions = document.getElementById('mapaDrawActions');
-    if(btnPv) btnPv.classList.toggle('mode-active', state.mapaMode==='pv');
-    if(btnRamal) btnRamal.classList.toggle('mode-active', state.mapaMode==='ramal');
     if(actions) actions.style.display = (state.mapaMode==='ramal') ? 'flex' : 'none';
   }
 
   function wireMapaToolbarEvents(){
-    var btnPv = document.getElementById('btnMapaAddPv');
-    var btnRamal = document.getElementById('btnMapaAddRamal');
+    var container = document.getElementById('mapaToolbarServicos');
     var btnFinalizar = document.getElementById('btnMapaFinalizarRamal');
     var btnCancelar = document.getElementById('btnMapaCancelarRamal');
-    if(btnPv) btnPv.addEventListener('click', function(){
-      state.mapaMode = (state.mapaMode==='pv') ? null : 'pv';
-      state.mapaRamalPoints = [];
-      if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
-      updateMapaModeUI();
-    });
-    if(btnRamal) btnRamal.addEventListener('click', function(){
-      if(state.mapaMode==='ramal'){ cancelarRamal(); return; }
-      state.mapaMode = 'ramal';
-      state.mapaRamalPoints = [];
-      updateMapaModeUI();
-    });
+    if(container){
+      container.addEventListener('click', function(e){
+        var btn = e.target.closest('.mapa-btn-servico');
+        if(!btn) return;
+        state.mapaMode = btn.getAttribute('data-geom-tipo');
+        state.mapaDesenhoCatalogoItemId = btn.getAttribute('data-catalogo-item-id');
+        state.mapaRamalPoints = [];
+        if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
+        updateMapaModeUI();
+      });
+    }
     if(btnFinalizar) btnFinalizar.addEventListener('click', function(){
       if(state.mapaRamalPoints.length<2){ toast('Marque pelo menos 2 pontos para o ramal.','error'); return; }
       var geom = state.mapaRamalPoints.slice();
+      var catalogoItemId = state.mapaDesenhoCatalogoItemId||null;
       state.mapaMode = null;
       state.mapaRamalPoints = [];
+      state.mapaDesenhoCatalogoItemId = null;
       updateMapaModeUI();
       if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
-      abrirModalMarcacao({ tipo:'ramal', geom: geom });
+      abrirModalMarcacao({ tipo:'ramal', geom: geom, catalogoItemId: catalogoItemId });
     });
     if(btnCancelar) btnCancelar.addEventListener('click', cancelarRamal);
   }
-
   function mapaPinLabelHtml(m){
     var principal = esc(m.rua || m.nomeLocal || '(sem endereço)');
     var numero = m.numeroServico ? ('<span class="num">Nº '+esc(m.numeroServico)+'</span>') : '';
