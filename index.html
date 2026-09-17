@@ -100,7 +100,8 @@
     font-size:11px;letter-spacing:.08em;text-transform:uppercase;
     color:var(--steel);font-weight:600;border-left:1px solid var(--line);padding-left:12px;
   }
-  .tabs{display:flex;gap:4px;margin-left:8px;flex:1;flex-wrap:wrap;}
+  .tabs{display:flex;gap:4px;margin-left:8px;flex:1;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;min-width:0;}
+  .tab-btn{flex:0 0 auto;}
   .tab-btn{
     border:1px solid transparent;background:transparent;color:var(--ink-soft);
     padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:700;
