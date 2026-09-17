@@ -3135,7 +3135,6 @@
   function renderMapaMarkersOnMap(){
     if(!mapaLayerGroup) return;
     mapaLayerGroup.clearLayers();
-    var canGestao = obrasGestaoCanAccess();
     state.mapaMarcacoes.forEach(function(m){
       if(state.mapaFiltroServico && state.mapaFiltroServico!=='all' && m.catalogoItemId!==state.mapaFiltroServico) return;
       var color = statusMapColor(m.status);
@@ -3148,8 +3147,7 @@
         var icon = L.divIcon({ className:'', html:pinHtml, iconSize:[22,28], iconAnchor:[11,24] });
         var marker = L.marker([m.geom[0].lat, m.geom[0].lng], { icon: icon }).addTo(mapaLayerGroup);
         marker.bindTooltip(mapaPinLabelHtml(m), { permanent:true, direction:'top', offset:[0,-20], className:'map-pin-label', interactive:false });
-        if(canGestao){ marker.on('click', function(){ abrirModalMarcacao(m); }); }
-        else { marker.bindPopup('<b>'+esc(m.nomeLocal||m.rua||'PV')+'</b>'+(m.nomeLocal&&m.rua?'<br>'+esc(m.rua):'')+(m.numeroServico?' · Nº '+esc(m.numeroServico):'')+'<br>'+statusMapLabel(m.status)+(m.observacao?'<br>'+esc(m.observacao):'')+(m.foto?'<br><img src="'+m.foto+'" class="foto-clicavel" style="max-width:180px;max-height:140px;border-radius:6px;margin-top:6px;display:block;cursor:zoom-in;">':'')); }
+        marker.on('click', function(){ abrirModalMarcacao(m); });
       } else if(m.tipo==='ramal' && m.geom && m.geom.length>1){
         var latlngs = m.geom.map(function(p){ return [p.lat,p.lng]; });
         var tubeDark = shadeColor(color, -35);
@@ -3157,8 +3155,7 @@
         L.polyline(latlngs, { color: tubeDark, weight:9, opacity:0.92, lineCap:'round', lineJoin:'round', interactive:false }).addTo(mapaLayerGroup);
         var line = L.polyline(latlngs, { color: tubeLight, weight:3, opacity:0.95, lineCap:'round', lineJoin:'round' }).addTo(mapaLayerGroup);
         line.bindTooltip(mapaPinLabelHtml(m), { permanent:true, direction:'center', className:'map-pin-label', interactive:false });
-        if(canGestao){ line.on('click', function(){ abrirModalMarcacao(m); }); }
-        else { line.bindPopup('<b>'+esc(m.nomeLocal||m.rua||'Ramal')+'</b>'+(m.nomeLocal&&m.rua?'<br>'+esc(m.rua):'')+(m.numeroServico?' · Nº '+esc(m.numeroServico):'')+'<br>'+statusMapLabel(m.status)+(m.observacao?'<br>'+esc(m.observacao):'')+(m.foto?'<br><img src="'+m.foto+'" class="foto-clicavel" style="max-width:180px;max-height:140px;border-radius:6px;margin-top:6px;display:block;cursor:zoom-in;">':'')); }
+        line.on('click', function(){ abrirModalMarcacao(m); });
       }
     });
   }
@@ -3183,16 +3180,14 @@
         '<span class="rua"'+(m.nomeLocal?' style="color:var(--muted);font-weight:400;"':'')+'>'+esc(m.rua||'(sem rua informada)')+'</span>'+
         '<span class="tag-example" style="background:transparent;">'+(m.tipo==='pv'?'PV':'Ramal')+'</span>'+
         (m.numeroServico?'<span class="tag-example" style="background:transparent;">Nº '+esc(m.numeroServico)+'</span>':'')+
-        (canGestao
-          ? ('<select class="status-select" data-statusid="'+m.id+'">'+
-              '<option value="processando"'+(m.status==='processando'?' selected':'')+'>Em andamento</option>'+
-              '<option value="parado"'+(m.status==='parado'?' selected':'')+'>Pendente</option>'+
-              '<option value="concluido"'+(m.status==='concluido'?' selected':'')+'>Concluído</option>'+
-            '</select>')
-          : ('<span class="chip '+statusMapClass(m.status)+'">'+statusMapLabel(m.status)+'</span>')
-        )+
+        '<select class="status-select" data-statusid="'+m.id+'">'+
+          '<option value="processando"'+(m.status==='processando'?' selected':'')+'>Em andamento</option>'+
+          '<option value="parado"'+(m.status==='parado'?' selected':'')+'>Pendente</option>'+
+          '<option value="concluido"'+(m.status==='concluido'?' selected':'')+'>Concluído</option>'+
+        '</select>'+
         '<span class="obs">'+esc(m.observacao||'')+'</span>'+
-        (canGestao ? ('<button type="button" class="btn ghost sm" data-editmarc="'+m.id+'">Editar</button><button type="button" class="btn danger sm" data-delmarc="'+m.id+'">Excluir</button>') : '')+
+        '<button type="button" class="btn ghost sm" data-editmarc="'+m.id+'">'+(m.foto?'Editar':'Adicionar foto')+'</button>'+
+        (canGestao ? ('<button type="button" class="btn danger sm" data-delmarc="'+m.id+'">Excluir</button>') : '')+
       '</div>';
     }).join('');
     wrap.querySelectorAll('[data-statusid]').forEach(function(sel){
@@ -3212,17 +3207,21 @@
 
   function abrirModalMarcacao(m){
     var isEdit = !!m.id;
+    var canGestao = obrasGestaoCanAccess();
     var root = document.getElementById('modal-root');
     var wrap = document.createElement('div');
     wrap.className = 'overlay';
     var marcFotoAtual = m.foto || '';
-    wrap.innerHTML =
-      '<div class="modal">'+
-        '<h3>'+(isEdit ? 'Editar marcação' : (m.tipo==='pv' ? 'Novo PV' : 'Novo ramal'))+'</h3>'+
-        '<div class="field" style="margin-bottom:10px;"><label>Nome do local (prédio/estabelecimento)</label><input type="text" id="marcNomeLocal" value="'+esc(m.nomeLocal||'')+'" placeholder="Ex: Edifício Aurora, Mercado Bom Preço"></div>'+
+    var camposIdentificacao = canGestao ?
+      ('<div class="field" style="margin-bottom:10px;"><label>Nome do local (prédio/estabelecimento)</label><input type="text" id="marcNomeLocal" value="'+esc(m.nomeLocal||'')+'" placeholder="Ex: Edifício Aurora, Mercado Bom Preço"></div>'+
         '<div class="field" style="margin-bottom:10px;"><label>Rua</label><input type="text" id="marcRua" value="'+esc(m.rua||'')+'" placeholder="Nome da rua"></div>'+
         '<div class="field" style="margin-bottom:10px;"><label>Número do serviço</label><input type="text" id="marcNumServico" value="'+esc(m.numeroServico||'')+'" placeholder="Ex: OS-1234"></div>'+
-        '<div class="field" style="margin-bottom:10px;"><label>Serviço (tabela de preços)</label><select id="marcServico"><option value="">— Nenhum —</option>'+mapaServicoOptionsHtml(m.obraId||state.mapaObraId, m.catalogoItemId)+'</select></div>'+
+        '<div class="field" style="margin-bottom:10px;"><label>Serviço (tabela de preços)</label><select id="marcServico"><option value="">— Nenhum —</option>'+mapaServicoOptionsHtml(m.obraId||state.mapaObraId, m.catalogoItemId)+'</select></div>')
+      : (isEdit ? ('<div class="field" style="margin-bottom:10px;"><label>Local</label><div class="hint" style="margin:0;">'+esc(m.nomeLocal||m.rua||'(sem endereço)')+(m.nomeLocal&&m.rua?' · '+esc(m.rua):'')+(m.numeroServico?' · Nº '+esc(m.numeroServico):'')+'</div></div>') : '');
+    wrap.innerHTML =
+      '<div class="modal">'+
+        '<h3>'+(isEdit ? (canGestao ? 'Editar marcação' : 'Atualizar marcação') : (m.tipo==='pv' ? 'Novo PV' : 'Novo ramal'))+'</h3>'+
+        camposIdentificacao+
         '<div class="field" style="margin-bottom:10px;"><label>Status</label>'+
           '<select id="marcStatus">'+
             '<option value="processando"'+((m.status||'processando')==='processando'?' selected':'')+'>Em andamento</option>'+
@@ -3233,7 +3232,7 @@
         '<div class="field" style="margin-bottom:14px;"><label>Observação</label><textarea id="marcObs" rows="2" style="width:100%;font-family:inherit;padding:8px;border:1px solid var(--line);border-radius:7px;">'+esc(m.observacao||'')+'</textarea></div>'+
         '<div class="field" style="margin-bottom:14px;"><label>Foto do serviço</label><div id="marcFotoPreviewWrap" style="margin-bottom:6px;">'+(m.foto?('<img src="'+m.foto+'" class="foto-clicavel" style="max-width:160px;max-height:120px;border-radius:6px;border:1px solid var(--line);display:block;cursor:zoom-in;">'):'<span class="hint" style="margin:0;">Nenhuma foto selecionada.</span>')+'</div><input type="file" accept="image/*" id="marcFotoInput">'+(m.foto?'<button type="button" class="btn ghost sm" data-act="fotoremove" style="margin-top:6px;">Remover foto</button>':'')+'</div>'+
         '<div class="row" style="justify-content:space-between;">'+
-          (isEdit ? '<button class="btn danger" data-act="del">Excluir</button>' : '<span></span>')+
+          (isEdit && canGestao ? '<button class="btn danger" data-act="del">Excluir</button>' : '<span></span>')+
           '<div style="display:flex;gap:8px;">'+
             '<button class="btn ghost" data-act="cancel">Cancelar</button>'+
             '<button class="btn primary" data-act="ok">Salvar</button>'+
@@ -3257,7 +3256,7 @@
       if(e.target===wrap){ wrap.remove(); return; }
       var act = e.target.getAttribute('data-act');
       if(act==='cancel'){ wrap.remove(); return; }
-      if(act==='del'){ wrap.remove(); excluirMarcacao(m.id); return; }
+      if(act==='del'){ if(!canGestao) return; wrap.remove(); excluirMarcacao(m.id); return; }
       if(act==='fotoremove'){
         marcFotoAtual = '';
         var pv = document.getElementById('marcFotoPreviewWrap');
@@ -3266,10 +3265,10 @@
         return;
       }
       if(act==='ok'){
-        var nomeLocal = document.getElementById('marcNomeLocal').value.trim();
-        var rua = document.getElementById('marcRua').value.trim();
-        var numeroServico = document.getElementById('marcNumServico').value.trim();
-        var catalogoItemId = document.getElementById('marcServico').value || null;
+        var nomeLocal = canGestao ? document.getElementById('marcNomeLocal').value.trim() : (m.nomeLocal||'');
+        var rua = canGestao ? document.getElementById('marcRua').value.trim() : (m.rua||'');
+        var numeroServico = canGestao ? document.getElementById('marcNumServico').value.trim() : (m.numeroServico||'');
+        var catalogoItemId = canGestao ? (document.getElementById('marcServico').value || null) : (m.catalogoItemId || null);
         var status = document.getElementById('marcStatus').value;
         var obs = document.getElementById('marcObs').value.trim();
         var foto = marcFotoAtual || null;
@@ -3278,7 +3277,7 @@
         else { criarMarcacao({ tipo:m.tipo, geom:m.geom, rua:rua, nomeLocal:nomeLocal, numeroServico:numeroServico, catalogoItemId:catalogoItemId, status:status, observacao:obs, foto:foto }); }
       }
     });
-    setTimeout(function(){ var el=document.getElementById('marcRua'); if(el) el.focus(); }, 0);
+    setTimeout(function(){ var el=document.getElementById(canGestao?'marcRua':'marcStatus'); if(el) el.focus(); }, 0);
   }
 
   function criarMarcacao(vals){
