@@ -3145,7 +3145,7 @@
         '</div>';
         var icon = L.divIcon({ className:'', html:pinHtml, iconSize:[22,28], iconAnchor:[11,24] });
         var marker = L.marker([m.geom[0].lat, m.geom[0].lng], { icon: icon }).addTo(mapaLayerGroup);
-        marker.bindTooltip(mapaPinLabelHtml(m), { permanent:true, direction:'top', offset:[0,-4], className:'map-pin-label', interactive:false });
+        marker.bindTooltip(mapaPinLabelHtml(m), { permanent:true, direction:'top', offset:[0,-20], className:'map-pin-label', interactive:false });
         if(canGestao){ marker.on('click', function(){ abrirModalMarcacao(m); }); }
         else { marker.bindPopup('<b>'+esc(m.nomeLocal||m.rua||'PV')+'</b>'+(m.nomeLocal&&m.rua?'<br>'+esc(m.rua):'')+(m.numeroServico?' · Nº '+esc(m.numeroServico):'')+'<br>'+statusMapLabel(m.status)+(m.observacao?'<br>'+esc(m.observacao):'')+(m.foto?'<br><img src="'+m.foto+'" class="foto-clicavel" style="max-width:180px;max-height:140px;border-radius:6px;margin-top:6px;display:block;cursor:zoom-in;">':'')); }
       } else if(m.tipo==='ramal' && m.geom && m.geom.length>1){
