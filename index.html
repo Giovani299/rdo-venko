@@ -2810,9 +2810,9 @@
     return '#FFC400';
   }
   function statusMapLabel(status){
-    if(status==='parado') return 'Parado';
+    if(status==='parado') return 'Pendente';
     if(status==='concluido') return 'Concluído';
-    return 'Processando';
+    return 'Em andamento';
   }
   function statusMapClass(status){
     if(status==='parado') return 'map-parado';
@@ -2978,8 +2978,8 @@
     if(mapaCurrentRenderedObraId !== state.mapaObraId || mapaCurrentRenderedCanGestao !== canGestao){
       var legendHtml =
         '<div class="map-legend">'+
-          '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-amarelo);"></span>Processando</span>'+
-          '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-vermelho);"></span>Parado</span>'+
+          '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-amarelo);"></span>Em andamento</span>'+
+          '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-vermelho);"></span>Pendente</span>'+
           '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-verde);"></span>Concluído</span>'+
         '</div>';
       content.innerHTML =
@@ -3183,8 +3183,8 @@
         (m.numeroServico?'<span class="tag-example" style="background:transparent;">Nº '+esc(m.numeroServico)+'</span>':'')+
         (canGestao
           ? ('<select class="status-select" data-statusid="'+m.id+'">'+
-              '<option value="processando"'+(m.status==='processando'?' selected':'')+'>Processando</option>'+
-              '<option value="parado"'+(m.status==='parado'?' selected':'')+'>Parado</option>'+
+              '<option value="processando"'+(m.status==='processando'?' selected':'')+'>Em andamento</option>'+
+              '<option value="parado"'+(m.status==='parado'?' selected':'')+'>Pendente</option>'+
               '<option value="concluido"'+(m.status==='concluido'?' selected':'')+'>Concluído</option>'+
             '</select>')
           : ('<span class="chip '+statusMapClass(m.status)+'">'+statusMapLabel(m.status)+'</span>')
@@ -3223,8 +3223,8 @@
         '<div class="field" style="margin-bottom:10px;"><label>Serviço (tabela de preços)</label><select id="marcServico"><option value="">— Nenhum —</option>'+mapaServicoOptionsHtml(m.obraId||state.mapaObraId, m.catalogoItemId)+'</select></div>'+
         '<div class="field" style="margin-bottom:10px;"><label>Status</label>'+
           '<select id="marcStatus">'+
-            '<option value="processando"'+((m.status||'processando')==='processando'?' selected':'')+'>Processando</option>'+
-            '<option value="parado"'+(m.status==='parado'?' selected':'')+'>Parado</option>'+
+            '<option value="processando"'+((m.status||'processando')==='processando'?' selected':'')+'>Em andamento</option>'+
+            '<option value="parado"'+(m.status==='parado'?' selected':'')+'>Pendente</option>'+
             '<option value="concluido"'+(m.status==='concluido'?' selected':'')+'>Concluído</option>'+
           '</select>'+
         '</div>'+
