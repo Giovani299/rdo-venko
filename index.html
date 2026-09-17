@@ -2781,6 +2781,7 @@
   var mapaLayerGroup = null;
   var mapaTempLayerGroup = null;
   var mapaCurrentRenderedObraId = null;
+  var mapaCurrentRenderedCanGestao = null;
   var mapaViewFitted = false;
 
   function mapMarcacaoRow(row){
@@ -2974,7 +2975,7 @@
       return;
     }
     var canGestao = obrasGestaoCanAccess();
-    if(mapaCurrentRenderedObraId !== state.mapaObraId){
+    if(mapaCurrentRenderedObraId !== state.mapaObraId || mapaCurrentRenderedCanGestao !== canGestao){
       var legendHtml =
         '<div class="map-legend">'+
           '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-amarelo);"></span>Processando</span>'+
@@ -3000,6 +3001,7 @@
         '<div id="leafletMap"></div>'+
         '<div class="card"><h2 style="font-size:15px;">Marcações</h2><div id="mapaMarcacoesList"></div></div>';
       mapaCurrentRenderedObraId = state.mapaObraId;
+      mapaCurrentRenderedCanGestao = canGestao;
       initLeafletMap(obra);
       if(canGestao) wireMapaToolbarEvents();
       var selServico = document.getElementById('mapaFiltroServico');
