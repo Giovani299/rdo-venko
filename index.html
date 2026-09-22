@@ -1533,7 +1533,7 @@
       ocorrencias: row.ocorrencias||[], checklist: row.checklist||[], comentarios: row.comentarios||[],
       equipesDia: row.equipes_dia||[], equipesDetalhe: row.equipes_detalhe||[], gestao: row.gestao||{}, numeroEquipe: row.numero_equipe||[],
       observacoesLegado: row.observacoes||'', materiaisLegado: row.materiais||[], atividadesLegado: row.atividades||[],
-      fotos: row.fotos||[], videos: row.videos||[], responsavel: row.responsavel, status: row.status,
+      fotos: row.fotos||[], videos: row.videos||[], legendas: row.legendas||'', responsavel: row.responsavel, status: row.status,
       assinatura: row.assinatura, aprovacao: row.aprovacao, exemplo: row.exemplo,
       assinaturas: (row.assinaturas && row.assinaturas.length) ? row.assinaturas : legacySignatures,
       createdAt: row.created_at, updatedAt: row.updated_at, deletedAt: row.deleted_at
@@ -4035,6 +4035,7 @@
       climaManha:{tempo:'',condicao:CLIMA_OPTS[0]}, climaTarde:{tempo:'',condicao:CLIMA_OPTS[0]},
       equipesDia:[], equipesDetalhe:[], maoDeObra:[], gestao:{adm:'',eng:''}, numeroEquipe:[], equipamentos:[],
       ocorrencias:[],
+      legendas:'',
       responsavel: state.currentUser ? state.currentUser.nome : '', status:'rascunho',
       assinaturas:[]
     };
@@ -4315,7 +4316,13 @@
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">9</span>Vídeos</h2>'+
+        '<h2><span class="idx">9</span>Legendas</h2>'+
+        '<p class="hint">Escreva aqui observações ou legendas gerais sobre as fotos anexadas.</p>'+
+        '<textarea id="rdoLegendas" rows="4" style="width:100%;box-sizing:border-box;" placeholder="Ex.: Fotos do trecho da Rua X, equipe 02 iniciando a ligação...">'+esc(rdo.legendas||'')+'</textarea>'+
+      '</div>'+
+
+      '<div class="card">'+
+        '<h2><span class="idx">10</span>Vídeos</h2>'+
         '<p class="hint">Anexe vídeos curtos da obra (máx. '+VIDEO_MAX_COUNT+', até '+VIDEO_MAX_MB+'MB cada).</p>'+
         '<div class="video-input-row">'+
           '<input type="file" id="rdoVideos" accept="video/*" multiple>'+
@@ -4325,7 +4332,7 @@
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">10</span>Responsável</h2>'+
+        '<h2><span class="idx">11</span>Responsável</h2>'+
         '<div class="grid2">'+
           '<div class="field"><label>Preenchido por</label><input type="text" id="rdoResponsavel" value="'+esc(rdo.responsavel||'')+'" required></div>'+
         '</div>'+
@@ -4358,6 +4365,8 @@
     wireEquipesDetalhe(rdo);
     wireChecklistTable('eq', 'nome', [{key:'qtd',type:'number'},{key:'horas',type:'number'}], function(v){ rdo.equipamentos=v; }, 'Outro equipamento');
     wireDynTable('oc', [{key:'tipo',type:'select',options:OCC_TIPOS},{key:'texto'},{key:'acao'}], function(){ return rdo.ocorrencias; }, function(v){ rdo.ocorrencias=v; });
+
+    document.getElementById('rdoLegendas').addEventListener('input', function(){ rdo.legendas = this.value; });
 
     renderPhotoUI();
     document.getElementById('rdoFotos').addEventListener('change', function(e){
@@ -4482,6 +4491,7 @@
         ocorrencias: rdo.ocorrencias.filter(function(r){ return r.texto; }),
         fotos: state.photos.map(function(p){ return {url: p.dataUrl, legenda: (p.legenda||'').trim()}; }),
         videos: state.videos.map(function(v){ return {url:v.url, name:v.name||''}; }),
+        legendas: (rdo.legendas||'').trim(),
         responsavel: responsavel,
         status: isLockedEdit ? rdo.status : (wantsSend ? 'enviado' : 'rascunho'),
         updated_at: new Date().toISOString()
@@ -4839,6 +4849,8 @@
           (fLeg?('<div style="font-size:10px;color:'+RDO_MUTED+';margin-top:2px;max-width:104px;word-wrap:break-word;text-align:center;">'+esc(fLeg)+'</div>'):'')+
         '</div>';
       }).join('')+'</div>') : '') +
+
+      (r.legendas ? rdoCard(rdoCardHead('Legendas') + '<div style="padding:10px 14px;white-space:pre-wrap;">'+esc(r.legendas)+'</div>') : '') +
 
       (videosList.length ? rdoCard(rdoCardHead('Vídeos', videosList.length) + (opts.print ?
         '<div style="padding:10px 14px;">'+videosList.map(function(v){ return '<div style="padding:3px 0;">🎬 '+esc(v.name||'vídeo anexado')+'</div>'; }).join('')+'</div>' :
