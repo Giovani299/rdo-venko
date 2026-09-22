@@ -263,12 +263,17 @@
 
   .photo-input-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
   .photo-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;}
-  .photo-thumb{position:relative;width:96px;height:96px;border-radius:8px;overflow:hidden;border:1px solid var(--line);}
-  .photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .photo-thumb{position:relative;width:96px;border-radius:8px;overflow:hidden;border:1px solid var(--line);display:flex;flex-direction:column;}
+  .photo-thumb img{width:100%;height:96px;object-fit:cover;display:block;}
   .photo-thumb button{
     position:absolute;top:3px;right:3px;background:rgba(20,20,18,.72);color:#fff;border:none;
     width:20px;height:20px;border-radius:5px;cursor:pointer;font-size:12px;line-height:1;
   }
+  .photo-thumb .photo-caption{
+    width:100%;box-sizing:border-box;border:none;border-top:1px solid var(--line);
+    font-size:10.5px;padding:4px 5px;background:var(--surface);color:var(--ink);font-family:inherit;
+  }
+  .photo-thumb .photo-caption:focus{outline:1px solid var(--focus);outline-offset:-1px;}
   .photo-note{font-size:11.5px;color:var(--steel);margin-top:6px;}
   .photo-note.warn{color:var(--status-stopped);font-weight:600;}
 
@@ -3965,13 +3970,22 @@
     var note = document.getElementById('photoNote');
     if(!grid) return;
     grid.innerHTML = state.photos.map(function(p,i){
-      return '<div class="photo-thumb"><img src="'+p.dataUrl+'"><button type="button" data-rmphoto="'+i+'">✕</button></div>';
+      return '<div class="photo-thumb"><img src="'+p.dataUrl+'"><button type="button" data-rmphoto="'+i+'">✕</button>'+
+        '<input type="text" class="photo-caption" data-caption="'+i+'" value="'+esc(p.legenda||'')+'" placeholder="Legenda (opcional)" maxlength="140">'+
+      '</div>';
     }).join('');
     grid.querySelectorAll('[data-rmphoto]').forEach(function(b){
       b.addEventListener('click', function(){
         state.photos.splice(parseInt(b.getAttribute('data-rmphoto'),10),1);
         renderPhotoUI();
       });
+    });
+    grid.querySelectorAll('[data-caption]').forEach(function(inp){
+      inp.addEventListener('input', function(){
+        var idx = parseInt(inp.getAttribute('data-caption'),10);
+        if(state.photos[idx]) state.photos[idx].legenda = inp.value;
+      });
+      inp.addEventListener('click', function(e){ e.stopPropagation(); });
     });
     var kb = totalPhotosKB();
     note.className = 'photo-note';
@@ -4232,7 +4246,7 @@
     // pendente (nunca chegou a ser enviada de verdade), então salvar aqui atualiza a fila local
     // (ou tenta enviar, se a pessoa confirmar) em vez de fazer update num id que não existe.
     var pendingEditItem = state.editingPendingItem;
-    state.photos = editing ? (rdo.fotos||[]).map(function(u){ return {dataUrl:u}; }) : [];
+    state.photos = editing ? (rdo.fotos||[]).map(function(u){ return (typeof u==='string') ? {dataUrl:u, legenda:''} : {dataUrl:(u&&u.url)||'', legenda:(u&&u.legenda)||''}; }) : [];
     state.videos = editing ? (rdo.videos||[]).map(function(v){ return (typeof v==='string') ? {url:v,name:''} : v; }) : [];
     document.getElementById('novoTitle').textContent = pendingEditItem ? 'Editar RDO pendente — '+fmtDate(rdo.data) : (editing ? 'Editar RDO — '+fmtDate(rdo.data) : 'Nova RDO');
 
@@ -4466,7 +4480,7 @@
         numero_equipe: numeroEquipeCompute(rdo),
         equipamentos: rdo.equipamentos.filter(function(r){ return r.nome; }),
         ocorrencias: rdo.ocorrencias.filter(function(r){ return r.texto; }),
-        fotos: state.photos.map(function(p){ return p.dataUrl; }),
+        fotos: state.photos.map(function(p){ return {url: p.dataUrl, legenda: (p.legenda||'').trim()}; }),
         videos: state.videos.map(function(v){ return {url:v.url, name:v.name||''}; }),
         responsavel: responsavel,
         status: isLockedEdit ? rdo.status : (wantsSend ? 'enviado' : 'rascunho'),
@@ -4817,7 +4831,14 @@
 
       rdoCard(rdoCardHead('Ocorrências', oc.length) + (oc.length ? oc.map(function(x){ return rdoOccurrenceRowHtml(x.tipo, x.texto, x.acao); }).join('') : rdoEmptyMsg())) +
 
-      (fotos.length ? rdoCard(rdoCardHead('Fotos', fotos.length) + '<div class="gallery" id="detailGallery" style="display:flex;flex-wrap:wrap;padding:8px;">'+fotos.map(function(f){ return '<img src="'+f+'" style="width:104px;height:80px;object-fit:cover;margin:4px;border:1px solid '+RDO_BORDER+';border-radius:6px;'+(opts.print?'':'cursor:pointer;')+'">'; }).join('')+'</div>') : '') +
+      (fotos.length ? rdoCard(rdoCardHead('Fotos', fotos.length) + '<div class="gallery" id="detailGallery" style="display:flex;flex-wrap:wrap;padding:8px;">'+fotos.map(function(f){
+        var fUrl = (typeof f==='string') ? f : ((f&&f.url)||'');
+        var fLeg = (typeof f==='string') ? '' : ((f&&f.legenda)||'');
+        return '<div style="display:inline-block;vertical-align:top;margin:4px;max-width:104px;">'+
+          '<img src="'+fUrl+'" style="width:104px;height:80px;object-fit:cover;border:1px solid '+RDO_BORDER+';border-radius:6px;display:block;'+(opts.print?'':'cursor:pointer;')+'">'+
+          (fLeg?('<div style="font-size:10px;color:'+RDO_MUTED+';margin-top:2px;max-width:104px;word-wrap:break-word;text-align:center;">'+esc(fLeg)+'</div>'):'')+
+        '</div>';
+      }).join('')+'</div>') : '') +
 
       (videosList.length ? rdoCard(rdoCardHead('Vídeos', videosList.length) + (opts.print ?
         '<div style="padding:10px 14px;">'+videosList.map(function(v){ return '<div style="padding:3px 0;">🎬 '+esc(v.name||'vídeo anexado')+'</div>'; }).join('')+'</div>' :
