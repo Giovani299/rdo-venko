@@ -4016,7 +4016,7 @@
         if(v && v.path){ supabaseClient.storage.from('rdo-videos').remove([v.path]); }
       });
     });
-    note.textContent = state.videos.length + ' vídeo(s) anexado(s) (máx. '+VIDEO_MAX_COUNT+', até '+VIDEO_MAX_MB+'MB cada)';
+    note.textContent = state.videos.length + ' vídeo(s) anexado(s) (até '+VIDEO_MAX_MB+'MB cada)';
   }
 
   /* ---------------- RDO form (create / edit) ---------------- */
@@ -4317,7 +4317,7 @@
 
       '<div class="card">'+
         '<h2><span class="idx">9</span>Vídeos</h2>'+
-        '<p class="hint">Anexe vídeos curtos da obra (máx. '+VIDEO_MAX_COUNT+', até '+VIDEO_MAX_MB+'MB cada).</p>'+
+        '<p class="hint">Anexe vídeos curtos da obra (até '+VIDEO_MAX_MB+'MB cada).</p>'+
         '<div class="video-input-row">'+
           '<input type="file" id="rdoVideos" accept="video/*" multiple>'+
         '</div>'+
@@ -4363,10 +4363,6 @@
     renderPhotoUI();
     document.getElementById('rdoFotos').addEventListener('change', function(e){
       var files = Array.prototype.slice.call(e.target.files||[]);
-      if(state.photos.length + files.length > 6){
-        toast('Máximo de 6 fotos por RDO.','error');
-      }
-      files = files.slice(0, Math.max(0, 6-state.photos.length));
       Promise.all(files.map(function(f){ return resizeImageFile(f, 900, 0.55).then(function(du){ return {dataUrl:du}; }); }))
         .then(function(newPhotos){
           state.photos = state.photos.concat(newPhotos);
@@ -4379,10 +4375,6 @@
     renderVideoUI();
     document.getElementById('rdoVideos').addEventListener('change', function(e){
       var files = Array.prototype.slice.call(e.target.files||[]);
-      if(state.videos.length + files.length > VIDEO_MAX_COUNT){
-        toast('Máximo de '+VIDEO_MAX_COUNT+' vídeos por RDO.','error');
-      }
-      files = files.slice(0, Math.max(0, VIDEO_MAX_COUNT-state.videos.length));
       var maxBytes = VIDEO_MAX_MB*1024*1024;
       var tooBig = files.filter(function(f){ return f.size > maxBytes; });
       files = files.filter(function(f){ return f.size <= maxBytes; });
