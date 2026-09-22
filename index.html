@@ -4109,6 +4109,7 @@
       var c = byId[opt.value];
       var checked = !!c;
       var tipoVal = checked ? (c.tipo||CONCLUIDO_TIPO_OPTS[0]) : CONCLUIDO_TIPO_OPTS[0];
+      var qtdVal = checked && c.quantidade!=null ? c.quantidade : '';
       return '<label class="checklist-item">'+
         '<input type="checkbox" data-eqconclchk="'+i+'" data-item="'+esc(opt.value)+'"'+(checked?' checked':'')+'>'+
         '<span class="checklist-label">'+esc(opt.label)+'</span>'+
@@ -4116,6 +4117,7 @@
           '<select data-eqconcltipo="'+i+'" data-item="'+esc(opt.value)+'">'+
             CONCLUIDO_TIPO_OPTS.map(function(o){ return '<option value="'+esc(o)+'"'+(tipoVal===o?' selected':'')+'>'+esc(o)+'</option>'; }).join('')+
           '</select>'+
+          '<input type="number" step="any" min="0" inputmode="decimal" data-eqconclqtd="'+i+'" data-item="'+esc(opt.value)+'" value="'+esc(String(qtdVal))+'" placeholder="Qtd." style="width:70px;margin-left:6px;">'+
         '</span>'+
       '</label>';
     }).join('');
@@ -4162,7 +4164,9 @@
       if(!chk.checked) return;
       var itemId = chk.getAttribute('data-item');
       var sel = container.querySelector('[data-eqconcltipo="'+i+'"][data-item="'+itemId+'"]');
-      rows.push({ catalogoItemId: itemId, tipo: sel ? sel.value : CONCLUIDO_TIPO_OPTS[0] });
+      var qtdInp = container.querySelector('[data-eqconclqtd="'+i+'"][data-item="'+itemId+'"]');
+      var qtdVal = (qtdInp && qtdInp.value!=='') ? Number(qtdInp.value) : null;
+      rows.push({ catalogoItemId: itemId, tipo: sel ? sel.value : CONCLUIDO_TIPO_OPTS[0], quantidade: qtdVal });
     });
     rdo.equipesDetalhe[i].concluidos = rows;
   }
@@ -4192,6 +4196,12 @@
       });
       container.querySelectorAll('[data-eqconcltipo="'+i+'"]').forEach(function(sel){
         sel.addEventListener('change', function(){
+          rebuildEquipeConcluidos(i, rdo, container);
+          updateEquipeValorBadge(i, rdo, container);
+        });
+      });
+      container.querySelectorAll('[data-eqconclqtd="'+i+'"]').forEach(function(inp){
+        inp.addEventListener('input', function(){
           rebuildEquipeConcluidos(i, rdo, container);
           updateEquipeValorBadge(i, rdo, container);
         });
@@ -4469,7 +4479,7 @@
           return {
             frente: d.frente||'', status: d.status||'', atividades: d.atividades||'',
             concluidos: (d.concluidos||[]).filter(function(c){ return c.catalogoItemId; }).map(function(c){
-              return { tipo: c.tipo||'', catalogoItemId: c.catalogoItemId||null };
+              return { tipo: c.tipo||'', catalogoItemId: c.catalogoItemId||null, quantidade: (c.quantidade===null||c.quantidade===undefined||c.quantidade==='')?null:Number(c.quantidade) };
             }),
             resumoAtividades: (d.resumoAtividades||[]).filter(function(s){ return s; }),
             resumoItens: (d.resumoItens||[]).filter(function(s){ return s; })
@@ -4707,7 +4717,9 @@
   function computeEquipeValor(d){
     return sumMoeda((d.concluidos||[]).filter(function(c){ return c.tipo==='Concluído' && c.catalogoItemId; }), function(c){
       var item = catalogoItemById(c.catalogoItemId);
-      return item ? Number(item.custoUnitario)||0 : 0;
+      var custo = item ? Number(item.custoUnitario)||0 : 0;
+      var qtd = Number(c.quantidade)||0;
+      return custo * qtd;
     });
   }
   function rdoEquipeDetalheRowHtml(nome, i, d, ne){
@@ -4716,7 +4728,9 @@
     var valor = canValor ? computeEquipeValor(d) : 0;
     var concl = (d.concluidos||[]).map(function(c){
       var item = c.catalogoItemId ? catalogoItemById(c.catalogoItemId) : null;
-      var itemTxt = item ? ' <span style="color:'+RDO_MUTED+';">— '+esc(item.descricao)+(canValor?' · '+fmtMoeda(Number(item.custoUnitario)||0):'')+'</span>' : '';
+      var qtdTxt = (c.quantidade!=null && c.quantidade!=='') ? ' · Qtd: '+fmtQtd(c.quantidade)+(item&&item.unidade?' '+esc(item.unidade):'') : '';
+      var valorTxt = (canValor && item) ? ' · '+fmtMoeda((Number(item.custoUnitario)||0) * (Number(c.quantidade)||0)) : '';
+      var itemTxt = item ? ' <span style="color:'+RDO_MUTED+';">— '+esc(item.descricao)+qtdTxt+valorTxt+'</span>' : '';
       return '<div style="padding:2px 0;">• '+rdoStatusTxt(c.tipo||'—')+itemTxt+'</div>';
     }).join('');
     return '<div data-pdf-row="1" style="padding:10px 14px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
