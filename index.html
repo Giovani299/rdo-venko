@@ -4816,18 +4816,9 @@
 
       rdoCard(rdoCardHead('Equipes em campo', equipesDia.length) + (equipesDia.length ? '<div style="padding:10px 14px;">'+esc(equipesDia.join(', '))+'</div>' : rdoEmptyMsg())) +
 
-      rdoCard(rdoCardHead('Mão de obra', mo.length) + (moTiles.length ? rdoTileGridHtml(moTiles,4) : rdoEmptyMsg())) +
-
       rdoCard(rdoCardHead('Gestão') + rdoTileGridHtml(gestaoTiles,3)) +
 
       rdoCard(rdoCardHead('Atividades por equipe', equipesDia.length) + (equipesDia.length ? equipesDia.map(function(nome,i){ return rdoEquipeDetalheRowHtml(nome, i, equipesDetalhe[i]||{}, numEq[i]||{}); }).join('') : rdoEmptyMsg())) +
-
-      (equipesDia.length ? rdoCard(rdoCardHead('Resumo de Produção') +
-        '<div style="display:flex;padding:9px 12px;font-weight:bold;font-size:10.5px;background:'+RDO_HEAD+';border-bottom:1px solid '+RDO_BORDER+';">'+
-          '<div style="width:130px;flex:none;">EQ</div><div style="flex:1;padding:0 8px;">Ativ.</div><div style="flex:1;padding:0 8px;">Itens Concluídos</div>'+
-        '</div>' +
-        equipesDia.map(function(nome,i){ return rdoResumoProducaoRowHtml(nome, i, equipesDetalhe[i]||{}); }).join('')
-      ) : '') +
 
       rdoCard(rdoCardHead('Equipamentos', totalEq) + (eqTiles.length ? rdoTileGridHtml(eqTiles,6) : rdoEmptyMsg())) +
 
