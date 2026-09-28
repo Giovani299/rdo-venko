@@ -53,8 +53,79 @@
     --shadow-sm:0 1px 2px rgba(35,35,32,.07);
     --shadow-md:0 6px 20px rgba(35,35,32,.10);
     --radius:10px;
+    --ink-fixed:#232320;
+    --paper-fixed:#FAF9F4;
   }
-  /* Tema único claro — fixo, independente do modo escuro do sistema/navegador. */
+  /* Tema com suporte a modo claro/escuro; alternável pelo usuário via botão no topo. */
+
+  :root[data-theme="dark"]{
+    --venko-yellow:#EEC512;
+    --venko-yellow-hi:#F7DE4E;
+    --venko-yellow-deep:#D9A400;
+    --ink:#F1EFE7;
+    --ink-soft:#C8C6BC;
+    --steel:#9A9C9F;
+    --paper:#171613;
+    --surface:#232320;
+    --surface-2:#2B2A26;
+    --line:#3A392F;
+    --line-soft:#302F28;
+    --focus:#5B9BD5;
+    --status-draft:#A7A9B0;
+    --status-draft-bg:#2D2D2C;
+    --status-sent:#5B9BD5;
+    --status-sent-bg:#1E2A33;
+    --status-approved:#4CAF6E;
+    --status-approved-bg:#1C2E20;
+    --status-rejected:#E06A66;
+    --status-rejected-bg:#3A1F1D;
+    --status-stopped:#E0954A;
+    --status-stopped-bg:#3A2A15;
+    --map-amarelo:#FFC400;
+    --map-amarelo-ink:#7A5900;
+    --map-amarelo-bg:#4A3B00;
+    --map-vermelho:#E06A66;
+    --map-vermelho-bg:#3A1F1D;
+    --map-verde:#4CAF6E;
+    --map-verde-bg:#1C2E20;
+    --map-canvas:#2B2D33;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.35);
+    --shadow-md:0 6px 20px rgba(0,0,0,.5);
+  }
+  [data-theme="light"]{
+    --venko-yellow:#EEC512;
+    --venko-yellow-hi:#F7DE4E;
+    --venko-yellow-deep:#B98E00;
+    --ink:#232320;
+    --ink-soft:#55564F;
+    --steel:#71737C;
+    --paper:#FAF9F4;
+    --surface:#FFFFFF;
+    --surface-2:#F3F1E9;
+    --line:#E3E1D5;
+    --line-soft:#EDEBE0;
+    --focus:#2B6CB0;
+    --status-draft:#7C7E86;
+    --status-draft-bg:#EBEAE6;
+    --status-sent:#2B6CB0;
+    --status-sent-bg:#E4EEF9;
+    --status-approved:#2E8F4E;
+    --status-approved-bg:#E4F3E9;
+    --status-rejected:#C6433F;
+    --status-rejected-bg:#FBE7E6;
+    --status-stopped:#C97317;
+    --status-stopped-bg:#FBEEDD;
+    --map-amarelo:#FFC400;
+    --map-amarelo-ink:#7A5900;
+    --map-amarelo-bg:#FFF3CC;
+    --map-vermelho:#C6433F;
+    --map-vermelho-bg:#FBE7E6;
+    --map-verde:#2E8F4E;
+    --map-verde-bg:#E4F3E9;
+    --map-canvas:#DDE0E5;
+    --shadow-sm:0 1px 2px rgba(35,35,32,.07);
+    --shadow-md:0 6px 20px rgba(35,35,32,.10);
+  }
 
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -108,7 +179,15 @@
     font-size:13px;letter-spacing:.01em;transition:background .12s,color .12s;
   }
   .tab-btn:hover{background:var(--surface-2);color:var(--ink);}
-  .tab-btn.active{background:var(--ink);color:var(--venko-yellow-hi);}
+  .tab-btn.active{background:var(--ink-fixed);color:var(--venko-yellow-hi);}
+
+  .theme-toggle{
+    border:1px solid var(--line);background:var(--surface);color:var(--ink);
+    width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:17px;
+    display:inline-flex;align-items:center;justify-content:center;
+    flex:0 0 auto;margin-right:4px;transition:background .12s,border-color .12s;
+  }
+  .theme-toggle:hover{background:var(--surface-2);}
 
   main{flex:1;padding:26px 22px 60px;max-width:1180px;margin:0 auto;width:100%;}
   .view{display:none;}
@@ -155,7 +234,7 @@
   .field.grow{flex:1;min-width:180px;}
   .field.grow input{width:100%;}
   .btn{
-    border:1px solid var(--ink);background:var(--ink);color:var(--venko-yellow-hi);
+    border:1px solid var(--ink-fixed);background:var(--ink-fixed);color:var(--venko-yellow-hi);
     padding:9px 16px;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;
     display:inline-flex;align-items:center;gap:8px;white-space:nowrap;
   }
@@ -336,7 +415,7 @@
   .mapa-servico-grupo:last-child{margin-bottom:0;}
   .mapa-servico-grupo-titulo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-soft);margin-bottom:6px;}
   .mapa-servico-grupo-botoes{display:flex;flex-wrap:wrap;gap:6px;}
-  .mapa-btn-servico.mode-active{background:var(--venko-yellow);border-color:var(--venko-yellow);color:var(--ink);}
+  .mapa-btn-servico.mode-active{background:var(--venko-yellow);border-color:var(--venko-yellow);color:var(--ink-fixed);}
   .map-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--ink-soft);margin-left:auto;}
   .map-legend-item{display:flex;align-items:center;gap:6px;}
   .map-legend-dot{width:11px;height:11px;border-radius:50%;display:inline-block;flex:0 0 auto;}
@@ -373,7 +452,7 @@
 
   #toast-region{position:fixed;bottom:18px;right:18px;display:flex;flex-direction:column;gap:8px;z-index:200;}
   .toast{
-    background:var(--ink);color:var(--paper);padding:11px 16px;border-radius:8px;font-size:13px;
+    background:var(--ink-fixed);color:var(--paper-fixed);padding:11px 16px;border-radius:8px;font-size:13px;
     box-shadow:var(--shadow-md);max-width:320px;border-left:4px solid var(--venko-yellow);
   }
   .toast.error{border-left-color:var(--status-rejected);}
@@ -387,7 +466,7 @@
 
   /* ---------------- login ---------------- */
   #loginScreen{
-    position:fixed;inset:0;background:var(--ink);display:flex;align-items:center;justify-content:center;
+    position:fixed;inset:0;background:var(--ink-fixed);display:flex;align-items:center;justify-content:center;
     padding:24px;z-index:200;
   }
   .login-card{
@@ -427,7 +506,7 @@
   }
   .fin-total-row{
     display:flex;justify-content:flex-end;gap:24px;padding:14px 16px;font-weight:800;font-size:16px;
-    background:var(--ink);color:var(--venko-yellow-hi);
+    background:var(--ink-fixed);color:var(--venko-yellow-hi);
   }
   table.fin-list{width:100%;border-collapse:collapse;min-width:760px;}
   table.fin-list th{
@@ -504,6 +583,14 @@
     .print-only{ display:block !important; margin-bottom:14px; font-size:14px; }
   }
 </style>
+<script>
+  (function(){
+    try{
+      var t = localStorage.getItem('rdoVenkoTheme');
+      if(t === 'dark'){ document.documentElement.setAttribute('data-theme','dark'); }
+    }catch(e){}
+  })();
+</script>
 </head>
 <body>
 <div id="offlineBanner" class="offline-banner" style="display:none">📴 Sem conexão — você pode continuar preenchendo RDOs, elas serão enviadas quando a internet voltar.</div>
@@ -523,6 +610,7 @@
 
 <div id="app" style="display:none">
   <header class="topbar">
+    <button type="button" id="btnThemeToggle" class="theme-toggle" title="Alternar modo claro/escuro" aria-label="Alternar modo claro/escuro">☀️</button>
     <div class="brand">
       <img class="brand-logo" id="brandLogo" alt="Venko">
       <span class="brand-tag">RDO · Relatório Diário de Obra</span>
@@ -4947,6 +5035,7 @@
 
     var container = document.createElement('div');
     container.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;';
+    container.setAttribute('data-theme','light');
     container.innerHTML = html;
     document.body.appendChild(container);
     var target = container.firstChild;
@@ -5047,6 +5136,7 @@
 
     var container = document.createElement('div');
     container.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;';
+    container.setAttribute('data-theme','light');
     container.innerHTML = html;
     document.body.appendChild(container);
     var target = container.firstChild;
@@ -5131,6 +5221,7 @@
 
     var container = document.createElement('div');
     container.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;';
+    container.setAttribute('data-theme','light');
     container.innerHTML = html;
     document.body.appendChild(container);
     var target = container.firstChild;
@@ -5234,6 +5325,7 @@
 
     var container = document.createElement('div');
     container.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;';
+    container.setAttribute('data-theme','light');
     container.innerHTML = html;
     document.body.appendChild(container);
     var target = container.firstChild;
@@ -5250,6 +5342,26 @@
   goto('dashboard');
   updateOnlineBanner();
   refreshPendingRdos();
+
+  function applyTheme(theme){
+    if(theme === 'dark'){ document.documentElement.setAttribute('data-theme','dark'); }
+    else { document.documentElement.removeAttribute('data-theme'); }
+    var btnTheme = document.getElementById('btnThemeToggle');
+    if(btnTheme) btnTheme.textContent = (theme === 'dark') ? '🌓' : '☀️';
+  }
+  var savedTheme = 'light';
+  try{ savedTheme = localStorage.getItem('rdoVenkoTheme') || 'light'; }catch(e){}
+  applyTheme(savedTheme);
+  var btnThemeToggle = document.getElementById('btnThemeToggle');
+  if(btnThemeToggle){
+    btnThemeToggle.addEventListener('click', function(){
+      var current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+      var next = current === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      try{ localStorage.setItem('rdoVenkoTheme', next); }catch(e){}
+    });
+  }
+
   var btnInstallApp = document.getElementById('btnInstallApp');
   if(btnInstallApp){
     if(isIosDevice() && !isStandaloneApp()) btnInstallApp.style.display = '';
