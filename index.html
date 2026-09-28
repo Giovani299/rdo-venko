@@ -1723,10 +1723,9 @@
     });
   }
   function loadRdosExcluidas(){
-    return supabaseClient.from('rdos').select('*').not('deleted_at','is',null).then(function(res){
+    return supabaseClient.from('rdos').select('id,obra_id,obra_nome,data,responsavel,status,deleted_at,created_at,updated_at').not('deleted_at','is',null).order('deleted_at',{ascending:false}).then(function(res){
       if(res.error){ toast('Não foi possível carregar a lixeira.','error'); return; }
       state.rdosExcluidas = (res.data||[]).map(mapRdoRow);
-      state.rdosExcluidas.sort(function(a,b){ return (b.deletedAt||'').localeCompare(a.deletedAt||''); });
       renderRdoTable();
     });
   }
@@ -1755,6 +1754,20 @@
       cacheSet('rdos', state.rdos);
       toast('RDO restaurada.','success');
       renderRdoTable();
+    });
+  }
+
+  function excluirRdoDefinitivo(id){
+    if(!obrasGestaoCanAccess()) return;
+    confirmModal({ title:'Excluir definitivamente', msg:'Esta RDO será apagada permanentemente do banco de dados, junto com fotos e vídeos anexados, e não poderá ser recuperada. Deseja continuar?', okLabel:'Excluir definitivamente', danger:true }).then(function(ok){
+      if(!ok) return;
+      supabaseClient.from('rdos').delete().eq('id', id).then(function(res){
+        if(res.error){ toast('Não foi possível excluir definitivamente a RDO.','error'); return; }
+        var idx = state.rdosExcluidas.findIndex(function(r){ return r.id===id; });
+        if(idx>-1) state.rdosExcluidas.splice(idx,1);
+        toast('RDO excluída definitivamente.','success');
+        renderRdoTable();
+      });
     });
   }
   function loadProfiles(){
@@ -2658,11 +2671,14 @@
           '<td data-label="Clima">—</td>'+
           '<td data-label="Ocorrências">—</td>'+
           '<td data-label="Status">'+statusChip(r.status)+'</td>'+
-          '<td data-label="Ações"><button type="button" class="btn ghost sm" data-restaurar="'+r.id+'">↺ Restaurar</button></td>'+
+          '<td data-label="Ações"><div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="btn ghost sm" data-restaurar="'+r.id+'">↺ Restaurar</button><button type="button" class="btn danger sm" data-excluir-definitivo="'+r.id+'">🗑 Excluir definitivamente</button></div></td>'+
         '</tr>';
       }).join('');
       body.querySelectorAll('[data-restaurar]').forEach(function(b){
         b.addEventListener('click', function(e){ e.stopPropagation(); restaurarRdo(b.getAttribute('data-restaurar')); });
+      });
+      body.querySelectorAll('[data-excluir-definitivo]').forEach(function(b){
+        b.addEventListener('click', function(e){ e.stopPropagation(); excluirRdoDefinitivo(b.getAttribute('data-excluir-definitivo')); });
       });
       return;
     }
