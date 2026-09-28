@@ -173,6 +173,22 @@
   }
   .tabs{display:flex;gap:4px;margin-left:8px;flex:1;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;min-width:0;}
   .tab-btn{flex:0 0 auto;}
+  .tabs, .table-wrap, .subtable-wrap{
+    scrollbar-width:thin;
+    scrollbar-color:var(--line) transparent;
+  }
+  .tabs::-webkit-scrollbar, .table-wrap::-webkit-scrollbar, .subtable-wrap::-webkit-scrollbar{
+    height:6px;width:6px;background:transparent;
+  }
+  .tabs::-webkit-scrollbar-track, .table-wrap::-webkit-scrollbar-track, .subtable-wrap::-webkit-scrollbar-track{
+    background:transparent;
+  }
+  .tabs::-webkit-scrollbar-thumb, .table-wrap::-webkit-scrollbar-thumb, .subtable-wrap::-webkit-scrollbar-thumb{
+    background:var(--line);border-radius:10px;
+  }
+  .tabs::-webkit-scrollbar-button, .table-wrap::-webkit-scrollbar-button, .subtable-wrap::-webkit-scrollbar-button{
+    display:none;width:0;height:0;
+  }
   .tab-btn{
     border:1px solid transparent;background:transparent;color:var(--ink-soft);
     padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:700;
