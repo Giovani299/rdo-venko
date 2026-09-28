@@ -1117,7 +1117,7 @@
   var TEAM_STATUS_OPTS = ['Em andamento','Parcialmente concluído','Concluído'];
   var CONCLUIDO_TIPO_OPTS = ['Concluído','Pendente'];
   var CARGO_OPTS = ['Administrador','Gerente de Operação','Engenheiro(a) de Obras','Encarregado de Obra','Encarregado de Obra Júnior','Encarregado de Manutenção','Técnico de Segurança','Operador de Máquina','Pedreiro','Servente','Encanador','Cliente','Outro'];
-  var STATUS_LABEL = { rascunho:'Rascunho', enviado:'Aguardando aprovação', aprovado:'Aprovado', rejeitado:'Rejeitado', pendente_offline:'Pendente (offline)' };
+  var STATUS_LABEL = { rascunho:'Rascunho', enviado:'Enviado', aprovado:'Aprovado', rejeitado:'Rejeitado', pendente_offline:'Pendente (offline)' };
 
   /* ---------------- suporte offline (PWA) ---------------- */
   var OFFLINE_DB_NAME = 'rdoVenkoOffline';
@@ -1301,7 +1301,7 @@
   }
   function pendingItemSummaryHtml(it){
     var p = it.payload;
-    var tipoTxt = p.status==='enviado' ? 'estava marcada para enviar para aprovação' : 'estava salva como rascunho';
+    var tipoTxt = p.status==='enviado' ? 'estava marcada para enviar' : 'estava salva como rascunho';
     return '<div class="pending-item" data-id="'+it.id+'">'+
         '<div class="pending-item-info">'+
           '<b>'+esc(p.obra_nome||'—')+'</b>'+
@@ -2587,7 +2587,7 @@
     document.getElementById('kpiRow').innerHTML =
       kpiTile(obrasAtivas,'Obras ativas','accent') +
       kpiTile(rdosMes,'RDOs este mês','') +
-      kpiTile(pendentes,'Aguardando aprovação','pend') +
+      kpiTile(pendentes,'RDOs enviadas','pend') +
       kpiTile(diasComPendencia,'Dias com pendência (mês)','warn');
   }
   function kpiTile(n,label,extra){
@@ -4454,7 +4454,6 @@
           '<div class="field"><label>Preenchido por</label><input type="text" id="rdoResponsavel" value="'+esc(rdo.responsavel||'')+'" required></div>'+
         '</div>'+
         (isLockedEdit ? '' : '<div class="checkline" style="margin-top:12px;"><input type="checkbox" id="rdoDeclaracao"><label for="rdoDeclaracao">Confirmo que as informações acima refletem fielmente o que ocorreu na obra nesta data.</label></div>') +
-        '<p class="hint" style="margin-top:12px;">A assinatura de Cliente e VENKO é adicionada apenas no PDF, no momento da impressão.</p>'+
       '</div>'+
 
       '<div class="form-actions dock-mobile">'+
@@ -4463,7 +4462,7 @@
         (isLockedEdit
           ? '<button type="submit" class="btn primary" id="btnSaveEdit">Salvar alterações</button>'
           : '<button type="submit" class="btn ghost" id="btnSaveDraft">Salvar rascunho</button>'+
-            '<button type="submit" class="btn primary" id="btnSubmitRdo">Enviar para aprovação</button>') +
+            '<button type="submit" class="btn primary" id="btnSubmitRdo">Enviar RDO</button>') +
       '</div>';
 
     populateObraSelect();
@@ -4570,7 +4569,7 @@
       var responsavel = document.getElementById('rdoResponsavel').value.trim();
       if(!responsavel){ toast('Informe quem está preenchendo a RDO.','error'); return; }
       if(wantsSend && !isLockedEdit && !document.getElementById('rdoDeclaracao').checked){
-        toast('Confirme a declaração para enviar a RDO para aprovação.','error'); return;
+        toast('Confirme a declaração para enviar a RDO.','error'); return;
       }
       if(state.videos.some(function(v){ return v.uploading; })){
         toast('Aguarde o envio dos vídeos terminar antes de salvar.','error'); return;
@@ -4602,10 +4601,6 @@
         status: isLockedEdit ? rdo.status : (wantsSend ? 'enviado' : 'rascunho'),
         updated_at: new Date().toISOString()
       };
-      if(wantsSend && !isLockedEdit){
-        payload.assinatura = { nome: responsavel, timestamp: Date.now() };
-      }
-
       var approxKB = Math.round(JSON.stringify(payload).length/1024);
       if(approxKB > 8000){
         toast('Este RDO está muito grande ('+approxKB+' KB) — remova uma ou mais fotos e tente novamente.','error');
@@ -4646,7 +4641,7 @@
           if(looksOffline(res.error) || looksAuthError(res.error)){ return queueOfflineRdo(); }
           toast('Erro ao salvar: '+res.error.message,'error'); return;
         }
-        toast(isLockedEdit ? 'Alterações salvas.' : (wantsSend ? 'RDO enviada para aprovação.' : 'Rascunho salvo.'), 'ok');
+        toast(isLockedEdit ? 'Alterações salvas.' : (wantsSend ? 'RDO enviada.' : 'Rascunho salvo.'), 'ok');
         var newId = res.data ? res.data.id : effId;
         state.editId = null; state.photos = []; state.videos = [];
         var cleanup = pendingEditItem ? pendingRemove(pendingEditItem.id) : Promise.resolve();
@@ -4681,22 +4676,7 @@
         '</div>'+
       '</div>'+
 
-      rdoBodyHtml(r, {print:false}) +
-
-      '<div class="card">'+
-        '<h2><span class="idx">✓</span>Assinatura e aprovação</h2>'+
-        '<div class="kv">'+
-          kvItem('Assinado por', r.assinatura ? r.assinatura.nome : '—') +
-          kvItem('Em', r.assinatura ? new Date(r.assinatura.timestamp).toLocaleString('pt-BR') : '—') +
-        '</div>'+
-        (r.aprovacao ? ('<div class="kv" style="margin-top:14px;">'+
-            kvItem('Decisão', r.aprovacao.status==='aprovado'?'Aprovado':'Rejeitado') +
-            kvItem('Por', r.aprovacao.nome) +
-            kvItem('Em', new Date(r.aprovacao.timestamp).toLocaleString('pt-BR')) +
-          '</div>'+
-          (r.aprovacao.comentario ? '<p style="margin-top:10px;color:var(--ink-soft);font-size:13px;">"'+esc(r.aprovacao.comentario)+'"</p>' : '')
-        ) : (r.status==='enviado' ? approveBox() : '<p class="empty-hint">Envie a RDO para aprovação para habilitar esta etapa.</p>')) +
-      '</div>';
+      rdoBodyHtml(r, {print:false});
 
     document.querySelectorAll('#detailGallery img').forEach(function(img){
       img.addEventListener('click', function(){ openLightbox(img.src); });
@@ -4704,11 +4684,6 @@
     var editBtn = document.getElementById('btnEditRdo');
     if(editBtn) editBtn.addEventListener('click', function(){ state.editId=r.id; state.editingPendingItem=null; goto('novo'); renderRdoForm(r); });
     document.getElementById('btnExportPdf').addEventListener('click', function(){ exportRdoPdf(r); });
-
-    if(r.status==='enviado' && !r.aprovacao){
-      document.getElementById('btnAprovar').addEventListener('click', function(){ decideRdo(r,'aprovado'); });
-      document.getElementById('btnRejeitar').addEventListener('click', function(){ decideRdo(r,'rejeitado'); });
-    }
   }
   function kvItem(l,v,warn){ return '<div class="item"><div class="l">'+esc(l)+'</div><div class="v"'+(warn?' style="color:var(--status-rejected)"':'')+'>'+esc(v)+'</div></div>'; }
   function readSection(title, headers, rows, allowHtml){
@@ -4718,31 +4693,6 @@
       rows.map(function(row){ return '<tr>'+row.map(function(c){ return '<td>'+(allowHtml?c:esc(c))+'</td>'; }).join('')+'</tr>'; }).join('')+
       '</tbody></table></div></div>';
   }
-  function approveBox(){
-    var prefill = state.currentUser ? esc(state.currentUser.nome) : '';
-    return '<div class="approve-box" style="margin-top:14px;">'+
-      '<div class="field"><label>Seu nome</label><input type="text" id="approveName" value="'+prefill+'" placeholder="quem está decidindo"></div>'+
-      '<textarea id="approveComment" placeholder="Comentário (opcional)"></textarea>'+
-      '<div class="approve-actions">'+
-        '<button class="btn primary" id="btnAprovar" type="button">Aprovar</button>'+
-        '<button class="btn danger" id="btnRejeitar" type="button">Rejeitar</button>'+
-      '</div></div>';
-  }
-  function decideRdo(r, decision){
-    var nome = (document.getElementById('approveName')||{}).value || '';
-    if(!nome.trim()){ toast('Informe seu nome para registrar a decisão.','error'); return; }
-    var comentario = (document.getElementById('approveComment')||{}).value || '';
-    supabaseClient.from('rdos').update({
-      status: decision,
-      aprovacao: { nome: nome.trim(), timestamp: Date.now(), status: decision, comentario: comentario },
-      updated_at: new Date().toISOString()
-    }).eq('id', r.id).then(function(res){
-      if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
-      toast(decision==='aprovado' ? 'RDO aprovada.' : 'RDO rejeitada.', decision==='aprovado'?'ok':'error');
-      loadRdos();
-    });
-  }
-
   /* ---------------- PDF export ---------------- */
   var DIAS_SEMANA = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
   function diaDaSemana(iso){
