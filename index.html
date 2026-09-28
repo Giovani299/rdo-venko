@@ -55,6 +55,7 @@
     --radius:10px;
     --ink-fixed:#232320;
     --paper-fixed:#FAF9F4;
+    --scrollbar-thumb:var(--line);
   }
   /* Tema com suporte a modo claro/escuro; alternável pelo usuário via botão no topo. */
 
@@ -91,6 +92,7 @@
     --map-canvas:#2B2D33;
     --shadow-sm:0 1px 2px rgba(0,0,0,.35);
     --shadow-md:0 6px 20px rgba(0,0,0,.5);
+    --scrollbar-thumb:#FFFFFF;
   }
   [data-theme="light"]{
     --venko-yellow:#EEC512;
@@ -125,6 +127,7 @@
     --map-canvas:#DDE0E5;
     --shadow-sm:0 1px 2px rgba(35,35,32,.07);
     --shadow-md:0 6px 20px rgba(35,35,32,.10);
+    --scrollbar-thumb:var(--line);
   }
 
   *{box-sizing:border-box;}
@@ -175,7 +178,7 @@
   .tab-btn{flex:0 0 auto;}
   .tabs, .table-wrap, .subtable-wrap{
     scrollbar-width:thin;
-    scrollbar-color:var(--line) transparent;
+    scrollbar-color:var(--scrollbar-thumb) transparent;
   }
   .tabs::-webkit-scrollbar, .table-wrap::-webkit-scrollbar, .subtable-wrap::-webkit-scrollbar{
     height:6px;width:6px;background:transparent;
@@ -184,7 +187,7 @@
     background:transparent;
   }
   .tabs::-webkit-scrollbar-thumb, .table-wrap::-webkit-scrollbar-thumb, .subtable-wrap::-webkit-scrollbar-thumb{
-    background:var(--line);border-radius:10px;
+    background:var(--scrollbar-thumb);border-radius:10px;
   }
   .tabs::-webkit-scrollbar-button, .table-wrap::-webkit-scrollbar-button, .subtable-wrap::-webkit-scrollbar-button{
     display:none;width:0;height:0;
