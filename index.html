@@ -648,6 +648,7 @@
       <button class="tab-btn" data-view="equipes">Equipes</button>
       <button class="tab-btn" data-view="financeiro" id="tabFinanceiro" style="display:none">Financeiro</button>
       <button class="tab-btn" data-view="tabelaprecos" id="tabTabelaPrecos" style="display:none">Tabela de Preços</button>
+      <button class="tab-btn" data-view="planejamento" id="tabPlanejamento" style="display:none">Planejamento</button>
       <button class="tab-btn" data-view="users" id="tabUsers" style="display:none">Usuários</button>
     </nav>
     <div class="user-box" id="userBox"></div>
@@ -857,6 +858,23 @@
       <div id="tabelaPrecosContent"></div>
     </section>
 
+    <section id="view-planejamento" class="view">
+      <div class="page-head">
+        <div>
+          <h1>Planejamento</h1>
+          <p>Matriz de serviços e cronograma por obra — a base oficial do planejamento de execução.</p>
+        </div>
+      </div>
+      <div id="planejamentoObraList"></div>
+    </section>
+
+    <section id="view-planejamento-obra" class="view">
+      <div class="page-head">
+        <button class="btn ghost" data-goto="planejamento">← Voltar ao Planejamento</button>
+      </div>
+      <div id="planejamentoObraContent"></div>
+    </section>
+
     <section id="view-detail" class="view">
       <div class="page-head">
         <button class="btn ghost" data-goto="dashboard">← Voltar ao painel</button>
@@ -884,6 +902,7 @@
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoFinanceiro"><label for="userAcessoFinanceiro">Acesso ao módulo Financeiro</label></div>
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoObras" checked><label for="userAcessoObras">Acesso à aba Obras</label></div>
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoObrasGestao" checked><label for="userAcessoObrasGestao">Pode cadastrar/editar/excluir clientes e obras (desmarque para deixar só visualizar e lançar serviços contratados)</label></div>
+          <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoPlanejamento"><label for="userAcessoPlanejamento">Acesso ao módulo Planejamento (Matriz de Serviços, Cronograma, Acompanhamento da Obra)</label></div>
           <div class="form-actions">
             <button type="button" class="btn ghost" id="userCancelEdit" style="display:none">Cancelar edição</button>
             <button type="submit" class="btn primary" id="userSubmitBtn">Cadastrar usuário</button>
@@ -1110,7 +1129,11 @@
     mapaMarcacoes: [],
     mapaMode: null,       // null | 'pv' | 'ramal'
     mapaRamalPoints: [],  // pontos em construção de um ramal ainda não salvo
-    mapaEditId: null
+    mapaEditId: null,
+    planejamentoObraId: null,
+    planejamentoServicos: [],
+    planejamentoFiltros: { status:'', busca:'' },
+    planejamentoEditId: null
   };
 
   var CLIMA_OPTS = ['Praticável','Parcialmente praticável','Impraticável'];
@@ -1118,6 +1141,8 @@
   var OCC_TIPOS = ['Pendência','Ocorrência','Resolvido'];
   var TEAM_STATUS_OPTS = ['Em andamento','Parcialmente concluído','Concluído'];
   var CONCLUIDO_TIPO_OPTS = ['Concluído','Pendente'];
+  var PLANEJAMENTO_STATUS_OPTS = ['Previsto','Em andamento','Parcialmente concluído','Concluído','Bloqueado','Cancelado'];
+  var PLANEJAMENTO_PRIORIDADE_OPTS = ['Baixa','Média','Alta'];
   var CARGO_OPTS = ['Administrador','Gerente de Operação','Engenheiro(a) de Obras','Encarregado de Obra','Encarregado de Obra Júnior','Encarregado de Manutenção','Técnico de Segurança','Operador de Máquina','Pedreiro','Servente','Encanador','Cliente','Outro'];
   var STATUS_LABEL = { rascunho:'Rascunho', enviado:'Enviado', aprovado:'Aprovado', rejeitado:'Rejeitado', pendente_offline:'Pendente (offline)' };
 
@@ -1495,6 +1520,7 @@
     if(view==='obras' && !(state.currentUser && (state.currentUser.is_admin || state.currentUser.acesso_obras !== false))) return;
     if((view==='mapa'||view==='mapa-obra') && !obrasCanAccess()) return;
     if(view==='clientes' && !obrasGestaoCanAccess()) return;
+    if((view==='planejamento'||view==='planejamento-obra') && !planejamentoCanAccess()) return;
     if(view==='tabelaprecos'){
       if(!financeiroCanAccess()) return;
       if(!state.tabelaPrecosUnlocked){
@@ -1610,6 +1636,23 @@
   }
   function mapObraServicoRow(row){
     return { id:row.id, obraId:row.obra_id, catalogoItemId:row.catalogo_item_id, quantidade:(row.quantidade===null||row.quantidade===undefined)?null:Number(row.quantidade), createdAt:row.created_at };
+  }
+  function mapPlanejamentoServicoRow(row){
+    return {
+      id:row.id, obraId:row.obra_id, catalogoItemId:row.catalogo_item_id||null, servicoNome:row.servico_nome,
+      endereco:row.endereco||'', trecho:row.trecho||'', numeroLocal:row.numero_local||'',
+      quantidadePrevista:Number(row.quantidade_prevista), unidade:row.unidade,
+      profundidade:row.profundidade==null?null:Number(row.profundidade),
+      comprimento:row.comprimento==null?null:Number(row.comprimento),
+      largura:row.largura==null?null:Number(row.largura),
+      diametro:row.diametro==null?null:Number(row.diametro),
+      observacoes:row.observacoes||'', projetoId:row.projeto_id||null, paginaProjeto:row.pagina_projeto||null,
+      dataInicioPrevista:row.data_inicio_prevista||'', dataFimPrevista:row.data_fim_prevista||'',
+      responsavelId:row.responsavel_id||null, equipeId:row.equipe_id||null,
+      prioridade:row.prioridade||'Média', status:row.status||'Previsto', origem:row.origem||'manual',
+      confirmado:row.confirmado!==false, grupoId:row.grupo_id||null,
+      createdAt:row.created_at, updatedAt:row.updated_at
+    };
   }
   function mapDepartamentoRow(row){
     return { id:row.id, nome:row.nome, createdAt:row.created_at };
@@ -1786,6 +1829,7 @@
           document.getElementById('tabTabelaPrecos').style.display = (fresh.is_admin || fresh.acesso_financeiro) ? '' : 'none';
           document.getElementById('tabObras').style.display = (fresh.is_admin || fresh.acesso_obras !== false) ? '' : 'none';
           document.getElementById('tabMapa').style.display = (fresh.is_admin || fresh.acesso_obras !== false) ? '' : 'none';
+          document.getElementById('tabPlanejamento').style.display = (fresh.is_admin || fresh.acesso_planejamento) ? '' : 'none';
           var podeGestaoObras = (fresh.is_admin || fresh.acesso_obras_gestao !== false);
           var clienteFormCard = document.getElementById('clienteFormCard'); if(clienteFormCard) clienteFormCard.style.display = podeGestaoObras ? '' : 'none';
           var obraFormCard = document.getElementById('obraFormCard'); if(obraFormCard) obraFormCard.style.display = podeGestaoObras ? '' : 'none';
@@ -1830,6 +1874,14 @@
       renderAll();
     });
   }
+  function loadPlanejamentoServicos(obraId){
+    return supabaseClient.from('planejamento_servicos').select('*').eq('obra_id', obraId).then(function(res){
+      if(res.error){ toast('Não foi possível carregar a matriz de serviços desta obra.','error'); return; }
+      state.planejamentoServicos = (res.data||[]).map(mapPlanejamentoServicoRow);
+      state.planejamentoServicos.sort(function(a,b){ return (a.servicoNome||'').localeCompare(b.servicoNome||''); });
+      renderAll();
+    });
+  }
   var realtimeSubscribed = false;
   function subscribeRealtime(){
     if(realtimeSubscribed) return;
@@ -1847,6 +1899,7 @@
       .on('postgres_changes', {event:'*', schema:'public', table:'produtos_catalogo'}, function(){ loadCatalogoProdutos(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'obra_servicos_contratados'}, function(){ loadObraServicosContratados(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'mapa_marcacoes'}, function(){ if(state.mapaObraId) loadMapaMarcacoes(state.mapaObraId); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'planejamento_servicos'}, function(){ if(state.planejamentoObraId) loadPlanejamentoServicos(state.planejamentoObraId); })
       .subscribe();
   }
 
@@ -1896,6 +1949,7 @@
     document.getElementById('tabTabelaPrecos').style.display = (profile.is_admin || profile.acesso_financeiro) ? '' : 'none';
     document.getElementById('tabObras').style.display = (profile.is_admin || profile.acesso_obras !== false) ? '' : 'none';
     document.getElementById('tabMapa').style.display = (profile.is_admin || profile.acesso_obras !== false) ? '' : 'none';
+    document.getElementById('tabPlanejamento').style.display = (profile.is_admin || profile.acesso_planejamento) ? '' : 'none';
     var podeGestaoObrasLogin = (profile.is_admin || profile.acesso_obras_gestao !== false);
     var clienteFormCardLogin = document.getElementById('clienteFormCard'); if(clienteFormCardLogin) clienteFormCardLogin.style.display = podeGestaoObrasLogin ? '' : 'none';
     var obraFormCardLogin = document.getElementById('obraFormCard'); if(obraFormCardLogin) obraFormCardLogin.style.display = podeGestaoObrasLogin ? '' : 'none';
@@ -1992,10 +2046,11 @@
     var isFinanceiro = document.getElementById('userAcessoFinanceiro').checked;
     var isObras = document.getElementById('userAcessoObras').checked;
     var isObrasGestao = document.getElementById('userAcessoObrasGestao').checked;
+    var isPlanejamento = document.getElementById('userAcessoPlanejamento').checked;
     if(!login || !nome){ toast('Preencha usuário e nome.','error'); return; }
 
     if(editingUserId){
-      supabaseClient.from('profiles').update({ nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao }).eq('id', editingUserId)
+      supabaseClient.from('profiles').update({ nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao, acesso_planejamento:isPlanejamento }).eq('id', editingUserId)
         .then(function(res){
           if(res.error){ toast('Erro ao salvar usuário: '+res.error.message,'error'); return; }
           toast('Usuário atualizado.','ok');
@@ -2030,6 +2085,7 @@
         var updates = {};
         if(isAdmin) updates.is_admin = true;
         if(isFinanceiro) updates.acesso_financeiro = true;
+        if(isPlanejamento) updates.acesso_planejamento = true;
         if(Object.keys(updates).length){ return supabaseClient.from('profiles').update(updates).eq('id', newId); }
       });
     }).then(function(){
@@ -2046,7 +2102,7 @@
     list.innerHTML = state.profiles.map(function(u){
       var isSelf = state.currentUser && state.currentUser.id===u.id;
       return '<div class="obra-card" data-id="'+u.id+'">'+
-        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+(u.acesso_financeiro?'<span class="tag-financeiro">Financeiro</span>':'')+(u.acesso_obras===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Sem Obras</span>':'')+(!u.is_admin && u.acesso_obras!==false && u.acesso_obras_gestao===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Obras só visualizar</span>':'')+'</b>'+
+        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+(u.acesso_financeiro?'<span class="tag-financeiro">Financeiro</span>':'')+(u.acesso_planejamento?'<span class="tag-financeiro">Planejamento</span>':'')+(u.acesso_obras===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Sem Obras</span>':'')+(!u.is_admin && u.acesso_obras!==false && u.acesso_obras_gestao===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Obras só visualizar</span>':'')+'</b>'+
           '<div class="meta">'+esc(u.login)+' · '+esc(u.cargo||'—')+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
@@ -2072,6 +2128,7 @@
         document.getElementById('userAcessoFinanceiro').checked = !!u.acesso_financeiro;
         document.getElementById('userAcessoObras').checked = (u.acesso_obras !== false);
         document.getElementById('userAcessoObrasGestao').checked = (u.acesso_obras_gestao !== false);
+        document.getElementById('userAcessoPlanejamento').checked = !!u.acesso_planejamento;
         document.getElementById('userFormTitle').textContent = 'Editar usuário — '+u.nome;
         document.getElementById('userSubmitBtn').textContent = 'Salvar alterações';
         document.getElementById('userCancelEdit').style.display = '';
@@ -2115,6 +2172,10 @@
   function obrasGestaoCanAccess(){
     var u = state.currentUser;
     return !!(u && (u.is_admin || u.acesso_obras_gestao !== false));
+  }
+  function planejamentoCanAccess(){
+    var u = state.currentUser;
+    return !!(u && (u.is_admin || u.acesso_planejamento));
   }
 
   /* ---------------- tabela de preços (catálogo de serviços) ---------------- */
@@ -2558,6 +2619,319 @@
     });
   }
 
+  /* ---------------- planejamento de obras (matriz de serviços) ---------------- */
+  function planejamentoStatusColor(status){
+    if(status==='Em andamento') return '#FFC400';
+    if(status==='Parcialmente concluído') return '#E8952B';
+    if(status==='Concluído') return '#2E8F4E';
+    if(status==='Bloqueado') return '#C6433F';
+    if(status==='Cancelado') return '#6b6b66';
+    return '#8A8A86';
+  }
+  function planejamentoServicosFiltrados(){
+    var f = state.planejamentoFiltros;
+    var busca = (f.busca||'').trim().toLowerCase();
+    return state.planejamentoServicos.filter(function(s){
+      if(f.status && s.status!==f.status) return false;
+      if(busca){
+        var hay = [s.servicoNome,s.endereco,s.trecho,s.numeroLocal,s.observacoes].join(' ').toLowerCase();
+        if(hay.indexOf(busca)===-1) return false;
+      }
+      return true;
+    });
+  }
+  function registrarPlanejamentoHistorico(servicoId, servicoNome, mudancas){
+    if(!mudancas || !mudancas.length) return;
+    var uid = state.currentUser ? state.currentUser.id : null;
+    var rows = mudancas.map(function(m){
+      return { servico_id: servicoId, servico_nome: servicoNome, campo: m.campo, valor_anterior: (m.antes==null?null:String(m.antes)), valor_novo: (m.depois==null?null:String(m.depois)), alterado_por: uid, origem: 'manual' };
+    });
+    supabaseClient.from('planejamento_historico').insert(rows).then(function(res){
+      if(res.error){ console.error('Erro ao gravar histórico do planejamento:', res.error.message); }
+    });
+  }
+  function renderPlanejamentoObraList(){
+    var list = document.getElementById('planejamentoObraList');
+    if(!list) return;
+    if(!planejamentoCanAccess()){ list.innerHTML = '<p class="empty-hint">Você não tem acesso ao módulo Planejamento.</p>'; return; }
+    if(state.obras.length===0){ list.innerHTML = '<p class="empty-hint">Nenhuma obra cadastrada ainda.</p>'; return; }
+    list.innerHTML = state.obras.map(function(o){
+      return '<div class="obra-card" data-id="'+o.id+'" style="cursor:pointer;">'+
+        '<div class="info"><b>'+esc(o.nome)+(o.exemplo?'<span class="tag-example">exemplo</span>':'')+'</b>'+
+          '<div class="meta">'+esc(o.endereco||'Endereço não informado')+(o.localidade?' · '+esc(o.localidade):'')+'</div>'+
+        '</div>'+
+        '<div class="obra-actions"><span class="chip '+(o.status==='ativa'?'approved':'draft')+'">'+(o.status==='ativa'?'Ativa':'Concluída')+'</span></div>'+
+      '</div>';
+    }).join('');
+    list.querySelectorAll('[data-id]').forEach(function(card){
+      card.addEventListener('click', function(){
+        state.planejamentoObraId = card.getAttribute('data-id');
+        state.planejamentoFiltros = { status:'', busca:'' };
+        state.planejamentoEditId = null;
+        goto('planejamento-obra');
+        loadPlanejamentoServicos(state.planejamentoObraId);
+      });
+    });
+  }
+  function planejamentoFormHtml(){
+    var editing = state.planejamentoEditId ? state.planejamentoServicos.find(function(x){return x.id===state.planejamentoEditId;}) : null;
+    var catalogoOpts = state.catalogoItens.map(function(c){
+      return '<option value="'+esc(c.descricao)+'">'+esc(c.unidade)+'</option>';
+    }).join('');
+    var responsavelOpts = state.profiles.map(function(p){
+      return '<option value="'+p.id+'"'+(editing&&editing.responsavelId===p.id?' selected':'')+'>'+esc(p.nome)+'</option>';
+    }).join('');
+    var equipeOpts = state.equipes.map(function(e){
+      return '<option value="'+e.id+'"'+(editing&&editing.equipeId===e.id?' selected':'')+'>'+esc(e.nome)+'</option>';
+    }).join('');
+    return '<div class="card">'+
+      '<h2><span class="idx">+</span><span>'+(editing?'Editar serviço':'Adicionar serviço à matriz')+'</span></h2>'+
+      '<p class="hint" style="margin:-6px 0 12px;">Selecione um item do catálogo em "Serviço" para preencher a unidade automaticamente (ainda editável), ou digite um serviço livre.</p>'+
+      '<form id="planejamentoForm">'+
+        '<input type="hidden" id="planCatalogoItemId" value="'+esc(editing&&editing.catalogoItemId?editing.catalogoItemId:'')+'">'+
+        '<div class="grid4">'+
+          '<div class="field"><label>Serviço</label><input type="text" id="planServico" list="planCatalogoList" autocomplete="off" required value="'+esc(editing?editing.servicoNome:'')+'"></div>'+
+          '<div class="field"><label>Unidade</label><input type="text" id="planUnidade" list="planUnidadeList" required placeholder="Ex: m, m², unid" value="'+esc(editing?editing.unidade:'')+'"></div>'+
+          '<div class="field"><label>Quantidade prevista</label><input type="number" id="planQuantidade" step="0.001" min="0" required value="'+(editing?editing.quantidadePrevista:'')+'"></div>'+
+          '<div class="field"><label>Status</label><select id="planStatus">'+PLANEJAMENTO_STATUS_OPTS.map(function(o){return '<option'+((editing?editing.status===o:o==='Previsto')?' selected':'')+'>'+o+'</option>';}).join('')+'</select></div>'+
+        '</div>'+
+        '<div class="grid4" style="margin-top:12px;">'+
+          '<div class="field"><label>Endereço/Local</label><input type="text" id="planEndereco" value="'+esc(editing?editing.endereco:'')+'"></div>'+
+          '<div class="field"><label>Trecho</label><input type="text" id="planTrecho" value="'+esc(editing?editing.trecho:'')+'"></div>'+
+          '<div class="field"><label>Número do local</label><input type="text" id="planNumeroLocal" value="'+esc(editing?editing.numeroLocal:'')+'"></div>'+
+          '<div class="field"><label>Prioridade</label><select id="planPrioridade">'+PLANEJAMENTO_PRIORIDADE_OPTS.map(function(o){return '<option'+((editing?editing.prioridade===o:o==='Média')?' selected':'')+'>'+o+'</option>';}).join('')+'</select></div>'+
+        '</div>'+
+        '<div class="grid4" style="margin-top:12px;">'+
+          '<div class="field"><label>Profundidade (m)</label><input type="number" id="planProfundidade" step="0.01" min="0" value="'+(editing&&editing.profundidade!=null?editing.profundidade:'')+'"></div>'+
+          '<div class="field"><label>Comprimento (m)</label><input type="number" id="planComprimento" step="0.01" min="0" value="'+(editing&&editing.comprimento!=null?editing.comprimento:'')+'"></div>'+
+          '<div class="field"><label>Largura (m)</label><input type="number" id="planLargura" step="0.01" min="0" value="'+(editing&&editing.largura!=null?editing.largura:'')+'"></div>'+
+          '<div class="field"><label>Diâmetro (mm)</label><input type="number" id="planDiametro" step="0.01" min="0" value="'+(editing&&editing.diametro!=null?editing.diametro:'')+'"></div>'+
+        '</div>'+
+        '<div class="grid4" style="margin-top:12px;">'+
+          '<div class="field"><label>Data início prevista</label><input type="date" id="planDataInicio" value="'+esc(editing?(editing.dataInicioPrevista||''):'')+'"></div>'+
+          '<div class="field"><label>Data fim prevista</label><input type="date" id="planDataFim" value="'+esc(editing?(editing.dataFimPrevista||''):'')+'"></div>'+
+          '<div class="field"><label>Responsável</label><select id="planResponsavel"><option value="">Nenhum</option>'+responsavelOpts+'</select></div>'+
+          '<div class="field"><label>Equipe</label><select id="planEquipe"><option value="">Nenhuma</option>'+equipeOpts+'</select></div>'+
+        '</div>'+
+        '<div class="grid2" style="margin-top:12px;">'+
+          '<div class="field full"><label>Observações</label><input type="text" id="planObservacoes" value="'+esc(editing?editing.observacoes:'')+'"></div>'+
+        '</div>'+
+        '<datalist id="planCatalogoList">'+catalogoOpts+'</datalist>'+
+        '<datalist id="planUnidadeList">'+FIN_UNIDADE_OPTS.map(function(u){return '<option value="'+esc(u)+'">';}).join('')+'</datalist>'+
+        '<div class="form-actions">'+
+          (editing?'<button type="button" class="btn ghost" id="planCancelEdit">Cancelar edição</button>':'')+
+          '<button type="submit" class="btn primary">'+(editing?'Salvar alterações':'Adicionar à matriz')+'</button>'+
+        '</div>'+
+      '</form>'+
+    '</div>';
+  }
+  function planejamentoTabelaHtml(servicos){
+    if(!servicos.length){
+      return '<div class="table-wrap"><p class="empty-hint" style="padding:20px;">Nenhum serviço cadastrado na matriz desta obra ainda.</p></div>';
+    }
+    var rowsHtml = servicos.map(function(s, i){
+      var numero = String(i+1);
+      while(numero.length<3) numero = '0'+numero;
+      return '<tr data-id="'+s.id+'">'+
+        '<td data-label="Nº">'+numero+'</td>'+
+        '<td data-label="Serviço">'+esc(s.servicoNome)+(s.observacoes?'<div style="color:var(--steel);font-size:11.5px;">'+esc(s.observacoes)+'</div>':'')+'</td>'+
+        '<td data-label="Endereço/Local">'+esc(s.endereco||'—')+(s.numeroLocal?', nº '+esc(s.numeroLocal):'')+(s.trecho?'<div style="color:var(--steel);font-size:11.5px;">'+esc(s.trecho)+'</div>':'')+'</td>'+
+        '<td class="num" data-label="Quantidade">'+fmtQtd(s.quantidadePrevista)+' '+esc(s.unidade)+'</td>'+
+        '<td data-label="Profundidade">'+(s.profundidade!=null?fmtQtd(s.profundidade)+' m':'—')+'</td>'+
+        '<td data-label="Datas">'+fmtDate(s.dataInicioPrevista)+' a '+fmtDate(s.dataFimPrevista)+'</td>'+
+        '<td data-label="Status"><span class="chip" style="background:'+planejamentoStatusColor(s.status)+';color:#fff;">'+esc(s.status)+'</span></td>'+
+        '<td style="text-align:right;" data-label="Ações">'+
+          '<button type="button" class="btn ghost sm" data-edit="'+s.id+'">Editar</button> '+
+          '<button type="button" class="btn ghost sm" data-dup="'+s.id+'">Duplicar</button> '+
+          '<button type="button" class="btn danger sm" data-del="'+s.id+'">Excluir</button>'+
+        '</td>'+
+      '</tr>';
+    }).join('');
+    return '<div class="table-wrap">'+
+      '<table class="fin-list">'+
+        '<thead><tr><th>Nº</th><th>Serviço</th><th>Endereço/Local</th><th>Quantidade</th><th>Profundidade</th><th>Datas previstas</th><th>Status</th><th></th></tr></thead>'+
+        '<tbody>'+rowsHtml+'</tbody>'+
+      '</table>'+
+    '</div>';
+  }
+  function renderPlanejamentoObra(){
+    var root = document.getElementById('planejamentoObraContent');
+    if(!root) return;
+    if(!planejamentoCanAccess()){ root.innerHTML = '<p class="empty-hint">Você não tem acesso ao módulo Planejamento.</p>'; return; }
+    var obra = state.obras.find(function(o){ return o.id===state.planejamentoObraId; });
+    if(!obra){ root.innerHTML = '<p class="empty-hint">Obra não encontrada.</p>'; return; }
+    var todos = state.planejamentoServicos;
+    var filtrados = planejamentoServicosFiltrados();
+    var totalServicos = todos.length;
+    var concluidos = todos.filter(function(s){ return s.status==='Concluído'; }).length;
+    var andamento = todos.filter(function(s){ return s.status==='Em andamento' || s.status==='Parcialmente concluído'; }).length;
+    var bloqueados = todos.filter(function(s){ return s.status==='Bloqueado'; }).length;
+    var f = state.planejamentoFiltros;
+    root.innerHTML =
+      '<div class="page-head">'+
+        '<div><h1>'+esc(obra.nome)+'</h1><p>Matriz de serviços e planejamento desta obra. O acompanhamento previsto × realizado será calculado automaticamente a partir do RDO numa próxima etapa.</p></div>'+
+      '</div>'+
+      '<div class="kpi-row">'+
+        kpiTile(totalServicos, 'Serviços na matriz', 'accent')+
+        kpiTile(concluidos, 'Concluídos', '')+
+        kpiTile(andamento, 'Em andamento', 'pend')+
+        kpiTile(bloqueados, 'Bloqueados', 'warn')+
+      '</div>'+
+      '<div class="filters" id="planFilterBar">'+
+        '<div class="field"><label>Status</label><select id="planFStatus"><option value="">Todos</option>'+PLANEJAMENTO_STATUS_OPTS.map(function(o){return '<option value="'+esc(o)+'"'+(f.status===o?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select></div>'+
+        '<div class="field full"><label>Buscar</label><input type="text" id="planFBusca" placeholder="Serviço, endereço, trecho..." value="'+esc(f.busca)+'"></div>'+
+      '</div>'+
+      planejamentoFormHtml()+
+      '<div class="card">'+
+        '<h2><span class="idx">M</span><span>Matriz de serviços'+(filtrados.length!==todos.length?' ('+filtrados.length+' de '+todos.length+')':'')+'</span></h2>'+
+        planejamentoTabelaHtml(filtrados)+
+      '</div>';
+    wirePlanejamentoFilterBar(obra);
+    wirePlanejamentoForm(obra);
+    wirePlanejamentoTableActions(obra);
+  }
+  function wirePlanejamentoFilterBar(obra){
+    var bar = document.getElementById('planFilterBar');
+    if(!bar) return;
+    var st = document.getElementById('planFStatus');
+    if(st) st.addEventListener('change', function(){ state.planejamentoFiltros.status = st.value; renderPlanejamentoObra(); });
+    var bs = document.getElementById('planFBusca');
+    if(bs){
+      bs.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); state.planejamentoFiltros.busca = bs.value; renderPlanejamentoObra(); } });
+      bs.addEventListener('blur', function(){ state.planejamentoFiltros.busca = bs.value; renderPlanejamentoObra(); });
+    }
+  }
+  function wirePlanejamentoForm(obra){
+    var form = document.getElementById('planejamentoForm');
+    if(!form) return;
+    var catalogoItemIdInput = document.getElementById('planCatalogoItemId');
+    var servicoInput = document.getElementById('planServico');
+    var unidadeInput = document.getElementById('planUnidade');
+
+    function findCatalogoMatch(txt){
+      var alvo = String(txt||'').trim().toLowerCase();
+      if(!alvo) return null;
+      return state.catalogoItens.find(function(c){ return String(c.descricao||'').trim().toLowerCase()===alvo; }) || null;
+    }
+    function aplicarCatalogo(c){
+      if(!c){ catalogoItemIdInput.value = ''; return; }
+      catalogoItemIdInput.value = c.id;
+      unidadeInput.value = c.unidade;
+    }
+    if(servicoInput){
+      servicoInput.addEventListener('input', function(){ aplicarCatalogo(findCatalogoMatch(servicoInput.value)); });
+    }
+    wireDatePlaceholder('planDataInicio');
+    wireDatePlaceholder('planDataFim');
+
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      function numOrNull(id){ var v = document.getElementById(id).value; return v===''?null:Number(v); }
+      var payload = {
+        obra_id: obra.id,
+        catalogo_item_id: catalogoItemIdInput.value || null,
+        servico_nome: servicoInput.value.trim(),
+        unidade: unidadeInput.value.trim(),
+        quantidade_prevista: Number(document.getElementById('planQuantidade').value),
+        status: document.getElementById('planStatus').value,
+        endereco: document.getElementById('planEndereco').value.trim() || null,
+        trecho: document.getElementById('planTrecho').value.trim() || null,
+        numero_local: document.getElementById('planNumeroLocal').value.trim() || null,
+        prioridade: document.getElementById('planPrioridade').value,
+        profundidade: numOrNull('planProfundidade'),
+        comprimento: numOrNull('planComprimento'),
+        largura: numOrNull('planLargura'),
+        diametro: numOrNull('planDiametro'),
+        data_inicio_prevista: document.getElementById('planDataInicio').value || null,
+        data_fim_prevista: document.getElementById('planDataFim').value || null,
+        responsavel_id: document.getElementById('planResponsavel').value || null,
+        equipe_id: document.getElementById('planEquipe').value || null,
+        observacoes: document.getElementById('planObservacoes').value.trim() || null
+      };
+      if(!payload.servico_nome || !payload.unidade){ toast('Preencha o serviço e a unidade.','error'); return; }
+      if(!(payload.quantidade_prevista>=0)){ toast('Quantidade prevista precisa ser um número válido.','error'); return; }
+
+      if(state.planejamentoEditId){
+        var anterior = state.planejamentoServicos.find(function(x){ return x.id===state.planejamentoEditId; });
+        var editId = state.planejamentoEditId;
+        supabaseClient.from('planejamento_servicos').update(payload).eq('id', editId).then(function(res){
+          if(res.error){ toast('Erro ao salvar serviço: '+res.error.message,'error'); return; }
+          if(anterior){
+            var campos = [
+              {campo:'Quantidade prevista', antes:anterior.quantidadePrevista, depois:payload.quantidade_prevista},
+              {campo:'Status', antes:anterior.status, depois:payload.status},
+              {campo:'Endereço/Local', antes:anterior.endereco, depois:payload.endereco},
+              {campo:'Data início prevista', antes:anterior.dataInicioPrevista, depois:payload.data_inicio_prevista},
+              {campo:'Data fim prevista', antes:anterior.dataFimPrevista, depois:payload.data_fim_prevista}
+            ].filter(function(c){ return String(c.antes==null?'':c.antes) !== String(c.depois==null?'':c.depois); });
+            registrarPlanejamentoHistorico(editId, payload.servico_nome, campos);
+          }
+          toast('Serviço atualizado.','ok');
+          state.planejamentoEditId = null;
+          loadPlanejamentoServicos(obra.id);
+        });
+        return;
+      }
+      supabaseClient.from('planejamento_servicos').insert(payload).select().then(function(res){
+        if(res.error){ toast('Erro ao adicionar serviço: '+res.error.message,'error'); return; }
+        var novo = res.data && res.data[0];
+        if(novo) registrarPlanejamentoHistorico(novo.id, payload.servico_nome, [{campo:'Serviço criado', antes:null, depois:payload.quantidade_prevista+' '+payload.unidade}]);
+        toast('Serviço adicionado à matriz.','ok');
+        loadPlanejamentoServicos(obra.id);
+      });
+    });
+    var cancel = document.getElementById('planCancelEdit');
+    if(cancel) cancel.addEventListener('click', function(){ state.planejamentoEditId = null; renderPlanejamentoObra(); });
+  }
+  function wirePlanejamentoTableActions(obra){
+    var root = document.getElementById('planejamentoObraContent');
+    root.querySelectorAll('[data-edit]').forEach(function(b){
+      b.addEventListener('click', function(){
+        state.planejamentoEditId = b.getAttribute('data-edit');
+        renderPlanejamentoObra();
+        window.scrollTo({top:0, behavior:'smooth'});
+      });
+    });
+    root.querySelectorAll('[data-dup]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-dup');
+        var s = state.planejamentoServicos.find(function(x){ return x.id===id; });
+        if(!s) return;
+        var payload = {
+          obra_id: obra.id, catalogo_item_id: s.catalogoItemId, servico_nome: s.servicoNome, unidade: s.unidade,
+          quantidade_prevista: s.quantidadePrevista, status: 'Previsto', endereco: s.endereco, trecho: s.trecho,
+          numero_local: s.numeroLocal, prioridade: s.prioridade, profundidade: s.profundidade, comprimento: s.comprimento,
+          largura: s.largura, diametro: s.diametro, data_inicio_prevista: s.dataInicioPrevista||null, data_fim_prevista: s.dataFimPrevista||null,
+          responsavel_id: s.responsavelId, equipe_id: s.equipeId, observacoes: s.observacoes
+        };
+        supabaseClient.from('planejamento_servicos').insert(payload).select().then(function(res){
+          if(res.error){ toast('Erro ao duplicar serviço: '+res.error.message,'error'); return; }
+          var novo = res.data && res.data[0];
+          if(novo) registrarPlanejamentoHistorico(novo.id, payload.servico_nome, [{campo:'Serviço duplicado de outra linha', antes:null, depois:payload.quantidade_prevista+' '+payload.unidade}]);
+          toast('Serviço duplicado.','ok');
+          loadPlanejamentoServicos(obra.id);
+        });
+      });
+    });
+    root.querySelectorAll('[data-del]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-del');
+        var s = state.planejamentoServicos.find(function(x){ return x.id===id; });
+        confirmModal({ title:'Excluir serviço', msg:'Isso remove este serviço da matriz de planejamento desta obra. Deseja continuar?', okLabel:'Excluir', danger:true })
+          .then(function(ok){
+            if(!ok) return;
+            if(s) registrarPlanejamentoHistorico(id, s.servicoNome, [{campo:'Serviço excluído', antes:s.quantidadePrevista+' '+s.unidade, depois:null}]);
+            supabaseClient.from('planejamento_servicos').delete().eq('id', id).then(function(res){
+              if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
+              toast('Serviço removido.','ok');
+              if(state.planejamentoEditId===id) state.planejamentoEditId=null;
+              loadPlanejamentoServicos(obra.id);
+            });
+          });
+      });
+    });
+  }
+
   /* ---------------- computed / render: dashboard ---------------- */
   function renderAll(){
     if(state.view==='dashboard'){ renderKpis(); renderFilters(); renderRdoTable(); }
@@ -2574,6 +2948,8 @@
     if(state.view==='financeiro'){ renderFinanceiroObraList(); }
     if(state.view==='financeiro-obra' && state.financeiroObraId){ renderFinanceiroObra(); }
     if(state.view==='tabelaprecos'){ renderTabelaPrecos(); }
+    if(state.view==='planejamento'){ renderPlanejamentoObraList(); }
+    if(state.view==='planejamento-obra' && state.planejamentoObraId){ renderPlanejamentoObra(); }
   }
 
   function renderKpis(){
