@@ -649,6 +649,7 @@
       <button class="tab-btn" data-view="financeiro" id="tabFinanceiro" style="display:none">Financeiro</button>
       <button class="tab-btn" data-view="tabelaprecos" id="tabTabelaPrecos" style="display:none">Tabela de Preços</button>
       <button class="tab-btn" data-view="planejamento" id="tabPlanejamento" style="display:none">Planejamento</button>
+      <button class="tab-btn" data-view="projetos" id="tabProjetos" style="display:none">Projetos</button>
       <button class="tab-btn" data-view="users" id="tabUsers" style="display:none">Usuários</button>
     </nav>
     <div class="user-box" id="userBox"></div>
@@ -873,6 +874,23 @@
         <button class="btn ghost" data-goto="planejamento">← Voltar ao Planejamento</button>
       </div>
       <div id="planejamentoObraContent"></div>
+    </section>
+
+    <section id="view-projetos" class="view">
+      <div class="page-head">
+        <div>
+          <h1>Projetos</h1>
+          <p>Anexe o projeto de uma obra para gerar a Matriz de Serviços e a fila do Mapa automaticamente.</p>
+        </div>
+      </div>
+      <div id="projetosObraList"></div>
+    </section>
+
+    <section id="view-projetos-obra" class="view">
+      <div class="page-head">
+        <button class="btn ghost" data-goto="projetos">← Voltar a Projetos</button>
+      </div>
+      <div id="projetosObraContent"></div>
     </section>
 
     <section id="view-detail" class="view">
@@ -1137,7 +1155,9 @@
     planejamentoImportAberto: false,
     mapaFilaIA: [],
     mapaFilaAtivaId: null,
-    mapaFilaImportAberto: false
+    mapaFilaImportAberto: false,
+    projetosObraId: null,
+    projetos: []
   };
 
   var CLIMA_OPTS = ['Praticável','Parcialmente praticável','Impraticável'];
@@ -1525,6 +1545,7 @@
     if((view==='mapa'||view==='mapa-obra') && !obrasCanAccess()) return;
     if(view==='clientes' && !obrasGestaoCanAccess()) return;
     if((view==='planejamento'||view==='planejamento-obra') && !planejamentoCanAccess()) return;
+    if((view==='projetos'||view==='projetos-obra') && !planejamentoCanAccess()) return;
     if(view==='tabelaprecos'){
       if(!financeiroCanAccess()) return;
       if(!state.tabelaPrecosUnlocked){
@@ -1834,6 +1855,7 @@
           document.getElementById('tabObras').style.display = (fresh.is_admin || fresh.acesso_obras !== false) ? '' : 'none';
           document.getElementById('tabMapa').style.display = (fresh.is_admin || fresh.acesso_obras !== false) ? '' : 'none';
           document.getElementById('tabPlanejamento').style.display = (fresh.is_admin || fresh.acesso_planejamento) ? '' : 'none';
+          document.getElementById('tabProjetos').style.display = (fresh.is_admin || fresh.acesso_planejamento) ? '' : 'none';
           var podeGestaoObras = (fresh.is_admin || fresh.acesso_obras_gestao !== false);
           var clienteFormCard = document.getElementById('clienteFormCard'); if(clienteFormCard) clienteFormCard.style.display = podeGestaoObras ? '' : 'none';
           var obraFormCard = document.getElementById('obraFormCard'); if(obraFormCard) obraFormCard.style.display = podeGestaoObras ? '' : 'none';
@@ -1886,6 +1908,40 @@
       renderAll();
     });
   }
+  var PROJETO_MAX_MB = 60;
+  function mapProjetoObraRow(row){
+    var url = '';
+    try{ url = supabaseClient.storage.from('projetos-obras').getPublicUrl(row.arquivo_path).data.publicUrl; }catch(e){}
+    return {
+      id:row.id, obraId:row.obra_id, nome:row.nome, tipo:row.tipo||'',
+      arquivoPath:row.arquivo_path, arquivoUrl:url, tamanhoBytes:row.tamanho_bytes||0,
+      statusAnalise:row.status_analise||'pendente', qtdServicosIdentificados:row.qtd_servicos_identificados,
+      observacoes:row.observacoes||'', uploadedBy:row.uploaded_by, createdAt:row.created_at,
+      analisadoEm:row.analisado_em||null
+    };
+  }
+  function loadProjetosObra(obraId){
+    return supabaseClient.from('projetos_obra').select('*').eq('obra_id', obraId).then(function(res){
+      if(res.error){ toast('Não foi possível carregar os projetos desta obra.','error'); return; }
+      if(state.projetosObraId!==obraId) return;
+      state.projetos = (res.data||[]).map(mapProjetoObraRow);
+      state.projetos.sort(function(a,b){ return (b.createdAt||'').localeCompare(a.createdAt||''); });
+      if(state.view==='projetos-obra') renderProjetosObraContent();
+    });
+  }
+  function uploadProjetoFile(file, obraId){
+    var safeName = file.name.replace(/[^a-zA-Z0-9_.-]/g,'_');
+    var path = obraId + '/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '_' + safeName;
+    return supabaseClient.storage.from('projetos-obras').upload(path, file, { cacheControl:'3600', upsert:false })
+      .then(function(res){
+        if(res.error) throw res.error;
+        return supabaseClient.from('projetos_obra').insert({
+          obra_id: obraId, nome: file.name, tipo: file.type || safeName.split('.').pop() || '',
+          arquivo_path: path, tamanho_bytes: file.size, status_analise: 'pendente',
+          uploaded_by: state.currentUser ? state.currentUser.id : null
+        });
+      });
+  }
   var realtimeSubscribed = false;
   function subscribeRealtime(){
     if(realtimeSubscribed) return;
@@ -1905,6 +1961,7 @@
       .on('postgres_changes', {event:'*', schema:'public', table:'mapa_marcacoes'}, function(){ if(state.mapaObraId) loadMapaMarcacoes(state.mapaObraId); })
       .on('postgres_changes', {event:'*', schema:'public', table:'planejamento_servicos'}, function(){ if(state.planejamentoObraId) loadPlanejamentoServicos(state.planejamentoObraId); })
       .on('postgres_changes', {event:'*', schema:'public', table:'mapa_fila_ia'}, function(){ if(state.mapaObraId) loadMapaFilaIA(state.mapaObraId); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'projetos_obra'}, function(){ if(state.projetosObraId) loadProjetosObra(state.projetosObraId); })
       .subscribe();
   }
 
@@ -1955,6 +2012,7 @@
     document.getElementById('tabObras').style.display = (profile.is_admin || profile.acesso_obras !== false) ? '' : 'none';
     document.getElementById('tabMapa').style.display = (profile.is_admin || profile.acesso_obras !== false) ? '' : 'none';
     document.getElementById('tabPlanejamento').style.display = (profile.is_admin || profile.acesso_planejamento) ? '' : 'none';
+    document.getElementById('tabProjetos').style.display = (profile.is_admin || profile.acesso_planejamento) ? '' : 'none';
     var podeGestaoObrasLogin = (profile.is_admin || profile.acesso_obras_gestao !== false);
     var clienteFormCardLogin = document.getElementById('clienteFormCard'); if(clienteFormCardLogin) clienteFormCardLogin.style.display = podeGestaoObrasLogin ? '' : 'none';
     var obraFormCardLogin = document.getElementById('obraFormCard'); if(obraFormCardLogin) obraFormCardLogin.style.display = podeGestaoObrasLogin ? '' : 'none';
@@ -2921,6 +2979,129 @@
     wirePlanejamentoForm(obra);
     wirePlanejamentoTableActions(obra);
   }
+
+  function renderProjetosObraList(){
+    var list = document.getElementById('projetosObraList');
+    if(!list) return;
+    if(!planejamentoCanAccess()){ list.innerHTML = '<p class="empty-hint">Você não tem acesso ao módulo Projetos.</p>'; return; }
+    if(state.obras.length===0){ list.innerHTML = '<p class="empty-hint">Nenhuma obra cadastrada ainda.</p>'; return; }
+    list.innerHTML = state.obras.map(function(o){
+      return '<div class="obra-card" data-id="'+o.id+'" style="cursor:pointer;">'+
+        '<div class="info"><b>'+esc(o.nome)+(o.exemplo?'<span class="tag-example">exemplo</span>':'')+'</b>'+
+          '<div class="meta">'+esc(o.endereco||'Endereço não informado')+(o.localidade?' · '+esc(o.localidade):'')+'</div>'+
+        '</div>'+
+        '<div class="obra-actions"><span class="chip '+(o.status==='ativa'?'approved':'draft')+'">'+(o.status==='ativa'?'Ativa':'Concluída')+'</span></div>'+
+      '</div>';
+    }).join('');
+    list.querySelectorAll('[data-id]').forEach(function(card){
+      card.addEventListener('click', function(){
+        state.projetosObraId = card.getAttribute('data-id');
+        state.projetos = [];
+        goto('projetos-obra');
+        loadProjetosObra(state.projetosObraId);
+      });
+    });
+  }
+  function projetoStatusChip(status){
+    if(status==='analisando') return '<span class="chip" style="background:#FFF3CC;color:#7A5900;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:2px solid rgba(122,89,0,.35);border-top-color:#7A5900;"></span> Analisando</span>';
+    if(status==='aguardando_analise') return '<span class="chip" style="background:#FFF3CC;color:#7A5900;">Aguardando análise</span>';
+    if(status==='analisado') return '<span class="chip approved">Analisado</span>';
+    if(status==='erro') return '<span class="chip rejected">Erro</span>';
+    return '<span class="chip draft">Pendente</span>';
+  }
+  function projetosListaHtml(){
+    if(!state.projetos.length){
+      return '<div class="table-wrap"><p class="empty-hint" style="padding:20px;">Nenhum projeto anexado ainda.</p></div>';
+    }
+    return '<div class="checklist-wrap">'+state.projetos.map(function(p){
+      var kb = p.tamanhoBytes ? (p.tamanhoBytes/1024/1024).toFixed(1)+' MB' : '';
+      var podeAnalisar = (p.statusAnalise==='pendente' || p.statusAnalise==='erro');
+      return '<div class="checklist-item" data-id="'+p.id+'" style="justify-content:space-between;flex-wrap:wrap;">'+
+        '<div><b>'+esc(p.nome)+'</b><div class="hint" style="margin:2px 0 0;">'+kb+(p.qtdServicosIdentificados!=null?' · '+p.qtdServicosIdentificados+' serviços identificados':'')+'</div></div>'+
+        '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
+          projetoStatusChip(p.statusAnalise)+
+          (podeAnalisar ? '<button type="button" class="btn primary sm" data-analisar="'+p.id+'">Analisar projeto</button>' : '')+
+          (p.arquivoUrl ? '<a href="'+esc(p.arquivoUrl)+'" target="_blank" rel="noopener" class="btn ghost sm">Abrir arquivo</a>' : '')+
+          '<button type="button" class="btn danger sm" data-delprojeto="'+p.id+'">Excluir</button>'+
+        '</div>'+
+      '</div>';
+    }).join('')+'</div>';
+  }
+  function renderProjetosObraContent(){
+    var root = document.getElementById('projetosObraContent');
+    if(!root) return;
+    if(!planejamentoCanAccess()){ root.innerHTML = '<p class="empty-hint">Você não tem acesso ao módulo Projetos.</p>'; return; }
+    var obra = state.obras.find(function(o){ return o.id===state.projetosObraId; });
+    if(!obra){ root.innerHTML = '<p class="empty-hint">Obra não encontrada.</p>'; return; }
+    root.innerHTML =
+      '<div class="page-head"><div><h1>'+esc(obra.nome)+'</h1><p>Anexe o projeto desta obra para gerar a Matriz de Serviços e a fila do Mapa automaticamente.</p></div></div>'+
+      '<div class="card">'+
+        '<h2><span class="idx">+</span><span>Anexar novo projeto</span></h2>'+
+        '<p class="hint">Não importa o formato — PDF, planta CAD exportada (DWG/DXF), imagem ou planilha. A leitura se adapta ao que for enviado, e nunca inventa dado.</p>'+
+        '<input type="file" id="projetoFileInput" multiple>'+
+      '</div>'+
+      '<div class="card">'+
+        '<h2><span class="idx">P</span><span>Projetos anexados'+(state.projetos.length?' ('+state.projetos.length+')':'')+'</span></h2>'+
+        '<p class="hint">Clique em "Analisar projeto" para marcar como aguardando análise, e avise no chat com Claude — a leitura do arquivo e a geração da Matriz e do Mapa acontecem por lá.</p>'+
+        projetosListaHtml()+
+      '</div>';
+    wireProjetosObraEvents(obra);
+  }
+  function wireProjetosObraEvents(obra){
+    var input = document.getElementById('projetoFileInput');
+    if(input){
+      input.addEventListener('change', function(e){
+        var files = Array.prototype.slice.call(e.target.files||[]);
+        var maxBytes = PROJETO_MAX_MB*1024*1024;
+        var tooBig = files.filter(function(f){ return f.size > maxBytes; });
+        files = files.filter(function(f){ return f.size <= maxBytes; });
+        if(tooBig.length){
+          toast('Arquivo(s) muito grande(s) (máx. '+PROJETO_MAX_MB+'MB): '+tooBig.map(function(f){return f.name;}).join(', '),'error');
+        }
+        e.target.value = '';
+        if(!files.length) return;
+        if(!navigator.onLine){
+          toast('Sem conexão: envio de projeto exige internet.','error');
+          return;
+        }
+        Promise.all(files.map(function(f){
+          return uploadProjetoFile(f, obra.id).catch(function(err){
+            toast('Falha ao enviar "'+f.name+'": '+(err && err.message ? err.message : err),'error');
+          });
+        })).then(function(){
+          toast('Projeto(s) enviado(s).','ok');
+          loadProjetosObra(obra.id);
+        });
+      });
+    }
+    var root = document.getElementById('projetosObraContent');
+    root.querySelectorAll('[data-analisar]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-analisar');
+        supabaseClient.from('projetos_obra').update({ status_analise:'aguardando_analise' }).eq('id', id).then(function(res){
+          if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
+          toast('Marcado como aguardando análise. Avise no chat com Claude para eu buscar o arquivo e gerar a Matriz e o Mapa.','ok');
+          loadProjetosObra(obra.id);
+        });
+      });
+    });
+    root.querySelectorAll('[data-delprojeto]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-delprojeto');
+        var p = state.projetos.find(function(x){ return x.id===id; });
+        confirmModal({ title:'Excluir projeto', msg:'Isso remove o arquivo e o registro deste projeto. Deseja continuar?', okLabel:'Excluir', danger:true })
+          .then(function(ok){
+            if(!ok) return;
+            supabaseClient.from('projetos_obra').delete().eq('id', id).then(function(res){
+              if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
+              if(p && p.arquivoPath) supabaseClient.storage.from('projetos-obras').remove([p.arquivoPath]);
+              toast('Projeto removido.','ok');
+              loadProjetosObra(obra.id);
+            });
+          });
+      });
+    });
+  }
   function wirePlanejamentoFilterBar(obra){
     var bar = document.getElementById('planFilterBar');
     if(!bar) return;
@@ -3093,6 +3274,8 @@
     if(state.view==='tabelaprecos'){ renderTabelaPrecos(); }
     if(state.view==='planejamento'){ renderPlanejamentoObraList(); }
     if(state.view==='planejamento-obra' && state.planejamentoObraId){ renderPlanejamentoObra(); }
+    if(state.view==='projetos'){ renderProjetosObraList(); }
+    if(state.view==='projetos-obra' && state.projetosObraId){ renderProjetosObraContent(); }
   }
 
   function renderKpis(){
