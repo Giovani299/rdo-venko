@@ -3013,11 +3013,13 @@
           return;
         }
         Promise.all(files.map(function(f){
-          return uploadProjetoFile(f, obra.id).catch(function(err){
+          return uploadProjetoFile(f, obra.id).then(function(){ return true; }).catch(function(err){
             toast('Falha ao enviar "'+f.name+'": '+(err && err.message ? err.message : err),'error');
+            return false;
           });
-        })).then(function(){
-          toast('Projeto(s) enviado(s).','ok');
+        })).then(function(resultados){
+          var okCount = resultados.filter(Boolean).length;
+          if(okCount) toast(okCount+' de '+files.length+' projeto(s) enviado(s).','ok');
           loadProjetosObra(obra.id);
         });
       });
