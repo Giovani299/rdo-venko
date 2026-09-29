@@ -3270,14 +3270,46 @@
       .catch(function(){ /* sem geocodificação — mapa fica no centro padrão */ });
   }
 
+  function reverseGeocodeMarcacao(lat, lng){
+    return fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat='+lat+'&lon='+lng+'&zoom=18&addressdetails=1')
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(data){
+        if(!data || !data.address) return null;
+        var a = data.address;
+        var road = a.road || a.pedestrian || a.footway || a.residential || '';
+        var bairro = a.suburb || a.neighbourhood || a.quarter || '';
+        var cidade = a.city || a.town || a.municipality || a.village || '';
+        var estado = a.state || '';
+        var ruaCompleta = [road, bairro, cidade, estado].filter(Boolean).join(', ');
+        return { rua: ruaCompleta || road || '', numero: a.house_number || '' };
+      })
+      .catch(function(){ return null; });
+  }
+
+  function preencherEnderecoAutomatico(latlng){
+    var ruaInp = document.getElementById('marcRua');
+    if(ruaInp){ ruaInp.placeholder = 'Buscando endereço...'; }
+    reverseGeocodeMarcacao(latlng.lat, latlng.lng).then(function(res){
+      var ruaEl = document.getElementById('marcRua');
+      var numEl = document.getElementById('marcNumServico');
+      if(ruaEl){
+        ruaEl.placeholder = 'Nome da rua';
+        if(!ruaEl.value && res && res.rua) ruaEl.value = res.rua;
+      }
+      if(numEl && !numEl.value && res && res.numero){ numEl.value = res.numero; }
+    });
+  }
+
   function onMapaClick(e){
     if(!obrasGestaoCanAccess()) return;
     if(state.mapaMode==='pv'){
       var catalogoItemId = state.mapaDesenhoCatalogoItemId||null;
+      var latlngPv = { lat:e.latlng.lat, lng:e.latlng.lng };
       state.mapaMode = null;
       state.mapaDesenhoCatalogoItemId = null;
       updateMapaModeUI();
-      abrirModalMarcacao({ tipo:'pv', geom:[{lat:e.latlng.lat, lng:e.latlng.lng}], catalogoItemId: catalogoItemId });
+      abrirModalMarcacao({ tipo:'pv', geom:[latlngPv], catalogoItemId: catalogoItemId });
+      preencherEnderecoAutomatico(latlngPv);
     } else if(state.mapaMode==='ramal'){
       state.mapaRamalPoints.push({lat:e.latlng.lat, lng:e.latlng.lng});
       drawTempRamal();
@@ -3338,6 +3370,7 @@
       updateMapaModeUI();
       if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
       abrirModalMarcacao({ tipo:'ramal', geom: geom, catalogoItemId: catalogoItemId });
+      preencherEnderecoAutomatico(geom[0]);
     });
     if(btnCancelar) btnCancelar.addEventListener('click', cancelarRamal);
   }
@@ -3440,7 +3473,7 @@
     var camposIdentificacao = canGestao ?
       ('<div class="field" style="margin-bottom:10px;"><label>Nome do local (prédio/estabelecimento)</label><input type="text" id="marcNomeLocal" value="'+esc(m.nomeLocal||'')+'" placeholder="Ex: Edifício Aurora, Mercado Bom Preço"></div>'+
         '<div class="field" style="margin-bottom:10px;"><label>Rua</label><input type="text" id="marcRua" value="'+esc(m.rua||'')+'" placeholder="Nome da rua"></div>'+
-        '<div class="field" style="margin-bottom:10px;"><label>Número do serviço</label><input type="text" id="marcNumServico" value="'+esc(m.numeroServico||'')+'" placeholder="Ex: OS-1234"></div>'+
+        '<div class="field" style="margin-bottom:10px;"><label>Número (residência)</label><input type="text" id="marcNumServico" value="'+esc(m.numeroServico||'')+'" placeholder="Ex: 555"></div>'+
         '<div class="field" style="margin-bottom:10px;"><label>Serviço (tabela de preços)</label><select id="marcServico"><option value="">— Nenhum —</option>'+mapaServicoOptionsHtml(m.obraId||state.mapaObraId, m.catalogoItemId)+'</select></div>')
       : (isEdit ? ('<div class="field" style="margin-bottom:10px;"><label>Local</label><div class="hint" style="margin:0;">'+esc(m.nomeLocal||m.rua||'(sem endereço)')+(m.nomeLocal&&m.rua?' · '+esc(m.rua):'')+(m.numeroServico?' · Nº '+esc(m.numeroServico):'')+'</div></div>') : '');
     wrap.innerHTML =
