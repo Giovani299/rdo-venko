@@ -446,6 +446,8 @@
   .leaflet-tooltip.map-pin-label b{font-weight:800;color:#000;}
   .leaflet-tooltip.map-pin-label .num{color:#000;font-weight:700;margin-left:3px;}
   .leaflet-tooltip-top.map-pin-label::before,.leaflet-tooltip-bottom.map-pin-label::before,.leaflet-tooltip-left.map-pin-label::before,.leaflet-tooltip-right.map-pin-label::before{display:none;}
+  .map-photo-hover{position:absolute;z-index:1000;display:none;pointer-events:none;width:92px;height:72px;border:2px solid #fff;border-radius:8px;box-shadow:0 2px 8px rgba(20,19,15,.4);overflow:hidden;background:#fff;}
+  .map-photo-hover img{width:100%;height:100%;object-fit:cover;display:block;}
   .map-hint-banner{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--ink);}
   .map-draw-actions{display:flex;gap:8px;align-items:center;}
   .marcacao-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line-soft);}
@@ -3231,9 +3233,28 @@
     mapaLayerGroup = L.layerGroup().addTo(leafletMapInstance);
     mapaTempLayerGroup = L.layerGroup().addTo(leafletMapInstance);
     leafletMapInstance.on('click', onMapaClick);
+    var mapaFotoHoverEl = document.createElement('div');
+    mapaFotoHoverEl.id = 'mapaFotoHover';
+    mapaFotoHoverEl.className = 'map-photo-hover';
+    mapaFotoHoverEl.innerHTML = '<img alt="">';
+    leafletMapInstance.getContainer().appendChild(mapaFotoHoverEl);
     setTimeout(function(){ if(leafletMapInstance) leafletMapInstance.invalidateSize(); }, 30);
     // a centralização/zoom do mapa é decidida em fitMapaViewParaMarcacoes, chamada
     // quando as marcações desta obra terminam de carregar (ver loadMapaMarcacoes)
+  }
+
+  function showMapaFotoHover(foto, containerPoint){
+    var el = document.getElementById('mapaFotoHover');
+    if(!el || !foto) return;
+    var img = el.querySelector('img');
+    if(img) img.src = foto;
+    el.style.left = (containerPoint.x + 16) + 'px';
+    el.style.top = (containerPoint.y - 16) + 'px';
+    el.style.display = 'block';
+  }
+  function hideMapaFotoHover(){
+    var el = document.getElementById('mapaFotoHover');
+    if(el) el.style.display = 'none';
   }
 
   function geocodeObraEndereco(obra){
@@ -3329,6 +3350,7 @@
   function renderMapaMarkersOnMap(){
     if(!mapaLayerGroup) return;
     mapaLayerGroup.clearLayers();
+    hideMapaFotoHover();
     state.mapaMarcacoes.forEach(function(m){
       if(state.mapaFiltroServico && state.mapaFiltroServico!=='all' && m.catalogoItemId!==state.mapaFiltroServico) return;
       var color = statusMapColor(m.status);
@@ -3342,6 +3364,10 @@
         var marker = L.marker([m.geom[0].lat, m.geom[0].lng], { icon: icon }).addTo(mapaLayerGroup);
         marker.bindTooltip(mapaPinLabelHtml(m), { permanent:true, direction:'top', offset:[0,-20], className:'map-pin-label', interactive:false });
         marker.on('click', function(){ abrirModalMarcacao(m); });
+        if(m.foto && m.status!=='processando'){
+          marker.on('mouseover mousemove', function(e){ showMapaFotoHover(m.foto, e.containerPoint); });
+          marker.on('mouseout', hideMapaFotoHover);
+        }
       } else if(m.tipo==='ramal' && m.geom && m.geom.length>1){
         var latlngs = m.geom.map(function(p){ return [p.lat,p.lng]; });
         var tubeDark = shadeColor(color, -35);
@@ -3350,6 +3376,10 @@
         var line = L.polyline(latlngs, { color: tubeLight, weight:3, opacity:0.95, lineCap:'round', lineJoin:'round' }).addTo(mapaLayerGroup);
         line.bindTooltip(mapaPinLabelHtml(m), { permanent:true, direction:'center', className:'map-pin-label', interactive:false });
         line.on('click', function(){ abrirModalMarcacao(m); });
+        if(m.foto && m.status!=='processando'){
+          line.on('mouseover mousemove', function(e){ showMapaFotoHover(m.foto, e.containerPoint); });
+          line.on('mouseout', hideMapaFotoHover);
+        }
       }
     });
   }
@@ -3400,6 +3430,7 @@
   }
 
   function abrirModalMarcacao(m){
+    hideMapaFotoHover();
     var isEdit = !!m.id;
     var canGestao = obrasGestaoCanAccess();
     var root = document.getElementById('modal-root');
