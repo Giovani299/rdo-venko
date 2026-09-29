@@ -1134,7 +1134,10 @@
     planejamentoServicos: [],
     planejamentoFiltros: { status:'', busca:'' },
     planejamentoEditId: null,
-    planejamentoImportAberto: false
+    planejamentoImportAberto: false,
+    mapaFilaIA: [],
+    mapaFilaAtivaId: null,
+    mapaFilaImportAberto: false
   };
 
   var CLIMA_OPTS = ['Praticável','Parcialmente praticável','Impraticável'];
@@ -1901,6 +1904,7 @@
       .on('postgres_changes', {event:'*', schema:'public', table:'obra_servicos_contratados'}, function(){ loadObraServicosContratados(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'mapa_marcacoes'}, function(){ if(state.mapaObraId) loadMapaMarcacoes(state.mapaObraId); })
       .on('postgres_changes', {event:'*', schema:'public', table:'planejamento_servicos'}, function(){ if(state.planejamentoObraId) loadPlanejamentoServicos(state.planejamentoObraId); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'mapa_fila_ia'}, function(){ if(state.mapaObraId) loadMapaFilaIA(state.mapaObraId); })
       .subscribe();
   }
 
@@ -3549,11 +3553,15 @@
     state.mapaEditId = null;
     state.mapaMarcacoes = [];
     state.mapaFiltroServico = 'all';
+    state.mapaFilaIA = [];
+    state.mapaFilaAtivaId = null;
+    state.mapaFilaImportAberto = false;
     mapaViewFitted = false;
     goto('mapa-obra');
     loadCatalogoProdutos();
     loadObraServicosContratados();
     loadMapaMarcacoes(obraId);
+    loadMapaFilaIA(obraId);
   }
 
   function loadMapaMarcacoes(obraId){
@@ -3571,6 +3579,24 @@
     });
   }
 
+  function mapMapaFilaRow(row){
+    return {
+      id:row.id, obraId:row.obra_id, tipoSugerido:row.tipo_sugerido||'pv', servicoTexto:row.servico_texto,
+      catalogoItemId:row.catalogo_item_id||null, endereco:row.endereco||'', numeroLocal:row.numero_local||'',
+      observacoes:row.observacoes||'', geom:row.geom||null, status:row.status||'pendente', origem:row.origem||'ia',
+      grupoId:row.grupo_id||null, createdBy:row.created_by, posicionadoMarcacaoId:row.posicionado_marcacao_id||null,
+      createdAt:row.created_at, updatedAt:row.updated_at
+    };
+  }
+  function loadMapaFilaIA(obraId){
+    return supabaseClient.from('mapa_fila_ia').select('*').eq('obra_id', obraId).eq('status','pendente').then(function(res){
+      if(res.error){ console.error('Erro ao carregar fila do mapa (IA):', res.error.message); return; }
+      if(state.mapaObraId!==obraId) return;
+      state.mapaFilaIA = (res.data||[]).map(mapMapaFilaRow);
+      state.mapaFilaIA.sort(function(a,b){ return (a.createdAt||'').localeCompare(b.createdAt||''); });
+      if(state.view==='mapa-obra') renderMapaFilaIA();
+    });
+  }
   function fitMapaViewParaMarcacoes(obraId){
     if(mapaViewFitted || !leafletMapInstance || state.mapaObraId!==obraId) return;
     var pts = [];
@@ -3676,6 +3702,197 @@
     sel.innerHTML = '<option value="all">Todos os serviços</option>'+mapaServicoOptionsHtml(obra.id, current==='all'?null:current);
     sel.value = current;
   }
+  var MAPA_FILA_IMPORT_EXEMPLO = '[\n  {\n    "servico": "Rede de esgoto - tubulação PVC",\n    "tipo": "ramal",\n    "endereco": "Rua das Flores",\n    "numero_local": "",\n    "observacoes": "Trecho entre nº 100 e nº 250 — Não identificado no projeto: profundidade",\n    "geom": null\n  },\n  {\n    "servico": "Poço de visita (PV)",\n    "tipo": "pv",\n    "endereco": "Rua das Flores, esquina com Rua Bela Vista",\n    "numero_local": "120",\n    "observacoes": "",\n    "geom": {"lat": -23.55052, "lng": -46.63331}\n  }\n]';
+  function mapaFindCatalogoMatch(txt){
+    var alvo = String(txt||'').trim().toLowerCase();
+    if(!alvo) return null;
+    return (state.catalogoItens||[]).find(function(c){ return String(c.descricao||'').trim().toLowerCase()===alvo; }) || null;
+  }
+  function mapaParseImportacaoFila(texto){
+    var erros = [];
+    var linhas = [];
+    var dados;
+    var txt = String(texto||'').trim();
+    if(!txt) return { linhas:[], erros:['Cole a lista de locais (em formato JSON) antes de pré-visualizar.'] };
+    try{ dados = JSON.parse(txt); }
+    catch(e){ return { linhas:[], erros:['O texto colado não é um JSON válido: '+e.message] }; }
+    if(!Array.isArray(dados)){ return { linhas:[], erros:['O JSON precisa ser uma lista de locais, entre colchetes: [ ... ].'] }; }
+    if(!dados.length){ return { linhas:[], erros:['A lista está vazia.'] }; }
+    function parseGeom(g, tipo){
+      if(g==null) return null;
+      var pontos = Array.isArray(g) ? g : [g];
+      var validos = pontos.filter(function(p){ return p && typeof p==='object' && isFinite(Number(p.lat)) && isFinite(Number(p.lng)); })
+        .map(function(p){ return { lat:Number(p.lat), lng:Number(p.lng) }; });
+      if(!validos.length) return null;
+      if(tipo==='ramal' && validos.length<2) return null;
+      return tipo==='ramal' ? validos : [validos[0]];
+    }
+    dados.forEach(function(item, i){
+      var n = i+1;
+      if(!item || typeof item!=='object' || Array.isArray(item)){ erros.push('Item '+n+': não é um objeto válido.'); return; }
+      var servico = String(item.servico_nome==null?(item.servico==null?'':item.servico):item.servico_nome).trim();
+      var tipo = (item.tipo==='ramal') ? 'ramal' : 'pv';
+      var problemas = [];
+      if(!servico || servico.toLowerCase()==='não identificado') problemas.push('serviço não identificado');
+      var catalogoMatch = mapaFindCatalogoMatch(servico);
+      linhas.push({
+        _linha:n, _problemas:problemas,
+        servico_texto: servico, catalogo_item_id: catalogoMatch?catalogoMatch.id:null,
+        tipo_sugerido: tipo,
+        endereco: item.endereco?String(item.endereco).trim():null,
+        numero_local: item.numero_local?String(item.numero_local).trim():null,
+        observacoes: item.observacoes?String(item.observacoes).trim():null,
+        geom: parseGeom(item.geom, tipo)
+      });
+    });
+    return { linhas: linhas, erros: erros };
+  }
+  function mapaFilaImportPreviewHtml(resultado){
+    var linhas = resultado.linhas, erros = resultado.erros;
+    var html = '';
+    if(erros.length){ html += '<p style="color:var(--red,#C6433F);">'+erros.map(esc).join('<br>')+'</p>'; }
+    if(linhas.length){
+      var validas = linhas.filter(function(l){ return !l._problemas.length; });
+      html += '<div class="table-wrap"><table class="fin-list"><thead><tr><th>#</th><th>Serviço</th><th>Endereço/Local</th><th>Tipo</th><th>Situação</th></tr></thead><tbody>'+
+        linhas.map(function(l){
+          var situacao = l._problemas.length ? ('<span style="color:var(--red,#C6433F);">Erro: '+esc(l._problemas.join(', '))+'</span>') : (l.geom ? '<span style="color:var(--green,#2E8F4E);">OK · coordenada do projeto</span>' : '<span style="color:var(--green,#2E8F4E);">OK · precisa clique no mapa</span>');
+          return '<tr><td>'+l._linha+'</td><td>'+esc(l.servico_texto||'—')+'</td><td>'+esc(l.endereco||'—')+(l.numero_local?', nº '+esc(l.numero_local):'')+'</td><td>'+(l.tipo_sugerido==='ramal'?'Ramal':'PV')+'</td><td>'+situacao+'</td></tr>';
+        }).join('')+
+      '</tbody></table></div>'+
+      '<p class="hint" style="margin-top:8px;">'+validas.length+' de '+linhas.length+' local(is) prontos para entrar na fila de posicionamento. Itens com erro não serão importados — corrija o JSON e pré-visualize novamente.</p>'+
+      (validas.length ? '<div class="form-actions"><button type="button" class="btn primary" id="mapaFilaImportConfirmar">Importar '+validas.length+' local(is)</button></div>' : '');
+    }
+    return html;
+  }
+  function mapaConfirmarImportacaoFila(linhasValidas){
+    if(!linhasValidas || !linhasValidas.length) return;
+    var uid = state.currentUser ? state.currentUser.id : null;
+    var grupoId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('impmapa-'+Date.now());
+    var payloads = linhasValidas.map(function(l){
+      return {
+        obra_id: state.mapaObraId, tipo_sugerido: l.tipo_sugerido, servico_texto: l.servico_texto,
+        catalogo_item_id: l.catalogo_item_id, endereco: l.endereco, numero_local: l.numero_local,
+        observacoes: l.observacoes, geom: l.geom, origem:'ia', status:'pendente', grupo_id: grupoId, created_by: uid
+      };
+    });
+    supabaseClient.from('mapa_fila_ia').insert(payloads).then(function(res){
+      if(res.error){ toast('Erro ao importar locais: '+res.error.message,'error'); return; }
+      toast(payloads.length+' local(is) adicionados à fila de posicionamento.','ok');
+      state.mapaFilaImportAberto = false;
+      loadMapaFilaIA(state.mapaObraId);
+    });
+  }
+  function iniciarPosicionamentoFila(id){
+    var item = (state.mapaFilaIA||[]).find(function(f){ return f.id===id; });
+    if(!item) return;
+    if(item.geom && item.geom.length){
+      abrirModalMarcacao({ tipo:item.tipoSugerido, geom:item.geom, catalogoItemId:item.catalogoItemId, rua:item.endereco, numeroServico:item.numeroLocal, observacao:item.observacoes, filaId:item.id });
+      return;
+    }
+    state.mapaMode = item.tipoSugerido==='ramal' ? 'ramal' : 'pv';
+    state.mapaFilaAtivaId = item.id;
+    state.mapaDesenhoCatalogoItemId = item.catalogoItemId || null;
+    state.mapaRamalPoints = [];
+    if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
+    updateMapaModeUI();
+    renderMapaFilaIA();
+    toast('Clique no mapa para posicionar: '+item.servicoTexto, 'ok');
+  }
+  function descartarItemFila(id){
+    confirmModal({ title:'Descartar item', msg:'Remove este item da fila de posicionamento (não afeta nada já criado no mapa). Deseja continuar?', okLabel:'Descartar', danger:true })
+      .then(function(ok){
+        if(!ok) return;
+        supabaseClient.from('mapa_fila_ia').update({ status:'descartado' }).eq('id', id).then(function(res){
+          if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
+          if(state.mapaFilaAtivaId===id){ state.mapaFilaAtivaId=null; state.mapaMode=null; state.mapaRamalPoints=[]; if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers(); updateMapaModeUI(); }
+          loadMapaFilaIA(state.mapaObraId);
+        });
+      });
+  }
+  function renderMapaFilaIA(){
+    var root = document.getElementById('mapaFilaIACard');
+    if(!root) return;
+    var fila = state.mapaFilaIA||[];
+    var modoAtivoHtml = '';
+    if(state.mapaFilaAtivaId){
+      var itemAtivo = fila.find(function(f){ return f.id===state.mapaFilaAtivaId; });
+      if(itemAtivo){
+        modoAtivoHtml = '<div class="hint" style="background:var(--surface-2,#f5f5f0);padding:8px 10px;border-radius:8px;margin-bottom:10px;">Modo ativo: clique no mapa para posicionar <b>'+esc(itemAtivo.servicoTexto)+'</b>'+(itemAtivo.tipoSugerido==='ramal'?' (marque os pontos do trecho e depois "Concluir ramal")':'')+'. <button type="button" class="btn ghost sm" id="btnCancelarFilaPosicionar" style="margin-left:6px;">Cancelar</button></div>';
+      }
+    }
+    var listaHtml = !fila.length ? '' : ('<div class="table-wrap" style="margin-top:10px;"><table class="fin-list"><thead><tr><th>Serviço</th><th>Endereço/Local</th><th>Tipo</th><th></th></tr></thead><tbody>'+
+      fila.map(function(f){
+        return '<tr data-id="'+f.id+'">'+
+          '<td>'+esc(f.servicoTexto)+(f.observacoes?'<div style="color:var(--steel);font-size:11.5px;">'+esc(f.observacoes)+'</div>':'')+'</td>'+
+          '<td>'+esc(f.endereco||'—')+(f.numeroLocal?', nº '+esc(f.numeroLocal):'')+'</td>'+
+          '<td>'+(f.tipoSugerido==='ramal'?'Ramal':'PV')+(f.geom&&f.geom.length?' · coordenada do projeto':'')+'</td>'+
+          '<td style="text-align:right;">'+
+            '<button type="button" class="btn primary sm" data-posicionar="'+f.id+'">'+(f.geom&&f.geom.length?'Confirmar posição':'Posicionar no mapa')+'</button> '+
+            '<button type="button" class="btn ghost sm" data-descartar="'+f.id+'">Descartar</button>'+
+          '</td>'+
+        '</tr>';
+      }).join('')+
+    '</tbody></table></div>');
+    root.innerHTML =
+      '<h2 style="font-size:15px;">Locais extraídos por IA</h2>'+
+      (!state.mapaFilaImportAberto ?
+        ('<button type="button" class="btn ghost" id="mapaFilaImportToggle">Importar locais (lista da IA)</button>'+
+         '<p class="hint" style="margin:8px 0 0;">Cole a lista de serviços que a IA extraiu de um projeto para colocá-los na fila de posicionamento do mapa.</p>')
+        :
+        ('<textarea id="mapaFilaImportTexto" rows="8" style="width:100%;font-family:monospace;font-size:12.5px;" placeholder="'+esc(MAPA_FILA_IMPORT_EXEMPLO)+'"></textarea>'+
+         '<div class="form-actions" style="margin-top:10px;">'+
+           '<button type="button" class="btn ghost" id="mapaFilaImportCancelar">Cancelar</button>'+
+           '<button type="button" class="btn ghost" id="mapaFilaImportExemplo">Preencher com exemplo</button>'+
+           '<button type="button" class="btn primary" id="mapaFilaImportPreview">Pré-visualizar</button>'+
+         '</div>'+
+         '<div id="mapaFilaImportPreviewBox" style="margin-top:14px;"></div>')
+      )+
+      modoAtivoHtml+
+      (fila.length ? ('<h2 style="font-size:15px;margin-top:14px;">Aguardando posicionamento ('+fila.length+')</h2>'+listaHtml) : '');
+    wireMapaFilaIA();
+  }
+  function wireMapaFilaIA(){
+    var toggle = document.getElementById('mapaFilaImportToggle');
+    if(toggle) toggle.addEventListener('click', function(){ state.mapaFilaImportAberto = true; renderMapaFilaIA(); });
+    var cancelar = document.getElementById('mapaFilaImportCancelar');
+    if(cancelar) cancelar.addEventListener('click', function(){ state.mapaFilaImportAberto = false; renderMapaFilaIA(); });
+    var exemplo = document.getElementById('mapaFilaImportExemplo');
+    var textarea = document.getElementById('mapaFilaImportTexto');
+    if(exemplo && textarea) exemplo.addEventListener('click', function(){ textarea.value = MAPA_FILA_IMPORT_EXEMPLO; });
+    var preview = document.getElementById('mapaFilaImportPreview');
+    var previewBox = document.getElementById('mapaFilaImportPreviewBox');
+    if(preview && textarea && previewBox){
+      preview.addEventListener('click', function(){
+        var resultado = mapaParseImportacaoFila(textarea.value);
+        previewBox.innerHTML = mapaFilaImportPreviewHtml(resultado);
+        var confirmar = document.getElementById('mapaFilaImportConfirmar');
+        if(confirmar){
+          confirmar.addEventListener('click', function(){
+            var validas = resultado.linhas.filter(function(l){ return !l._problemas.length; });
+            mapaConfirmarImportacaoFila(validas);
+          });
+        }
+      });
+    }
+    var root = document.getElementById('mapaFilaIACard');
+    if(root){
+      root.querySelectorAll('[data-posicionar]').forEach(function(b){
+        b.addEventListener('click', function(){ iniciarPosicionamentoFila(b.getAttribute('data-posicionar')); });
+      });
+      root.querySelectorAll('[data-descartar]').forEach(function(b){
+        b.addEventListener('click', function(){ descartarItemFila(b.getAttribute('data-descartar')); });
+      });
+    }
+    var btnCancelarPos = document.getElementById('btnCancelarFilaPosicionar');
+    if(btnCancelarPos){
+      btnCancelarPos.addEventListener('click', function(){
+        state.mapaMode = null; state.mapaFilaAtivaId = null; state.mapaDesenhoCatalogoItemId = null; state.mapaRamalPoints = [];
+        if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
+        updateMapaModeUI();
+        renderMapaFilaIA();
+      });
+    }
+  }
   function renderMapaObraContent(){
     var obra = state.obras.find(function(o){ return o.id===state.mapaObraId; });
     var content = document.getElementById('mapaObraContent');
@@ -3710,6 +3927,7 @@
         )+
         '<div class="map-filter-bar" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><label style="font-size:13px;color:var(--muted);">Filtrar por serviço:</label><select id="mapaFiltroServico" style="max-width:280px;"><option value="all">Todos os serviços</option>'+mapaServicoOptionsHtml(obra.id, state.mapaFiltroServico==='all'?null:state.mapaFiltroServico)+'</select></div>'+
         '<div id="leafletMap"></div>'+
+        (canGestao ? '<div class="card" id="mapaFilaIACard"></div>' : '')+
         '<div class="card"><h2 style="font-size:15px;">Marcações</h2><div id="mapaMarcacoesList"></div></div>';
       mapaCurrentRenderedObraId = state.mapaObraId;
       mapaCurrentRenderedCanGestao = canGestao;
@@ -3727,6 +3945,7 @@
     }
     renderMapaMarkersOnMap();
     renderMapaMarcacoesList();
+    renderMapaFilaIA();
   }
 
   function initLeafletMap(obra){
@@ -3820,10 +4039,14 @@
     if(state.mapaMode==='pv'){
       var catalogoItemId = state.mapaDesenhoCatalogoItemId||null;
       var latlngPv = { lat:e.latlng.lat, lng:e.latlng.lng };
+      var filaItemPv = state.mapaFilaAtivaId ? (state.mapaFilaIA||[]).find(function(f){ return f.id===state.mapaFilaAtivaId; }) : null;
+      var filaIdPv = state.mapaFilaAtivaId;
       state.mapaMode = null;
       state.mapaDesenhoCatalogoItemId = null;
+      state.mapaFilaAtivaId = null;
       updateMapaModeUI();
-      abrirModalMarcacao({ tipo:'pv', geom:[latlngPv], catalogoItemId: catalogoItemId });
+      renderMapaFilaIA();
+      abrirModalMarcacao({ tipo:'pv', geom:[latlngPv], catalogoItemId: catalogoItemId, rua: filaItemPv?filaItemPv.endereco:'', numeroServico: filaItemPv?filaItemPv.numeroLocal:'', observacao: filaItemPv?filaItemPv.observacoes:'', filaId: filaIdPv });
       preencherEnderecoAutomatico(latlngPv);
     } else if(state.mapaMode==='ramal'){
       state.mapaRamalPoints.push({lat:e.latlng.lat, lng:e.latlng.lng});
@@ -3871,20 +4094,26 @@
         state.mapaMode = btn.getAttribute('data-geom-tipo');
         state.mapaDesenhoCatalogoItemId = btn.getAttribute('data-catalogo-item-id');
         state.mapaRamalPoints = [];
+        state.mapaFilaAtivaId = null;
         if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
         updateMapaModeUI();
+        renderMapaFilaIA();
       });
     }
     if(btnFinalizar) btnFinalizar.addEventListener('click', function(){
       if(state.mapaRamalPoints.length<2){ toast('Marque pelo menos 2 pontos para o ramal.','error'); return; }
       var geom = state.mapaRamalPoints.slice();
       var catalogoItemId = state.mapaDesenhoCatalogoItemId||null;
+      var filaItemRamal = state.mapaFilaAtivaId ? (state.mapaFilaIA||[]).find(function(f){ return f.id===state.mapaFilaAtivaId; }) : null;
+      var filaIdRamal = state.mapaFilaAtivaId;
       state.mapaMode = null;
       state.mapaRamalPoints = [];
       state.mapaDesenhoCatalogoItemId = null;
+      state.mapaFilaAtivaId = null;
       updateMapaModeUI();
+      renderMapaFilaIA();
       if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
-      abrirModalMarcacao({ tipo:'ramal', geom: geom, catalogoItemId: catalogoItemId });
+      abrirModalMarcacao({ tipo:'ramal', geom: geom, catalogoItemId: catalogoItemId, rua: filaItemRamal?filaItemRamal.endereco:'', numeroServico: filaItemRamal?filaItemRamal.numeroLocal:'', observacao: filaItemRamal?filaItemRamal.observacoes:'', filaId: filaIdRamal });
       preencherEnderecoAutomatico(geom[0]);
     });
     if(btnCancelar) btnCancelar.addEventListener('click', cancelarRamal);
@@ -4047,7 +4276,7 @@
         var foto = marcFotoAtual || null;
         wrap.remove();
         if(isEdit){ atualizarMarcacao(m.id, { rua:rua, nomeLocal:nomeLocal, numeroServico:numeroServico, catalogoItemId:catalogoItemId, status:status, observacao:obs, foto:foto }); }
-        else { criarMarcacao({ tipo:m.tipo, geom:m.geom, rua:rua, nomeLocal:nomeLocal, numeroServico:numeroServico, catalogoItemId:catalogoItemId, status:status, observacao:obs, foto:foto }); }
+        else { criarMarcacao({ tipo:m.tipo, geom:m.geom, rua:rua, nomeLocal:nomeLocal, numeroServico:numeroServico, catalogoItemId:catalogoItemId, status:status, observacao:obs, foto:foto, filaId:m.filaId }); }
       }
     });
     setTimeout(function(){ var el=document.getElementById(canGestao?'marcRua':'marcStatus'); if(el) el.focus(); }, 0);
@@ -4068,9 +4297,13 @@
       created_by: state.currentUser ? state.currentUser.id : null,
       created_by_nome: state.currentUser ? state.currentUser.nome : null
     };
-    supabaseClient.from('mapa_marcacoes').insert(payload).then(function(res){
+    supabaseClient.from('mapa_marcacoes').insert(payload).select().then(function(res){
       if(res.error){ toast('Erro ao salvar marcação: '+res.error.message,'error'); return; }
       toast('Marcação salva.','ok');
+      if(vals.filaId){
+        var novaMarcacaoId = res.data && res.data[0] && res.data[0].id;
+        supabaseClient.from('mapa_fila_ia').update({ status:'posicionado', posicionado_marcacao_id: novaMarcacaoId||null }).eq('id', vals.filaId).then(function(){ loadMapaFilaIA(state.mapaObraId); });
+      }
       loadMapaMarcacoes(state.mapaObraId);
     });
   }
