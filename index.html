@@ -4778,6 +4778,11 @@
       return custo * qtd;
     });
   }
+  function computeEquipeQtdFeita(d){
+    return (d.concluidos||[]).reduce(function(acc, c){
+      return acc + (c.tipo==='Concluído' ? (Number(c.quantidade)||0) : 0);
+    }, 0);
+  }
   function rdoEquipeDetalheRowHtml(nome, i, d, ne){
     var integrantesTxt = (ne.integrantes&&ne.integrantes.length) ? ne.integrantes.map(function(c){ return esc(c.nome)+' — '+esc(c.funcao); }).join(', ') : 'Nenhum colaborador ativo.';
     var canValor = financeiroCanAccess();
@@ -4796,6 +4801,12 @@
       '<div style="font-size:10.5px;margin-top:4px;">Integrantes: '+integrantesTxt+'</div>'+
       (d.atividades ? '<div style="margin-top:6px;white-space:pre-wrap;">'+esc(d.atividades)+'</div>' : '')+
       (concl ? '<div style="margin-top:6px;">'+concl+'</div>' : '')+
+    '</div>';
+  }
+  function rdoResumoQtdEquipeRowHtml(nome, i, d){
+    var qtd = computeEquipeQtdFeita(d);
+    return '<div data-pdf-row="1" style="padding:9px 14px;border-bottom:1px solid '+RDO_LINE_SOFT+';font-weight:bold;">'+
+      'EQ '+(i+1)+' fez '+fmtQtd(qtd)+
     '</div>';
   }
   function rdoResumoProducaoRowHtml(nome, i, d){
@@ -4884,6 +4895,8 @@
       rdoCard(rdoCardHead('Gestão') + rdoTileGridHtml(gestaoTiles,3)) +
 
       rdoCard(rdoCardHead('Atividades por equipe', equipesDia.length) + (equipesDia.length ? equipesDia.map(function(nome,i){ return rdoEquipeDetalheRowHtml(nome, i, equipesDetalhe[i]||{}, numEq[i]||{}); }).join('') : rdoEmptyMsg())) +
+
+      (financeiroCanAccess() ? rdoCard(rdoCardHead('Resumo de produção das equipes') + (equipesDia.length ? equipesDia.map(function(nome,i){ return rdoResumoQtdEquipeRowHtml(nome, i, equipesDetalhe[i]||{}); }).join('') : rdoEmptyMsg())) : '') +
 
       rdoCard(rdoCardHead('Equipamentos', totalEq) + (eqTiles.length ? rdoTileGridHtml(eqTiles,6) : rdoEmptyMsg())) +
 
