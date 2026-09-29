@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="config.js"></script>
@@ -1651,7 +1652,9 @@
       comprimento:row.comprimento==null?null:Number(row.comprimento),
       largura:row.largura==null?null:Number(row.largura),
       diametro:row.diametro==null?null:Number(row.diametro),
-      observacoes:row.observacoes||'', projetoId:row.projeto_id||null, paginaProjeto:row.pagina_projeto||null,
+      observacoes:row.observacoes||'', material:row.material||'', metodo:row.metodo||'',
+      profundidadeTexto:row.profundidade_texto||'', servicoPropostaTexto:row.servico_proposta_texto||'',
+      projetoId:row.projeto_id||null, paginaProjeto:row.pagina_projeto||null,
       dataInicioPrevista:row.data_inicio_prevista||'', dataFimPrevista:row.data_fim_prevista||'',
       responsavelId:row.responsavel_id||null, equipeId:row.equipe_id||null,
       prioridade:row.prioridade||'Média', status:row.status||'Previsto', origem:row.origem||'manual',
@@ -2691,7 +2694,7 @@
       if(res.error){ console.error('Erro ao gravar histórico do planejamento:', res.error.message); }
     });
   }
-  var PLANEJAMENTO_IMPORT_EXEMPLO = '[\n  {\n    "servico_nome": "Rede de esgoto - tubulação PVC",\n    "unidade": "m",\n    "quantidade_prevista": 120,\n    "endereco": "Rua das Flores",\n    "trecho": "Entre nº 100 e nº 250",\n    "numero_local": "",\n    "profundidade": 1.2,\n    "diametro": 150,\n    "observacoes": "Não identificado no projeto — confirmar em campo",\n    "prioridade": "Média",\n    "status": "Previsto"\n  }\n]';
+  var PLANEJAMENTO_IMPORT_EXEMPLO = '[\n  {\n    "servico_nome": "Rede de esgoto - tubulação PVC",\n    "unidade": "m",\n    "quantidade_prevista": 120,\n    "endereco": "Rua das Flores",\n    "trecho": "Entre nº 100 e nº 250",\n    "numero_local": "",\n    "profundidade": 1.2,\n    "diametro": 150,\n    "material": "PVC",\n    "metodo": "VCA",\n    "profundidade_texto": "",\n    "servico_proposta_texto": "",\n    "observacoes": "Não identificado no projeto — confirmar em campo",\n    "prioridade": "Média",\n    "status": "Previsto"\n  }\n]';
   function planejamentoParseImportacao(texto){
     var erros = [];
     var linhas = [];
@@ -2722,6 +2725,10 @@
         profundidade: numOuNull(item.profundidade), comprimento: numOuNull(item.comprimento),
         largura: numOuNull(item.largura), diametro: numOuNull(item.diametro),
         observacoes: item.observacoes?String(item.observacoes).trim():null,
+        material: item.material?String(item.material).trim():null,
+        metodo: item.metodo?String(item.metodo).trim():null,
+        profundidade_texto: item.profundidade_texto?String(item.profundidade_texto).trim():null,
+        servico_proposta_texto: item.servico_proposta_texto?String(item.servico_proposta_texto).trim():null,
         prioridade: PLANEJAMENTO_PRIORIDADE_OPTS.indexOf(item.prioridade)!==-1?item.prioridade:'Média',
         status: PLANEJAMENTO_STATUS_OPTS.indexOf(item.status)!==-1?item.status:'Previsto',
         data_inicio_prevista: item.data_inicio_prevista||null, data_fim_prevista: item.data_fim_prevista||null
@@ -2774,6 +2781,7 @@
         obra_id: obra.id, servico_nome: l.servico_nome, unidade: l.unidade, quantidade_prevista: l.quantidade_prevista,
         endereco: l.endereco, trecho: l.trecho, numero_local: l.numero_local, profundidade: l.profundidade,
         comprimento: l.comprimento, largura: l.largura, diametro: l.diametro, observacoes: l.observacoes,
+        material: l.material, metodo: l.metodo, profundidade_texto: l.profundidade_texto, servico_proposta_texto: l.servico_proposta_texto,
         prioridade: l.prioridade, status: l.status, data_inicio_prevista: l.data_inicio_prevista, data_fim_prevista: l.data_fim_prevista,
         origem: 'ia', confirmado: false, grupo_id: grupoId, created_by: uid
       };
@@ -2872,6 +2880,12 @@
           '<div class="field"><label>Diâmetro (mm)</label><input type="number" id="planDiametro" step="0.01" min="0" value="'+(editing&&editing.diametro!=null?editing.diametro:'')+'"></div>'+
         '</div>'+
         '<div class="grid4" style="margin-top:12px;">'+
+          '<div class="field"><label>Material</label><input type="text" id="planMaterial" placeholder="Ex: PVC, PEAD, Concreto" value="'+esc(editing?(editing.material||''):'')+'"></div>'+
+          '<div class="field"><label>Método</label><input type="text" id="planMetodo" placeholder="Ex: VCA, MND, HDD" value="'+esc(editing?(editing.metodo||''):'')+'"></div>'+
+          '<div class="field"><label>Profundidades (texto)</label><input type="text" id="planProfundidadeTexto" placeholder="Ex: 3,93 → 4,04 m" value="'+esc(editing?(editing.profundidadeTexto||''):'')+'"></div>'+
+          '<div class="field"><label>Serviço da proposta / quantidade</label><input type="text" id="planServicoProposta" placeholder="Ex: I1: 3,00 m; I4: 1 ligação" value="'+esc(editing?(editing.servicoPropostaTexto||''):'')+'"></div>'+
+        '</div>'+
+        '<div class="grid4" style="margin-top:12px;">'+
           '<div class="field"><label>Data início prevista</label><input type="date" id="planDataInicio" value="'+esc(editing?(editing.dataInicioPrevista||''):'')+'"></div>'+
           '<div class="field"><label>Data fim prevista</label><input type="date" id="planDataFim" value="'+esc(editing?(editing.dataFimPrevista||''):'')+'"></div>'+
           '<div class="field"><label>Responsável</label><select id="planResponsavel"><option value="">Nenhum</option>'+responsavelOpts+'</select></div>'+
@@ -2901,7 +2915,7 @@
         '<td data-label="Serviço">'+(s.origem==='ia'&&!s.confirmado?'<span class="chip" style="background:#FFC400;color:#1a1a1a;margin-right:6px;">IA · revisar</span>':'')+esc(s.servicoNome)+(s.observacoes?'<div style="color:var(--steel);font-size:11.5px;">'+esc(s.observacoes)+'</div>':'')+'</td>'+
         '<td data-label="Endereço/Local">'+esc(s.endereco||'—')+(s.numeroLocal?', nº '+esc(s.numeroLocal):'')+(s.trecho?'<div style="color:var(--steel);font-size:11.5px;">'+esc(s.trecho)+'</div>':'')+'</td>'+
         '<td class="num" data-label="Quantidade">'+fmtQtd(s.quantidadePrevista)+' '+esc(s.unidade)+'</td>'+
-        '<td data-label="Profundidade">'+(s.profundidade!=null?fmtQtd(s.profundidade)+' m':'—')+'</td>'+
+        '<td data-label="Profundidade">'+(s.profundidadeTexto?esc(s.profundidadeTexto):(s.profundidade!=null?fmtQtd(s.profundidade)+' m':'—'))+'</td>'+
         '<td data-label="Datas">'+fmtDate(s.dataInicioPrevista)+' a '+fmtDate(s.dataFimPrevista)+'</td>'+
         '<td data-label="Status"><span class="chip" style="background:'+planejamentoStatusColor(s.status)+';color:#fff;">'+esc(s.status)+'</span></td>'+
         '<td style="text-align:right;" data-label="Ações">'+
@@ -2952,7 +2966,7 @@
       planejamentoImportarCardHtml()+
       planejamentoFormHtml()+
       '<div class="card">'+
-        '<h2><span class="idx">M</span><span>Matriz de serviços'+(filtrados.length!==todos.length?' ('+filtrados.length+' de '+todos.length+')':'')+'</span></h2>'+
+        '<h2><span class="idx">M</span><span>Matriz de serviços'+(filtrados.length!==todos.length?' ('+filtrados.length+' de '+todos.length+')':'')+'</span><button type="button" class="btn ghost sm" id="btnExportarMatrizExcel" style="margin-left:auto;">Exportar Excel</button></h2>'+
         planejamentoTabelaHtml(filtrados)+
       '</div>';
     wireProjetosCard(obra);
@@ -2960,8 +2974,68 @@
     wirePlanejamentoFilterBar(obra);
     wirePlanejamentoForm(obra);
     wirePlanejamentoTableActions(obra);
+    var btnExportarExcel = document.getElementById('btnExportarMatrizExcel');
+    if(btnExportarExcel) btnExportarExcel.addEventListener('click', function(){ exportarMatrizExcel(obra, state.planejamentoServicos); });
   }
 
+  function exportarMatrizExcel(obra, servicos){
+    if(!servicos || !servicos.length){ toast('Nenhum serviço na matriz para exportar.','error'); return; }
+    if(typeof XLSX==='undefined'){ toast('Não foi possível carregar o gerador de Excel. Verifique sua conexão e tente novamente.','error'); return; }
+    function diametroMaterialTxt(s){
+      var partes = [];
+      if(s.diametro!=null) partes.push('Ø'+fmtQtd(s.diametro));
+      if(s.material) partes.push(s.material);
+      return partes.length ? partes.join(' ') : '—';
+    }
+    function profundidadeTxt(s){
+      if(s.profundidadeTexto) return s.profundidadeTexto;
+      if(s.profundidade!=null) return fmtQtd(s.profundidade)+' m';
+      return '—';
+    }
+    function extensaoTxt(s){ return fmtQtd(s.quantidadePrevista)+' '+(s.unidade||''); }
+    function somaPorUnidadeTxt(lista){
+      var somas = {}; var ordem = [];
+      lista.forEach(function(s){
+        var u = s.unidade || '';
+        if(!(u in somas)){ somas[u]=0; ordem.push(u); }
+        somas[u] += Number(s.quantidadePrevista)||0;
+      });
+      return ordem.map(function(u){ return fmtQtd(somas[u])+' '+u; }).join(' + ');
+    }
+    var grupos = []; var porLocal = {};
+    servicos.forEach(function(s){
+      var chave = s.endereco || '(sem localização)';
+      if(!(chave in porLocal)){ porLocal[chave] = []; grupos.push(chave); }
+      porLocal[chave].push(s);
+    });
+    var header = ['Localização','Trecho — estacas','Serviço da proposta / quantidade','Extensão da rede','Diâmetro/material','Profundidades indicadas — início → fim','Método','Observações relevantes'];
+    var aoa = [
+      ['Resumo da Matriz — '+obra.nome],
+      ['Exportado em '+new Date().toLocaleDateString('pt-BR')+' a partir dos serviços cadastrados na Matriz de Planejamento desta obra. Subtotais somam por unidade (ex: metros e ligações são somados separadamente).'],
+      [],
+      header
+    ];
+    grupos.forEach(function(chave){
+      var linhas = porLocal[chave];
+      linhas.forEach(function(s){
+        aoa.push([
+          s.endereco||'—', s.trecho||'—', s.servicoPropostaTexto||'—',
+          extensaoTxt(s), diametroMaterialTxt(s), profundidadeTxt(s),
+          s.metodo||'—', s.observacoes||'—'
+        ]);
+      });
+      aoa.push(['Subtotal '+chave, '', '', somaPorUnidadeTxt(linhas), '', '', '', '']);
+    });
+    aoa.push(['TOTAL GERAL', '', '', somaPorUnidadeTxt(servicos), '', '', '', '']);
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{wch:22},{wch:26},{wch:26},{wch:16},{wch:16},{wch:26},{wch:10},{wch:34}];
+    ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:7} }, { s:{r:1,c:0}, e:{r:1,c:7} }];
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Resumo da Matriz');
+    var nomeArquivo = 'Resumo_Matriz_'+String(obra.nome||'obra').replace(/[^a-zA-Z0-9]+/g,'_')+'.xlsx';
+    XLSX.writeFile(wb, nomeArquivo);
+    toast('Excel gerado: '+nomeArquivo,'ok');
+  }
   function projetoStatusChip(status){
     if(status==='analisando') return '<span class="chip" style="background:#FFF3CC;color:#7A5900;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:2px solid rgba(122,89,0,.35);border-top-color:#7A5900;"></span> Analisando</span>';
     if(status==='aguardando_analise') return '<span class="chip" style="background:#FFF3CC;color:#7A5900;">Aguardando análise</span>';
@@ -3108,7 +3182,11 @@
         data_fim_prevista: document.getElementById('planDataFim').value || null,
         responsavel_id: document.getElementById('planResponsavel').value || null,
         equipe_id: document.getElementById('planEquipe').value || null,
-        observacoes: document.getElementById('planObservacoes').value.trim() || null
+        observacoes: document.getElementById('planObservacoes').value.trim() || null,
+        material: document.getElementById('planMaterial').value.trim() || null,
+        metodo: document.getElementById('planMetodo').value.trim() || null,
+        profundidade_texto: document.getElementById('planProfundidadeTexto').value.trim() || null,
+        servico_proposta_texto: document.getElementById('planServicoProposta').value.trim() || null
       };
       if(!payload.servico_nome || !payload.unidade){ toast('Preencha o serviço e a unidade.','error'); return; }
       if(!(payload.quantidade_prevista>=0)){ toast('Quantidade prevista precisa ser um número válido.','error'); return; }
@@ -3176,7 +3254,8 @@
           quantidade_prevista: s.quantidadePrevista, status: 'Previsto', endereco: s.endereco, trecho: s.trecho,
           numero_local: s.numeroLocal, prioridade: s.prioridade, profundidade: s.profundidade, comprimento: s.comprimento,
           largura: s.largura, diametro: s.diametro, data_inicio_prevista: s.dataInicioPrevista||null, data_fim_prevista: s.dataFimPrevista||null,
-          responsavel_id: s.responsavelId, equipe_id: s.equipeId, observacoes: s.observacoes
+          responsavel_id: s.responsavelId, equipe_id: s.equipeId, observacoes: s.observacoes,
+          material: s.material||null, metodo: s.metodo||null, profundidade_texto: s.profundidadeTexto||null, servico_proposta_texto: s.servicoPropostaTexto||null
         };
         supabaseClient.from('planejamento_servicos').insert(payload).select().then(function(res){
           if(res.error){ toast('Erro ao duplicar serviço: '+res.error.message,'error'); return; }
@@ -3940,6 +4019,40 @@
         });
       });
   }
+  function converterFilaParaMapa(obraId){
+    var fila = state.mapaFilaIA||[];
+    var prontos = fila.filter(function(f){ return f.geom && f.geom.length; });
+    if(!prontos.length){ toast('Nenhum item da fila já tem coordenada do projeto para converter. Os demais precisam ser posicionados manualmente no mapa.','error'); return; }
+    var semCoordenada = fila.length - prontos.length;
+    confirmModal({
+      title:'Converter para o Mapa',
+      msg:'Isso cria '+prontos.length+' marcação(ões) real(is) no Mapa a partir dos itens da fila que já têm coordenada do projeto, como Pendente.'+(semCoordenada?' Os '+semCoordenada+' item(ns) sem coordenada continuam na fila para posicionamento manual.':''),
+      okLabel:'Converter'
+    }).then(function(ok){
+      if(!ok) return;
+      var uid = state.currentUser ? state.currentUser.id : null;
+      var uidNome = state.currentUser ? state.currentUser.nome : null;
+      var okCount = 0, falhaCount = 0;
+      Promise.all(prontos.map(function(item){
+        var payload = {
+          obra_id: obraId, tipo: item.tipoSugerido, rua: item.endereco||null, nome_local: null,
+          numero_servico: item.numeroLocal||null, status: 'parado', observacao: item.observacoes||null,
+          geom: item.geom, catalogo_item_id: item.catalogoItemId||null, foto: null,
+          created_by: uid, created_by_nome: uidNome
+        };
+        return supabaseClient.from('mapa_marcacoes').insert(payload).select().then(function(res){
+          if(res.error || !res.data || !res.data[0]){ falhaCount++; if(res.error) console.error('Erro ao converter item da fila:', res.error.message); return; }
+          var novaId = res.data[0].id;
+          return supabaseClient.from('mapa_fila_ia').update({ status:'posicionado', posicionado_marcacao_id: novaId }).eq('id', item.id).then(function(){ okCount++; });
+        });
+      })).then(function(){
+        if(falhaCount){ toast(okCount+' convertido(s), '+falhaCount+' falharam (veja o console).', okCount?'ok':'error'); }
+        else { toast(okCount+' local(is) convertido(s) para o Mapa.','ok'); }
+        loadMapaFilaIA(obraId);
+        loadMapaMarcacoes(obraId);
+      });
+    });
+  }
   function renderMapaFilaIA(){
     var root = document.getElementById('mapaFilaIACard');
     if(!root) return;
@@ -3979,6 +4092,7 @@
          '<div id="mapaFilaImportPreviewBox" style="margin-top:14px;"></div>')
       )+
       modoAtivoHtml+
+      (fila.some(function(f){ return f.geom && f.geom.length; }) ? ('<div class="form-actions" style="margin:10px 0 0;"><button type="button" class="btn primary" id="btnConverterFilaMapa">Converter para o Mapa ('+fila.filter(function(f){return f.geom&&f.geom.length;}).length+')</button></div>') : '')+
       (fila.length ? ('<h2 style="font-size:15px;margin-top:14px;">Aguardando posicionamento ('+fila.length+')</h2>'+listaHtml) : '');
     wireMapaFilaIA();
   }
@@ -4023,6 +4137,8 @@
         renderMapaFilaIA();
       });
     }
+    var btnConverterFila = document.getElementById('btnConverterFilaMapa');
+    if(btnConverterFila) btnConverterFila.addEventListener('click', function(){ converterFilaParaMapa(state.mapaObraId); });
   }
   function renderMapaObraContent(){
     var obra = state.obras.find(function(o){ return o.id===state.mapaObraId; });
