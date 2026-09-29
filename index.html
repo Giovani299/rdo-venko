@@ -1133,7 +1133,8 @@
     planejamentoObraId: null,
     planejamentoServicos: [],
     planejamentoFiltros: { status:'', busca:'' },
-    planejamentoEditId: null
+    planejamentoEditId: null,
+    planejamentoImportAberto: false
   };
 
   var CLIMA_OPTS = ['Praticável','Parcialmente praticável','Impraticável'];
@@ -2640,15 +2641,136 @@
       return true;
     });
   }
-  function registrarPlanejamentoHistorico(servicoId, servicoNome, mudancas){
+  function registrarPlanejamentoHistorico(servicoId, servicoNome, mudancas, origemHist){
     if(!mudancas || !mudancas.length) return;
     var uid = state.currentUser ? state.currentUser.id : null;
     var rows = mudancas.map(function(m){
-      return { servico_id: servicoId, servico_nome: servicoNome, campo: m.campo, valor_anterior: (m.antes==null?null:String(m.antes)), valor_novo: (m.depois==null?null:String(m.depois)), alterado_por: uid, origem: 'manual' };
+      return { servico_id: servicoId, servico_nome: servicoNome, campo: m.campo, valor_anterior: (m.antes==null?null:String(m.antes)), valor_novo: (m.depois==null?null:String(m.depois)), alterado_por: uid, origem: (origemHist||'manual') };
     });
     supabaseClient.from('planejamento_historico').insert(rows).then(function(res){
       if(res.error){ console.error('Erro ao gravar histórico do planejamento:', res.error.message); }
     });
+  }
+  var PLANEJAMENTO_IMPORT_EXEMPLO = '[\n  {\n    "servico_nome": "Rede de esgoto - tubulação PVC",\n    "unidade": "m",\n    "quantidade_prevista": 120,\n    "endereco": "Rua das Flores",\n    "trecho": "Entre nº 100 e nº 250",\n    "numero_local": "",\n    "profundidade": 1.2,\n    "diametro": 150,\n    "observacoes": "Não identificado no projeto — confirmar em campo",\n    "prioridade": "Média",\n    "status": "Previsto"\n  }\n]';
+  function planejamentoParseImportacao(texto){
+    var erros = [];
+    var linhas = [];
+    var dados;
+    var txt = String(texto||'').trim();
+    if(!txt) return { linhas:[], erros:['Cole a lista de serviços (em formato JSON) antes de pré-visualizar.'] };
+    try{ dados = JSON.parse(txt); }
+    catch(e){ return { linhas:[], erros:['O texto colado não é um JSON válido: '+e.message] }; }
+    if(!Array.isArray(dados)){ return { linhas:[], erros:['O JSON precisa ser uma lista de serviços, entre colchetes: [ ... ].'] }; }
+    if(!dados.length){ return { linhas:[], erros:['A lista está vazia.'] }; }
+    function numOuNull(v){ if(v===null||v===undefined||v==='') return null; var n = Number(v); return isNaN(n)?null:n; }
+    dados.forEach(function(item, i){
+      var n = i+1;
+      if(!item || typeof item!=='object' || Array.isArray(item)){ erros.push('Item '+n+': não é um objeto válido.'); return; }
+      var nome = String(item.servico_nome==null?'':item.servico_nome).trim();
+      var unidade = String(item.unidade==null?'':item.unidade).trim();
+      var qtd = numOuNull(item.quantidade_prevista);
+      var problemas = [];
+      if(!nome || nome.toLowerCase()==='não identificado') problemas.push('serviço não identificado');
+      if(!unidade) problemas.push('unidade não identificada');
+      if(qtd===null || qtd<0) problemas.push('quantidade prevista não identificada ou inválida');
+      linhas.push({
+        _linha:n, _problemas:problemas,
+        servico_nome: nome, unidade: unidade, quantidade_prevista: qtd,
+        endereco: item.endereco?String(item.endereco).trim():null,
+        trecho: item.trecho?String(item.trecho).trim():null,
+        numero_local: item.numero_local?String(item.numero_local).trim():null,
+        profundidade: numOuNull(item.profundidade), comprimento: numOuNull(item.comprimento),
+        largura: numOuNull(item.largura), diametro: numOuNull(item.diametro),
+        observacoes: item.observacoes?String(item.observacoes).trim():null,
+        prioridade: PLANEJAMENTO_PRIORIDADE_OPTS.indexOf(item.prioridade)!==-1?item.prioridade:'Média',
+        status: PLANEJAMENTO_STATUS_OPTS.indexOf(item.status)!==-1?item.status:'Previsto',
+        data_inicio_prevista: item.data_inicio_prevista||null, data_fim_prevista: item.data_fim_prevista||null
+      });
+    });
+    return { linhas: linhas, erros: erros };
+  }
+  function planejamentoImportarCardHtml(){
+    if(!state.planejamentoImportAberto){
+      return '<div class="card"><button type="button" class="btn ghost" id="planImportToggle">Importar serviços (lista da IA)</button>'+
+        '<p class="hint" style="margin:8px 0 0;">Cole aqui a lista de serviços que a IA extraiu do projeto (formato JSON) para criar várias linhas da matriz de uma vez. Cada serviço entra marcado como "IA · revisar" até alguém confirmar.</p></div>';
+    }
+    return '<div class="card">'+
+      '<h2><span class="idx">IA</span><span>Importar serviços (lista da IA)</span></h2>'+
+      '<p class="hint" style="margin:-6px 0 12px;">Cole abaixo o JSON com a lista de serviços (veja o exemplo). Depois clique em "Pré-visualizar" para conferir antes de importar. Campos não identificados no projeto devem vir vazios/nulos — nunca inventados.</p>'+
+      '<textarea id="planImportTexto" rows="8" style="width:100%;font-family:monospace;font-size:12.5px;" placeholder="'+esc(PLANEJAMENTO_IMPORT_EXEMPLO)+'"></textarea>'+
+      '<div class="form-actions" style="margin-top:10px;">'+
+        '<button type="button" class="btn ghost" id="planImportCancelar">Cancelar</button>'+
+        '<button type="button" class="btn ghost" id="planImportExemplo">Preencher com exemplo</button>'+
+        '<button type="button" class="btn primary" id="planImportPreview">Pré-visualizar</button>'+
+      '</div>'+
+      '<div id="planImportPreviewBox" style="margin-top:14px;"></div>'+
+    '</div>';
+  }
+  function planejamentoImportPreviewHtml(resultado){
+    var linhas = resultado.linhas, erros = resultado.erros;
+    var html = '';
+    if(erros.length){
+      html += '<p style="color:var(--red,#C6433F);">'+erros.map(esc).join('<br>')+'</p>';
+    }
+    if(linhas.length){
+      var validas = linhas.filter(function(l){ return !l._problemas.length; });
+      html += '<div class="table-wrap"><table class="fin-list"><thead><tr><th>#</th><th>Serviço</th><th>Endereço/Local</th><th>Quantidade</th><th>Situação</th></tr></thead><tbody>'+
+        linhas.map(function(l){
+          var situacao = l._problemas.length ? ('<span style="color:var(--red,#C6433F);">Erro: '+esc(l._problemas.join(', '))+'</span>') : '<span style="color:var(--green,#2E8F4E);">OK</span>';
+          return '<tr><td>'+l._linha+'</td><td>'+esc(l.servico_nome||'—')+'</td><td>'+esc(l.endereco||'—')+(l.trecho?', '+esc(l.trecho):'')+'</td><td class="num">'+(l.quantidade_prevista==null?'—':fmtQtd(l.quantidade_prevista)+' '+esc(l.unidade))+'</td><td>'+situacao+'</td></tr>';
+        }).join('')+
+      '</tbody></table></div>'+
+      '<p class="hint" style="margin-top:8px;">'+validas.length+' de '+linhas.length+' serviço(s) prontos para importar. Itens com erro não serão importados — corrija o JSON e pré-visualize novamente.</p>'+
+      (validas.length ? '<div class="form-actions"><button type="button" class="btn primary" id="planImportConfirmar">Importar '+validas.length+' serviço(s)</button></div>' : '');
+    }
+    return html;
+  }
+  function planejamentoConfirmarImportacao(obra, linhasValidas){
+    if(!linhasValidas || !linhasValidas.length) return;
+    var uid = state.currentUser ? state.currentUser.id : null;
+    var grupoId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('imp-'+Date.now());
+    var payloads = linhasValidas.map(function(l){
+      return {
+        obra_id: obra.id, servico_nome: l.servico_nome, unidade: l.unidade, quantidade_prevista: l.quantidade_prevista,
+        endereco: l.endereco, trecho: l.trecho, numero_local: l.numero_local, profundidade: l.profundidade,
+        comprimento: l.comprimento, largura: l.largura, diametro: l.diametro, observacoes: l.observacoes,
+        prioridade: l.prioridade, status: l.status, data_inicio_prevista: l.data_inicio_prevista, data_fim_prevista: l.data_fim_prevista,
+        origem: 'ia', confirmado: false, grupo_id: grupoId, created_by: uid
+      };
+    });
+    supabaseClient.from('planejamento_servicos').insert(payloads).select().then(function(res){
+      if(res.error){ toast('Erro ao importar serviços: '+res.error.message,'error'); return; }
+      (res.data||[]).forEach(function(novo){
+        registrarPlanejamentoHistorico(novo.id, novo.servico_nome, [{campo:'Serviço importado via IA (aguardando confirmação)', antes:null, depois:novo.quantidade_prevista+' '+novo.unidade}], 'ia');
+      });
+      toast(payloads.length+' serviço(s) importado(s). Revise e confirme cada um antes de oficializar.','ok');
+      state.planejamentoImportAberto = false;
+      loadPlanejamentoServicos(obra.id);
+    });
+  }
+  function wirePlanejamentoImportar(obra){
+    var toggle = document.getElementById('planImportToggle');
+    if(toggle) toggle.addEventListener('click', function(){ state.planejamentoImportAberto = true; renderPlanejamentoObra(); });
+    var cancelar = document.getElementById('planImportCancelar');
+    if(cancelar) cancelar.addEventListener('click', function(){ state.planejamentoImportAberto = false; renderPlanejamentoObra(); });
+    var exemplo = document.getElementById('planImportExemplo');
+    var textarea = document.getElementById('planImportTexto');
+    if(exemplo && textarea) exemplo.addEventListener('click', function(){ textarea.value = PLANEJAMENTO_IMPORT_EXEMPLO; });
+    var preview = document.getElementById('planImportPreview');
+    var previewBox = document.getElementById('planImportPreviewBox');
+    if(preview && textarea && previewBox){
+      preview.addEventListener('click', function(){
+        var resultado = planejamentoParseImportacao(textarea.value);
+        previewBox.innerHTML = planejamentoImportPreviewHtml(resultado);
+        var confirmar = document.getElementById('planImportConfirmar');
+        if(confirmar){
+          confirmar.addEventListener('click', function(){
+            var validas = resultado.linhas.filter(function(l){ return !l._problemas.length; });
+            planejamentoConfirmarImportacao(obra, validas);
+          });
+        }
+      });
+    }
   }
   function renderPlanejamentoObraList(){
     var list = document.getElementById('planejamentoObraList');
@@ -2734,13 +2856,14 @@
       while(numero.length<3) numero = '0'+numero;
       return '<tr data-id="'+s.id+'">'+
         '<td data-label="Nº">'+numero+'</td>'+
-        '<td data-label="Serviço">'+esc(s.servicoNome)+(s.observacoes?'<div style="color:var(--steel);font-size:11.5px;">'+esc(s.observacoes)+'</div>':'')+'</td>'+
+        '<td data-label="Serviço">'+(s.origem==='ia'&&!s.confirmado?'<span class="chip" style="background:#FFC400;color:#1a1a1a;margin-right:6px;">IA · revisar</span>':'')+esc(s.servicoNome)+(s.observacoes?'<div style="color:var(--steel);font-size:11.5px;">'+esc(s.observacoes)+'</div>':'')+'</td>'+
         '<td data-label="Endereço/Local">'+esc(s.endereco||'—')+(s.numeroLocal?', nº '+esc(s.numeroLocal):'')+(s.trecho?'<div style="color:var(--steel);font-size:11.5px;">'+esc(s.trecho)+'</div>':'')+'</td>'+
         '<td class="num" data-label="Quantidade">'+fmtQtd(s.quantidadePrevista)+' '+esc(s.unidade)+'</td>'+
         '<td data-label="Profundidade">'+(s.profundidade!=null?fmtQtd(s.profundidade)+' m':'—')+'</td>'+
         '<td data-label="Datas">'+fmtDate(s.dataInicioPrevista)+' a '+fmtDate(s.dataFimPrevista)+'</td>'+
         '<td data-label="Status"><span class="chip" style="background:'+planejamentoStatusColor(s.status)+';color:#fff;">'+esc(s.status)+'</span></td>'+
         '<td style="text-align:right;" data-label="Ações">'+
+          (s.origem==='ia'&&!s.confirmado?'<button type="button" class="btn primary sm" data-confirm="'+s.id+'">Confirmar</button> ':'')+
           '<button type="button" class="btn ghost sm" data-edit="'+s.id+'">Editar</button> '+
           '<button type="button" class="btn ghost sm" data-dup="'+s.id+'">Duplicar</button> '+
           '<button type="button" class="btn danger sm" data-del="'+s.id+'">Excluir</button>'+
@@ -2766,6 +2889,7 @@
     var concluidos = todos.filter(function(s){ return s.status==='Concluído'; }).length;
     var andamento = todos.filter(function(s){ return s.status==='Em andamento' || s.status==='Parcialmente concluído'; }).length;
     var bloqueados = todos.filter(function(s){ return s.status==='Bloqueado'; }).length;
+    var pendenteIA = todos.filter(function(s){ return s.origem==='ia' && !s.confirmado; }).length;
     var f = state.planejamentoFiltros;
     root.innerHTML =
       '<div class="page-head">'+
@@ -2776,16 +2900,19 @@
         kpiTile(concluidos, 'Concluídos', '')+
         kpiTile(andamento, 'Em andamento', 'pend')+
         kpiTile(bloqueados, 'Bloqueados', 'warn')+
+        kpiTile(pendenteIA, 'Aguardando confirmação (IA)', pendenteIA>0?'pend':'')+
       '</div>'+
       '<div class="filters" id="planFilterBar">'+
         '<div class="field"><label>Status</label><select id="planFStatus"><option value="">Todos</option>'+PLANEJAMENTO_STATUS_OPTS.map(function(o){return '<option value="'+esc(o)+'"'+(f.status===o?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select></div>'+
         '<div class="field full"><label>Buscar</label><input type="text" id="planFBusca" placeholder="Serviço, endereço, trecho..." value="'+esc(f.busca)+'"></div>'+
       '</div>'+
+      planejamentoImportarCardHtml()+
       planejamentoFormHtml()+
       '<div class="card">'+
         '<h2><span class="idx">M</span><span>Matriz de serviços'+(filtrados.length!==todos.length?' ('+filtrados.length+' de '+todos.length+')':'')+'</span></h2>'+
         planejamentoTabelaHtml(filtrados)+
       '</div>';
+    wirePlanejamentoImportar(obra);
     wirePlanejamentoFilterBar(obra);
     wirePlanejamentoForm(obra);
     wirePlanejamentoTableActions(obra);
@@ -2885,6 +3012,18 @@
   }
   function wirePlanejamentoTableActions(obra){
     var root = document.getElementById('planejamentoObraContent');
+    root.querySelectorAll('[data-confirm]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-confirm');
+        var s = state.planejamentoServicos.find(function(x){ return x.id===id; });
+        supabaseClient.from('planejamento_servicos').update({confirmado:true}).eq('id', id).then(function(res){
+          if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
+          if(s) registrarPlanejamentoHistorico(id, s.servicoNome, [{campo:'Serviço confirmado (revisão da importação por IA)', antes:'Aguardando confirmação', depois:'Confirmado'}]);
+          toast('Serviço confirmado.','ok');
+          loadPlanejamentoServicos(obra.id);
+        });
+      });
+    });
     root.querySelectorAll('[data-edit]').forEach(function(b){
       b.addEventListener('click', function(){
         state.planejamentoEditId = b.getAttribute('data-edit');
