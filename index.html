@@ -1900,12 +1900,21 @@
   function mapProjetoObraRow(row){
     var url = '';
     try{ url = supabaseClient.storage.from('projetos-obras').getPublicUrl(row.arquivo_path).data.publicUrl; }catch(e){}
+    var excelUrl = '';
+    try{ if(row.excel_path) excelUrl = supabaseClient.storage.from('projetos-obras').getPublicUrl(row.excel_path).data.publicUrl; }catch(e){}
     return {
       id:row.id, obraId:row.obra_id, nome:row.nome, tipo:row.tipo||'', codigo:row.codigo||'',
       arquivoPath:row.arquivo_path, arquivoUrl:url, tamanhoBytes:row.tamanho_bytes||0,
       statusAnalise:row.status_analise||'pendente', qtdServicosIdentificados:row.qtd_servicos_identificados,
       observacoes:row.observacoes||'', uploadedBy:row.uploaded_by, createdAt:row.created_at,
-      analisadoEm:row.analisado_em||null
+      analisadoEm:row.analisado_em||null,
+      clienteIdentificado:row.cliente_identificado||'', numeroIdentificado:row.numero_identificado||'',
+      excelPath:row.excel_path||'', excelUrl:excelUrl,
+      paginasTotal:row.paginas_total, paginasProcessadas:row.paginas_processadas,
+      mensagemStatus:row.mensagem_status||'', enderecosIdentificados:row.enderecos_identificados,
+      pontosLocalizados:row.pontos_localizados, valorTotalProjeto:row.valor_total_projeto,
+      erroMensagem:row.erro_mensagem||'', analiseIniciadaEm:row.analise_iniciada_em||null,
+      analiseConcluidaEm:row.analise_concluida_em||null
     };
   }
   function loadProjetosObra(obraId){
@@ -1928,6 +1937,11 @@
       return 'PROJ-'+n;
     });
   }
+  function invocarAnaliseAutomatica(projetoId){
+    supabaseClient.functions.invoke('analisar-projeto', { body:{ projetoId: projetoId } }).then(function(res){
+      if(res && res.error) console.error('Falha ao iniciar análise automática:', res.error.message || res.error);
+    }).catch(function(err){ console.error('Falha ao iniciar análise automática:', err); });
+  }
   function uploadProjetoFile(file, obraId){
     var safeName = file.name.replace(/[^a-zA-Z0-9_.-]/g,'_');
     var path = obraId + '/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '_' + safeName;
@@ -1939,6 +1953,9 @@
             obra_id: obraId, nome: file.name, tipo: file.type || safeName.split('.').pop() || '',
             arquivo_path: path, tamanho_bytes: file.size, status_analise: 'pendente', codigo: codigo,
             uploaded_by: state.currentUser ? state.currentUser.id : null
+          }).select('id').then(function(insRes){
+            if(!insRes.error && insRes.data && insRes.data[0]) invocarAnaliseAutomatica(insRes.data[0].id);
+            return insRes;
           });
         });
       });
@@ -3267,6 +3284,30 @@
     if(status==='erro') return '<span class="chip rejected">Erro</span>';
     return '<span class="chip draft">Pendente</span>';
   }
+  function projetoDetalheHtml(p){
+    if(p.statusAnalise==='analisando'){
+      var pct = (p.paginasTotal && p.paginasProcessadas!=null) ? Math.round((p.paginasProcessadas/p.paginasTotal)*100) : null;
+      return '<div class="hint" style="margin:6px 0 0;width:100%;">'+
+        (pct!=null ? '<div style="background:#eee;border-radius:6px;height:6px;overflow:hidden;margin-bottom:4px;"><div style="background:#7A5900;height:100%;width:'+pct+'%;"></div></div>' : '')+
+        esc(p.mensagemStatus||'Analisando projeto...')+
+      '</div>';
+    }
+    if(p.statusAnalise==='analisado'){
+      var partes = [];
+      if(p.qtdServicosIdentificados!=null) partes.push(p.qtdServicosIdentificados+' serviço(s)');
+      if(p.enderecosIdentificados!=null) partes.push(p.enderecosIdentificados+' endereço(s)');
+      if(p.pontosLocalizados!=null) partes.push(p.pontosLocalizados+' ponto(s) no mapa');
+      if(p.valorTotalProjeto!=null) partes.push('valor total '+fmtMoeda(p.valorTotalProjeto));
+      return '<div class="hint" style="margin:6px 0 0;width:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
+        '<span>'+esc(partes.join(' · ')||'Análise concluída.')+'</span>'+
+        (p.excelUrl ? '<a href="'+esc(p.excelUrl)+'" target="_blank" rel="noopener" class="btn ghost sm">Baixar Excel</a>' : '')+
+      '</div>';
+    }
+    if(p.statusAnalise==='erro' && p.erroMensagem){
+      return '<div class="hint" style="margin:6px 0 0;width:100%;color:#a33;">'+esc(p.erroMensagem)+'</div>';
+    }
+    return '';
+  }
   function projetosListaHtml(){
     if(!state.projetos.length){
       return '<p class="hint" style="margin:6px 0 0;">Nenhum projeto anexado ainda.</p>';
@@ -3275,13 +3316,14 @@
       var kb = p.tamanhoBytes ? (p.tamanhoBytes/1024/1024).toFixed(1)+' MB' : '';
       var podeAnalisar = (p.statusAnalise==='pendente' || p.statusAnalise==='erro');
       return '<div class="checklist-item" data-id="'+p.id+'" style="justify-content:space-between;flex-wrap:wrap;">'+
-        '<div><b>'+esc(p.nome)+'</b><div class="hint" style="margin:2px 0 0;">'+kb+(p.qtdServicosIdentificados!=null?' · '+p.qtdServicosIdentificados+' serviços identificados':'')+'</div></div>'+
+        '<div><b>'+esc(p.nome)+'</b><div class="hint" style="margin:2px 0 0;">'+kb+'</div></div>'+
         '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
           projetoStatusChip(p.statusAnalise)+
-          (podeAnalisar ? '<button type="button" class="btn primary sm" data-analisar="'+p.id+'">Analisar projeto</button>' : '')+
+          (podeAnalisar ? '<button type="button" class="btn primary sm" data-analisar="'+p.id+'">'+(p.statusAnalise==='erro'?'Analisar novamente':'Analisar projeto')+'</button>' : '')+
           (p.arquivoUrl ? '<a href="'+esc(p.arquivoUrl)+'" target="_blank" rel="noopener" class="btn ghost sm">Abrir arquivo</a>' : '')+
           '<button type="button" class="btn danger sm" data-delprojeto="'+p.id+'">Excluir</button>'+
         '</div>'+
+        projetoDetalheHtml(p)+
       '</div>';
     }).join('')+'</div>';
   }
@@ -3326,11 +3368,9 @@
     root.querySelectorAll('[data-analisar]').forEach(function(b){
       b.addEventListener('click', function(){
         var id = b.getAttribute('data-analisar');
-        supabaseClient.from('projetos_obra').update({ status_analise:'aguardando_analise' }).eq('id', id).then(function(res){
-          if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
-          toast('Marcado como aguardando análise. Avise no chat com Claude para eu buscar o arquivo e gerar a Matriz e o Mapa.','ok');
-          loadProjetosObra(obra.id);
-        });
+        toast('Análise automática iniciada — acompanhe o progresso aqui mesmo.','ok');
+        invocarAnaliseAutomatica(id);
+        loadProjetosObra(obra.id);
       });
     });
     root.querySelectorAll('[data-delprojeto]').forEach(function(b){
