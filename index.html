@@ -1136,6 +1136,7 @@
     planejamentoFiltros: { status:'', busca:'' },
     planejamentoEditId: null,
     planejamentoImportAberto: false,
+    planejamentoImportProjetoId: null,
     mapaFilaIA: [],
     mapaFilaAtivaId: null,
     mapaFilaImportAberto: false,
@@ -1654,6 +1655,11 @@
       diametro:row.diametro==null?null:Number(row.diametro),
       observacoes:row.observacoes||'', material:row.material||'', metodo:row.metodo||'',
       profundidadeTexto:row.profundidade_texto||'', servicoPropostaTexto:row.servico_proposta_texto||'',
+      complemento:row.complemento||'', bairro:row.bairro||'', cidade:row.cidade||'', estado:row.estado||'', cep:row.cep||'',
+      valorUnitario:row.valor_unitario==null?null:Number(row.valor_unitario), valorTotal:row.valor_total==null?null:Number(row.valor_total),
+      latitude:row.latitude==null?null:Number(row.latitude), longitude:row.longitude==null?null:Number(row.longitude),
+      confianca:row.confianca==null?null:Number(row.confianca), fonteTexto:row.fonte_texto||'', revisadoManualmente:!!row.revisado_manualmente,
+      codigo:row.codigo||'',
       projetoId:row.projeto_id||null, paginaProjeto:row.pagina_projeto||null,
       dataInicioPrevista:row.data_inicio_prevista||'', dataFimPrevista:row.data_fim_prevista||'',
       responsavelId:row.responsavel_id||null, equipeId:row.equipe_id||null,
@@ -1895,7 +1901,7 @@
     var url = '';
     try{ url = supabaseClient.storage.from('projetos-obras').getPublicUrl(row.arquivo_path).data.publicUrl; }catch(e){}
     return {
-      id:row.id, obraId:row.obra_id, nome:row.nome, tipo:row.tipo||'',
+      id:row.id, obraId:row.obra_id, nome:row.nome, tipo:row.tipo||'', codigo:row.codigo||'',
       arquivoPath:row.arquivo_path, arquivoUrl:url, tamanhoBytes:row.tamanho_bytes||0,
       statusAnalise:row.status_analise||'pendente', qtdServicosIdentificados:row.qtd_servicos_identificados,
       observacoes:row.observacoes||'', uploadedBy:row.uploaded_by, createdAt:row.created_at,
@@ -1911,16 +1917,29 @@
       if(state.view==='planejamento-obra') renderPlanejamentoObra();
     });
   }
+  function gerarCodigoProjeto(){
+    return supabaseClient.from('projetos_obra').select('codigo').not('codigo','is',null).order('codigo',{ascending:false}).limit(1).then(function(res){
+      var max = 0;
+      if(!res.error && res.data && res.data[0] && res.data[0].codigo){
+        var m = /(\d+)$/.exec(res.data[0].codigo);
+        if(m) max = parseInt(m[1],10)||0;
+      }
+      var n = String(max+1); while(n.length<3) n = '0'+n;
+      return 'PROJ-'+n;
+    });
+  }
   function uploadProjetoFile(file, obraId){
     var safeName = file.name.replace(/[^a-zA-Z0-9_.-]/g,'_');
     var path = obraId + '/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '_' + safeName;
     return supabaseClient.storage.from('projetos-obras').upload(path, file, { cacheControl:'3600', upsert:false })
       .then(function(res){
         if(res.error) throw res.error;
-        return supabaseClient.from('projetos_obra').insert({
-          obra_id: obraId, nome: file.name, tipo: file.type || safeName.split('.').pop() || '',
-          arquivo_path: path, tamanho_bytes: file.size, status_analise: 'pendente',
-          uploaded_by: state.currentUser ? state.currentUser.id : null
+        return gerarCodigoProjeto().then(function(codigo){
+          return supabaseClient.from('projetos_obra').insert({
+            obra_id: obraId, nome: file.name, tipo: file.type || safeName.split('.').pop() || '',
+            arquivo_path: path, tamanho_bytes: file.size, status_analise: 'pendente', codigo: codigo,
+            uploaded_by: state.currentUser ? state.currentUser.id : null
+          });
         });
       });
   }
@@ -2694,7 +2713,7 @@
       if(res.error){ console.error('Erro ao gravar histórico do planejamento:', res.error.message); }
     });
   }
-  var PLANEJAMENTO_IMPORT_EXEMPLO = '[\n  {\n    "servico_nome": "Rede de esgoto - tubulação PVC",\n    "unidade": "m",\n    "quantidade_prevista": 120,\n    "endereco": "Rua das Flores",\n    "trecho": "Entre nº 100 e nº 250",\n    "numero_local": "",\n    "profundidade": 1.2,\n    "diametro": 150,\n    "material": "PVC",\n    "metodo": "VCA",\n    "profundidade_texto": "",\n    "servico_proposta_texto": "",\n    "observacoes": "Não identificado no projeto — confirmar em campo",\n    "prioridade": "Média",\n    "status": "Previsto"\n  }\n]';
+  var PLANEJAMENTO_IMPORT_EXEMPLO = '[\n  {\n    "servico_nome": "Rede de esgoto - tubulação PVC",\n    "unidade": "m",\n    "quantidade_prevista": 120,\n    "endereco": "Rua das Flores",\n    "trecho": "Entre nº 100 e nº 250",\n    "numero_local": "",\n    "complemento": "",\n    "bairro": "",\n    "cidade": "",\n    "estado": "",\n    "cep": "",\n    "profundidade": 1.2,\n    "diametro": 150,\n    "material": "PVC",\n    "metodo": "VCA",\n    "profundidade_texto": "",\n    "servico_proposta_texto": "",\n    "valor_unitario": null,\n    "pagina_projeto": 17,\n    "confianca": 96,\n    "fonte_texto": "Página 17 — quadro de quantitativos",\n    "observacoes": "Não identificado no projeto — confirmar em campo",\n    "prioridade": "Média",\n    "status": "Previsto"\n  }\n]';
   function planejamentoParseImportacao(texto){
     var erros = [];
     var linhas = [];
@@ -2722,6 +2741,11 @@
         endereco: item.endereco?String(item.endereco).trim():null,
         trecho: item.trecho?String(item.trecho).trim():null,
         numero_local: item.numero_local?String(item.numero_local).trim():null,
+        complemento: item.complemento?String(item.complemento).trim():null,
+        bairro: item.bairro?String(item.bairro).trim():null,
+        cidade: item.cidade?String(item.cidade).trim():null,
+        estado: item.estado?String(item.estado).trim():null,
+        cep: item.cep?String(item.cep).trim():null,
         profundidade: numOuNull(item.profundidade), comprimento: numOuNull(item.comprimento),
         largura: numOuNull(item.largura), diametro: numOuNull(item.diametro),
         observacoes: item.observacoes?String(item.observacoes).trim():null,
@@ -2729,6 +2753,10 @@
         metodo: item.metodo?String(item.metodo).trim():null,
         profundidade_texto: item.profundidade_texto?String(item.profundidade_texto).trim():null,
         servico_proposta_texto: item.servico_proposta_texto?String(item.servico_proposta_texto).trim():null,
+        valor_unitario: numOuNull(item.valor_unitario),
+        pagina_projeto: numOuNull(item.pagina_projeto),
+        confianca: (function(){ var c = numOuNull(item.confianca); return c==null?null:Math.max(0,Math.min(100,c)); })(),
+        fonte_texto: item.fonte_texto?String(item.fonte_texto).trim():null,
         prioridade: PLANEJAMENTO_PRIORIDADE_OPTS.indexOf(item.prioridade)!==-1?item.prioridade:'Média',
         status: PLANEJAMENTO_STATUS_OPTS.indexOf(item.status)!==-1?item.status:'Previsto',
         data_inicio_prevista: item.data_inicio_prevista||null, data_fim_prevista: item.data_fim_prevista||null
@@ -2744,6 +2772,7 @@
     return '<div class="card">'+
       '<h2><span class="idx">IA</span><span>Importar serviços (lista da IA)</span></h2>'+
       '<p class="hint" style="margin:-6px 0 12px;">Cole abaixo o JSON com a lista de serviços (veja o exemplo). Depois clique em "Pré-visualizar" para conferir antes de importar. Campos não identificados no projeto devem vir vazios/nulos — nunca inventados.</p>'+
+      '<div class="field" style="max-width:360px;margin-bottom:10px;"><label>Projeto de origem (opcional, para código e rastreio)</label><select id="planImportProjeto"><option value="">Nenhum / avulso</option>'+state.projetos.map(function(p){return '<option value="'+p.id+'"'+(state.planejamentoImportProjetoId===p.id?' selected':'')+'>'+esc(p.codigo?p.codigo+' — '+p.nome:p.nome)+'</option>';}).join('')+'</select></div>'+
       '<textarea id="planImportTexto" rows="8" style="width:100%;font-family:monospace;font-size:12.5px;" placeholder="'+esc(PLANEJAMENTO_IMPORT_EXEMPLO)+'"></textarea>'+
       '<div class="form-actions" style="margin-top:10px;">'+
         '<button type="button" class="btn ghost" id="planImportCancelar">Cancelar</button>'+
@@ -2763,7 +2792,12 @@
       var validas = linhas.filter(function(l){ return !l._problemas.length; });
       html += '<div class="table-wrap"><table class="fin-list"><thead><tr><th>#</th><th>Serviço</th><th>Endereço/Local</th><th>Quantidade</th><th>Situação</th></tr></thead><tbody>'+
         linhas.map(function(l){
-          var situacao = l._problemas.length ? ('<span style="color:var(--red,#C6433F);">Erro: '+esc(l._problemas.join(', '))+'</span>') : '<span style="color:var(--green,#2E8F4E);">OK</span>';
+          var avisos = [];
+          if(!l._problemas.length){
+            if(!l.endereco) avisos.push('⚠️ Endereço incompleto');
+            if(l.valor_unitario==null) avisos.push('⚠️ Valor não informado');
+          }
+          var situacao = l._problemas.length ? ('<span style="color:var(--red,#C6433F);">Erro: '+esc(l._problemas.join(', '))+'</span>') : (avisos.length ? ('<span style="color:#E8952B;">OK · '+esc(avisos.join(' · '))+'</span>') : '<span style="color:var(--green,#2E8F4E);">OK</span>');
           return '<tr><td>'+l._linha+'</td><td>'+esc(l.servico_nome||'—')+'</td><td>'+esc(l.endereco||'—')+(l.trecho?', '+esc(l.trecho):'')+'</td><td class="num">'+(l.quantidade_prevista==null?'—':fmtQtd(l.quantidade_prevista)+' '+esc(l.unidade))+'</td><td>'+situacao+'</td></tr>';
         }).join('')+
       '</tbody></table></div>'+
@@ -2772,28 +2806,40 @@
     }
     return html;
   }
-  function planejamentoConfirmarImportacao(obra, linhasValidas){
+  function planejamentoConfirmarImportacao(obra, linhasValidas, projetoId){
     if(!linhasValidas || !linhasValidas.length) return;
     var uid = state.currentUser ? state.currentUser.id : null;
     var grupoId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('imp-'+Date.now());
-    var payloads = linhasValidas.map(function(l){
-      return {
-        obra_id: obra.id, servico_nome: l.servico_nome, unidade: l.unidade, quantidade_prevista: l.quantidade_prevista,
-        endereco: l.endereco, trecho: l.trecho, numero_local: l.numero_local, profundidade: l.profundidade,
-        comprimento: l.comprimento, largura: l.largura, diametro: l.diametro, observacoes: l.observacoes,
-        material: l.material, metodo: l.metodo, profundidade_texto: l.profundidade_texto, servico_proposta_texto: l.servico_proposta_texto,
-        prioridade: l.prioridade, status: l.status, data_inicio_prevista: l.data_inicio_prevista, data_fim_prevista: l.data_fim_prevista,
-        origem: 'ia', confirmado: false, grupo_id: grupoId, created_by: uid
-      };
-    });
-    supabaseClient.from('planejamento_servicos').insert(payloads).select().then(function(res){
-      if(res.error){ toast('Erro ao importar serviços: '+res.error.message,'error'); return; }
-      (res.data||[]).forEach(function(novo){
-        registrarPlanejamentoHistorico(novo.id, novo.servico_nome, [{campo:'Serviço importado via IA (aguardando confirmação)', antes:null, depois:novo.quantidade_prevista+' '+novo.unidade}], 'ia');
+    var projeto = projetoId ? state.projetos.find(function(p){ return p.id===projetoId; }) : null;
+    function pad3(n){ var s = String(n); while(s.length<3) s = '0'+s; return s; }
+    function montarPayloads(seqInicial){
+      return linhasValidas.map(function(l, i){
+        var codigo = (projeto && projeto.codigo) ? (projeto.codigo+'-'+pad3(seqInicial+i+1)) : null;
+        return {
+          obra_id: obra.id, servico_nome: l.servico_nome, unidade: l.unidade, quantidade_prevista: l.quantidade_prevista,
+          endereco: l.endereco, trecho: l.trecho, numero_local: l.numero_local, profundidade: l.profundidade,
+          comprimento: l.comprimento, largura: l.largura, diametro: l.diametro, observacoes: l.observacoes,
+          material: l.material, metodo: l.metodo, profundidade_texto: l.profundidade_texto, servico_proposta_texto: l.servico_proposta_texto,
+          complemento: l.complemento, bairro: l.bairro, cidade: l.cidade, estado: l.estado, cep: l.cep,
+          valor_unitario: l.valor_unitario, confianca: l.confianca, fonte_texto: l.fonte_texto,
+          projeto_id: projetoId||null, pagina_projeto: l.pagina_projeto, codigo: codigo,
+          prioridade: l.prioridade, status: l.status, data_inicio_prevista: l.data_inicio_prevista, data_fim_prevista: l.data_fim_prevista,
+          origem: 'ia', confirmado: false, grupo_id: grupoId, created_by: uid
+        };
       });
-      toast(payloads.length+' serviço(s) importado(s). Revise e confirme cada um antes de oficializar.','ok');
-      state.planejamentoImportAberto = false;
-      loadPlanejamentoServicos(obra.id);
+    }
+    var contagemPromise = projeto ? supabaseClient.from('planejamento_servicos').select('id', {count:'exact', head:true}).eq('projeto_id', projetoId) : Promise.resolve({count:0});
+    contagemPromise.then(function(resContagem){
+      var payloads = montarPayloads(resContagem.count||0);
+      supabaseClient.from('planejamento_servicos').insert(payloads).select().then(function(res){
+        if(res.error){ toast('Erro ao importar serviços: '+res.error.message,'error'); return; }
+        (res.data||[]).forEach(function(novo){
+          registrarPlanejamentoHistorico(novo.id, novo.servico_nome, [{campo:'Serviço importado via IA (aguardando confirmação)', antes:null, depois:novo.quantidade_prevista+' '+novo.unidade}], 'ia');
+        });
+        toast(payloads.length+' serviço(s) importado(s). Revise e confirme cada um antes de oficializar.','ok');
+        state.planejamentoImportAberto = false;
+        loadPlanejamentoServicos(obra.id);
+      });
     });
   }
   function wirePlanejamentoImportar(obra){
@@ -2804,6 +2850,8 @@
     var exemplo = document.getElementById('planImportExemplo');
     var textarea = document.getElementById('planImportTexto');
     if(exemplo && textarea) exemplo.addEventListener('click', function(){ textarea.value = PLANEJAMENTO_IMPORT_EXEMPLO; });
+    var selProjeto = document.getElementById('planImportProjeto');
+    if(selProjeto) selProjeto.addEventListener('change', function(){ state.planejamentoImportProjetoId = selProjeto.value || null; });
     var preview = document.getElementById('planImportPreview');
     var previewBox = document.getElementById('planImportPreviewBox');
     if(preview && textarea && previewBox){
@@ -2814,7 +2862,8 @@
         if(confirmar){
           confirmar.addEventListener('click', function(){
             var validas = resultado.linhas.filter(function(l){ return !l._problemas.length; });
-            planejamentoConfirmarImportacao(obra, validas);
+            var projetoIdSel = document.getElementById('planImportProjeto') ? (document.getElementById('planImportProjeto').value || null) : null;
+            planejamentoConfirmarImportacao(obra, validas, projetoIdSel);
           });
         }
       });
@@ -2874,6 +2923,18 @@
           '<div class="field"><label>Prioridade</label><select id="planPrioridade">'+PLANEJAMENTO_PRIORIDADE_OPTS.map(function(o){return '<option'+((editing?editing.prioridade===o:o==='Média')?' selected':'')+'>'+o+'</option>';}).join('')+'</select></div>'+
         '</div>'+
         '<div class="grid4" style="margin-top:12px;">'+
+          '<div class="field"><label>Complemento</label><input type="text" id="planComplemento" value="'+esc(editing?(editing.complemento||''):'')+'"></div>'+
+          '<div class="field"><label>Bairro</label><input type="text" id="planBairro" value="'+esc(editing?(editing.bairro||''):'')+'"></div>'+
+          '<div class="field"><label>Cidade</label><input type="text" id="planCidade" value="'+esc(editing?(editing.cidade||''):'')+'"></div>'+
+          '<div class="field"><label>Estado (UF)</label><input type="text" id="planEstado" maxlength="2" style="text-transform:uppercase;" value="'+esc(editing?(editing.estado||''):'')+'"></div>'+
+        '</div>'+
+        '<div class="grid4" style="margin-top:12px;">'+
+          '<div class="field"><label>CEP</label><input type="text" id="planCep" value="'+esc(editing?(editing.cep||''):'')+'"></div>'+
+          '<div class="field"><label>Valor unitário (R$)</label><input type="number" id="planValorUnitario" step="0.01" min="0" value="'+(editing&&editing.valorUnitario!=null?editing.valorUnitario:'')+'"></div>'+
+          '<div class="field"><label>Valor total (calculado)</label><input type="text" id="planValorTotalPreview" disabled value="'+(editing&&editing.valorTotal!=null?fmtMoeda(editing.valorTotal):'—')+'"></div>'+
+          '<div class="field"><label>Confiança da extração</label><input type="text" disabled value="'+(editing&&editing.confianca!=null?(editing.confianca+'% '+(editing.confianca>=90?'🟢 alta':editing.confianca>=70?'🟡 média':'🔴 baixa')):'—')+'"></div>'+
+        '</div>'+
+        '<div class="grid4" style="margin-top:12px;">'+
           '<div class="field"><label>Profundidade (m)</label><input type="number" id="planProfundidade" step="0.01" min="0" value="'+(editing&&editing.profundidade!=null?editing.profundidade:'')+'"></div>'+
           '<div class="field"><label>Comprimento (m)</label><input type="number" id="planComprimento" step="0.01" min="0" value="'+(editing&&editing.comprimento!=null?editing.comprimento:'')+'"></div>'+
           '<div class="field"><label>Largura (m)</label><input type="number" id="planLargura" step="0.01" min="0" value="'+(editing&&editing.largura!=null?editing.largura:'')+'"></div>'+
@@ -2903,6 +2964,14 @@
       '</form>'+
     '</div>';
   }
+  function planejamentoAvisosHtml(s){
+    var avisos = [];
+    if(!s.endereco) avisos.push('⚠️ Endereço incompleto');
+    if(s.valorUnitario==null) avisos.push('⚠️ Valor não informado');
+    if(s.confirmado && s.latitude==null && s.longitude==null) avisos.push('⚠️ Coordenada não localizada');
+    if(!avisos.length) return '';
+    return '<div style="color:#C6433F;font-size:11px;margin-top:2px;">'+avisos.map(esc).join(' · ')+'</div>';
+  }
   function planejamentoTabelaHtml(servicos){
     if(!servicos.length){
       return '<div class="table-wrap"><p class="empty-hint" style="padding:20px;">Nenhum serviço cadastrado na matriz desta obra ainda.</p></div>';
@@ -2912,7 +2981,7 @@
       while(numero.length<3) numero = '0'+numero;
       return '<tr data-id="'+s.id+'">'+
         '<td data-label="Nº">'+numero+'</td>'+
-        '<td data-label="Serviço">'+(s.origem==='ia'&&!s.confirmado?'<span class="chip" style="background:#FFC400;color:#1a1a1a;margin-right:6px;">IA · revisar</span>':'')+esc(s.servicoNome)+(s.observacoes?'<div style="color:var(--steel);font-size:11.5px;">'+esc(s.observacoes)+'</div>':'')+'</td>'+
+        '<td data-label="Serviço">'+(s.origem==='ia'&&!s.confirmado?'<span class="chip" style="background:#FFC400;color:#1a1a1a;margin-right:6px;">IA · revisar</span>':'')+(s.codigo?'<span class="hint" style="font-family:monospace;margin-right:6px;">'+esc(s.codigo)+'</span>':'')+esc(s.servicoNome)+(s.observacoes?'<div style="color:var(--steel);font-size:11.5px;">'+esc(s.observacoes)+'</div>':'')+planejamentoAvisosHtml(s)+'</td>'+
         '<td data-label="Endereço/Local">'+esc(s.endereco||'—')+(s.numeroLocal?', nº '+esc(s.numeroLocal):'')+(s.trecho?'<div style="color:var(--steel);font-size:11.5px;">'+esc(s.trecho)+'</div>':'')+'</td>'+
         '<td class="num" data-label="Quantidade">'+fmtQtd(s.quantidadePrevista)+' '+esc(s.unidade)+'</td>'+
         '<td data-label="Profundidade">'+(s.profundidadeTexto?esc(s.profundidadeTexto):(s.profundidade!=null?fmtQtd(s.profundidade)+' m':'—'))+'</td>'+
@@ -2920,6 +2989,7 @@
         '<td data-label="Status"><span class="chip" style="background:'+planejamentoStatusColor(s.status)+';color:#fff;">'+esc(s.status)+'</span></td>'+
         '<td style="text-align:right;" data-label="Ações">'+
           (s.origem==='ia'&&!s.confirmado?'<button type="button" class="btn primary sm" data-confirm="'+s.id+'">Confirmar</button> ':'')+
+          (s.confirmado && s.latitude==null && s.endereco ? '<button type="button" class="btn ghost sm" data-localizar="'+s.id+'">Localizar no mapa</button> ' : '')+
           '<button type="button" class="btn ghost sm" data-edit="'+s.id+'">Editar</button> '+
           '<button type="button" class="btn ghost sm" data-dup="'+s.id+'">Duplicar</button> '+
           '<button type="button" class="btn danger sm" data-del="'+s.id+'">Excluir</button>'+
@@ -2966,7 +3036,7 @@
       planejamentoImportarCardHtml()+
       planejamentoFormHtml()+
       '<div class="card">'+
-        '<h2><span class="idx">M</span><span>Matriz de serviços'+(filtrados.length!==todos.length?' ('+filtrados.length+' de '+todos.length+')':'')+'</span><button type="button" class="btn ghost sm" id="btnExportarMatrizExcel" style="margin-left:auto;">Exportar Excel</button></h2>'+
+        '<h2><span class="idx">M</span><span>Matriz de serviços'+(filtrados.length!==todos.length?' ('+filtrados.length+' de '+todos.length+')':'')+'</span>'+(pendenteIA>0?'<button type="button" class="btn primary sm" id="btnConfirmarPendentesMapa" style="margin-left:auto;">Confirmar pendentes e enviar ao Mapa ('+pendenteIA+')</button>':'')+'<button type="button" class="btn ghost sm" id="btnExportarMatrizExcel" style="margin-left:'+(pendenteIA>0?'8px':'auto')+';">Exportar Excel</button></h2>'+
         planejamentoTabelaHtml(filtrados)+
       '</div>';
     wireProjetosCard(obra);
@@ -2976,6 +3046,8 @@
     wirePlanejamentoTableActions(obra);
     var btnExportarExcel = document.getElementById('btnExportarMatrizExcel');
     if(btnExportarExcel) btnExportarExcel.addEventListener('click', function(){ exportarMatrizExcel(obra, state.planejamentoServicos); });
+    var btnConfirmarPendentes = document.getElementById('btnConfirmarPendentesMapa');
+    if(btnConfirmarPendentes) btnConfirmarPendentes.addEventListener('click', function(){ confirmarPendentesEEnviarAoMapa(obra); });
   }
 
   function exportarMatrizExcel(obra, servicos){
@@ -3033,8 +3105,160 @@
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Resumo da Matriz');
     var nomeArquivo = 'Resumo_Matriz_'+String(obra.nome||'obra').replace(/[^a-zA-Z0-9]+/g,'_')+'.xlsx';
+    function enderecoCompletoTxt(s){
+      var partes = [];
+      if(s.endereco) partes.push(s.endereco);
+      if(s.numeroLocal) partes.push('nº '+s.numeroLocal);
+      if(s.complemento) partes.push(s.complemento);
+      if(s.bairro) partes.push(s.bairro);
+      if(s.cidade) partes.push(s.cidade);
+      if(s.estado) partes.push(s.estado);
+      if(s.cep) partes.push('CEP '+s.cep);
+      return partes.length ? partes.join(', ') : 'NÃO INFORMADO';
+    }
+    function projetoNomeById(id){
+      if(!id) return '';
+      var p = (state.projetos||[]).find(function(x){ return x.id===id; });
+      return p ? (p.codigo?p.codigo+' — '+p.nome:p.nome) : '';
+    }
+    var servicosHeader = ['ID','Projeto','Endereço completo','Logradouro','Número','Bairro','Cidade','Estado','Serviço','Descrição','Quantidade','Unidade','Comprimento','Largura','Profundidade','Diâmetro','Valor unitário','Valor total','Latitude','Longitude','Status','Observações'];
+    var servicosAoa = [servicosHeader];
+    var valorTotalProjeto = 0;
+    var temAlgumValor = false;
+    servicos.forEach(function(s){
+      if(s.valorTotal!=null){ valorTotalProjeto += s.valorTotal; temAlgumValor = true; }
+      servicosAoa.push([
+        s.codigo || s.id, projetoNomeById(s.projetoId), enderecoCompletoTxt(s), s.endereco||'NÃO INFORMADO', s.numeroLocal||'NÃO INFORMADO',
+        s.bairro||'NÃO INFORMADO', s.cidade||'NÃO INFORMADO', s.estado||'NÃO INFORMADO',
+        s.servicoNome, s.observacoes||'', s.quantidadePrevista, s.unidade,
+        s.comprimento!=null?s.comprimento:'', s.largura!=null?s.largura:'', (s.profundidadeTexto||(s.profundidade!=null?s.profundidade:'')), s.diametro!=null?s.diametro:'',
+        s.valorUnitario!=null?s.valorUnitario:'NÃO INFORMADO', s.valorTotal!=null?s.valorTotal:'NÃO INFORMADO',
+        s.latitude!=null?s.latitude:'PENDENTE DE VALIDAÇÃO', s.longitude!=null?s.longitude:'PENDENTE DE VALIDAÇÃO',
+        s.status, s.observacoes||''
+      ]);
+    });
+    servicosAoa.push([]);
+    servicosAoa.push(['VALOR TOTAL DO PROJETO','','','','','','','','','','','','','','','','', temAlgumValor?valorTotalProjeto:'NÃO INFORMADO','','','','']);
+    var wsServicos = XLSX.utils.aoa_to_sheet(servicosAoa);
+    var resumoAoa = [
+      ['RESUMO'],
+      ['Obra', obra.nome],
+      ['Quantidade total de serviços', servicos.length],
+      ['Quantidade de endereços distintos', grupos.length],
+      ['Valor total', temAlgumValor?fmtMoeda(valorTotalProjeto):'NÃO INFORMADO'],
+      [],
+      ['Serviços por status', '']
+    ];
+    var porStatus = {};
+    servicos.forEach(function(s){ porStatus[s.status] = (porStatus[s.status]||0)+1; });
+    Object.keys(porStatus).forEach(function(st){ resumoAoa.push([st, porStatus[st]]); });
+    var wsResumo = XLSX.utils.aoa_to_sheet(resumoAoa);
+    var porTipo = {}; var ordemTipo = [];
+    servicos.forEach(function(s){
+      var chaveTipo = s.servicoNome || '(sem serviço)';
+      if(!(chaveTipo in porTipo)){ porTipo[chaveTipo] = {}; ordemTipo.push(chaveTipo); }
+      var u = s.unidade||'';
+      porTipo[chaveTipo][u] = (porTipo[chaveTipo][u]||0) + (Number(s.quantidadePrevista)||0);
+    });
+    var quantAoa = [['Tipo de serviço','Quantidade total']];
+    ordemTipo.forEach(function(t){
+      var somaTxt = Object.keys(porTipo[t]).map(function(u){ return fmtQtd(porTipo[t][u])+' '+u; }).join(' + ');
+      quantAoa.push([t, somaTxt]);
+    });
+    var wsQuant = XLSX.utils.aoa_to_sheet(quantAoa);
+    XLSX.utils.book_append_sheet(wb, wsServicos, 'SERVIÇOS');
+    XLSX.utils.book_append_sheet(wb, wsResumo, 'RESUMO');
+    XLSX.utils.book_append_sheet(wb, wsQuant, 'QUANTITATIVOS');
     XLSX.writeFile(wb, nomeArquivo);
     toast('Excel gerado: '+nomeArquivo,'ok');
+  }
+  function geocodeEnderecoServico(s, obra){
+    var partes = [s.endereco, s.numeroLocal, s.bairro, s.cidade||obra.localidade, s.estado].filter(Boolean);
+    var query = partes.join(', ');
+    if(!query) return Promise.resolve(null);
+    return fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(query))
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(list){
+        if(list && list[0]) return { lat:parseFloat(list[0].lat), lng:parseFloat(list[0].lon) };
+        return null;
+      })
+      .catch(function(){ return null; });
+  }
+  function vincularServicoAoMapa(servico, obraId, coords){
+    var uid = state.currentUser ? state.currentUser.id : null;
+    var uidNome = state.currentUser ? state.currentUser.nome : null;
+    var catalogoMatch = mapaFindCatalogoMatch(servico.servicoNome);
+    var tipo = catalogoMatch ? mapaServicoTipoGeom(catalogoMatch) : 'pv';
+    if(coords){
+      var payload = {
+        obra_id: obraId, tipo: tipo, rua: servico.endereco||null, nome_local: null,
+        numero_servico: servico.numeroLocal||null, status: 'parado',
+        observacao: servico.servicoNome+' ('+fmtQtd(servico.quantidadePrevista)+' '+servico.unidade+')',
+        geom: [coords], catalogo_item_id: servico.catalogoItemId||null, foto: null,
+        planejamento_servico_id: servico.id, created_by: uid, created_by_nome: uidNome
+      };
+      return supabaseClient.from('mapa_marcacoes').insert(payload).select().then(function(res){
+        if(res.error) return { ok:false, error:res.error.message };
+        return supabaseClient.from('planejamento_servicos').update({ latitude: coords.lat, longitude: coords.lng }).eq('id', servico.id).then(function(){ return { ok:true, marcada:true }; });
+      });
+    }
+    var payloadFila = {
+      obra_id: obraId, tipo_sugerido: tipo, servico_texto: servico.servicoNome,
+      catalogo_item_id: servico.catalogoItemId||null, endereco: servico.endereco||null, numero_local: servico.numeroLocal||null,
+      observacoes: 'Localização não encontrada automaticamente — posicionar manualmente no mapa.',
+      geom: null, origem:'ia', status:'pendente', planejamento_servico_id: servico.id, created_by: uid
+    };
+    return supabaseClient.from('mapa_fila_ia').insert(payloadFila).then(function(res){
+      if(res.error) return { ok:false, error:res.error.message };
+      return { ok:true, marcada:false };
+    });
+  }
+  function confirmarPendentesEEnviarAoMapa(obra){
+    var pendentes = state.planejamentoServicos.filter(function(s){ return s.origem==='ia' && !s.confirmado; });
+    if(!pendentes.length) return;
+    confirmModal({
+      title:'Confirmar pendentes e enviar ao Mapa',
+      msg:'Isso confirma '+pendentes.length+' serviço(s) importado(s) pela IA, busca a coordenada de cada endereço (quando ainda não localizada) e cria os pontos correspondentes no Mapa — sem apagar nem duplicar nada existente. Serviços sem endereço identificável ficam pendentes de posicionamento manual. Deseja continuar?',
+      okLabel:'Confirmar e enviar'
+    }).then(function(ok){
+      if(!ok) return;
+      toast('Processando '+pendentes.length+' serviço(s)... a geocodificação é feita um endereço por vez.','ok');
+      var i = 0, localizados = 0, semLocalizacao = 0, falhas = 0;
+      function processarProximo(){
+        if(i>=pendentes.length){
+          toast('Concluído: '+localizados+' localizado(s) no mapa, '+semLocalizacao+' aguardando posicionamento manual'+(falhas?', '+falhas+' falha(s)':'')+'.', falhas?'error':'ok');
+          loadPlanejamentoServicos(obra.id);
+          return;
+        }
+        var s = pendentes[i]; i++;
+        supabaseClient.from('planejamento_servicos').update({ confirmado:true }).eq('id', s.id).then(function(){
+          var jaTemCoord = s.latitude!=null && s.longitude!=null;
+          var geoPromise = jaTemCoord ? Promise.resolve({lat:s.latitude,lng:s.longitude}) : geocodeEnderecoServico(s, obra);
+          geoPromise.then(function(coords){
+            vincularServicoAoMapa(s, obra.id, coords).then(function(res){
+              if(!res || !res.ok) falhas++;
+              else if(res.marcada) localizados++;
+              else semLocalizacao++;
+              setTimeout(processarProximo, jaTemCoord ? 50 : 1100);
+            });
+          });
+        });
+      }
+      processarProximo();
+    });
+  }
+  function localizarServicoNoMapa(obra, servicoId){
+    var s = state.planejamentoServicos.find(function(x){ return x.id===servicoId; });
+    if(!s) return;
+    toast('Buscando coordenada para "'+s.endereco+'"...','ok');
+    geocodeEnderecoServico(s, obra).then(function(coords){
+      if(!coords){ toast('Localização não encontrada para este endereço. Posicione manualmente pela fila do Mapa.','error'); return; }
+      vincularServicoAoMapa(s, obra.id, coords).then(function(res){
+        if(!res || !res.ok){ toast('Erro ao criar o ponto no mapa'+(res&&res.error?': '+res.error:'')+'.','error'); return; }
+        toast('Ponto criado no Mapa a partir do endereço do serviço.','ok');
+        loadPlanejamentoServicos(obra.id);
+      });
+    });
   }
   function projetoStatusChip(status){
     if(status==='analisando') return '<span class="chip" style="background:#FFF3CC;color:#7A5900;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:2px solid rgba(122,89,0,.35);border-top-color:#7A5900;"></span> Analisando</span>';
@@ -3137,6 +3361,17 @@
       bs.addEventListener('blur', function(){ state.planejamentoFiltros.busca = bs.value; renderPlanejamentoObra(); });
     }
   }
+  function statusPlanejamentoParaMapa(status){
+    if(status==='Concluído') return 'concluido';
+    if(status==='Previsto') return 'parado';
+    return 'processando';
+  }
+  function sincronizarStatusMarcacaoDoServico(servicoId, planStatus){
+    var novoStatus = statusPlanejamentoParaMapa(planStatus);
+    supabaseClient.from('mapa_marcacoes').update({ status: novoStatus, updated_at: new Date().toISOString() }).eq('planejamento_servico_id', servicoId).then(function(res){
+      if(res.error) console.error('Erro ao sincronizar status da marcação vinculada:', res.error.message);
+    });
+  }
   function wirePlanejamentoForm(obra){
     var form = document.getElementById('planejamentoForm');
     if(!form) return;
@@ -3159,6 +3394,18 @@
     }
     wireDatePlaceholder('planDataInicio');
     wireDatePlaceholder('planDataFim');
+
+    var qtdInputPreview = document.getElementById('planQuantidade');
+    var valorUnitInputPreview = document.getElementById('planValorUnitario');
+    var valorTotalPreviewEl = document.getElementById('planValorTotalPreview');
+    function atualizarValorTotalPreview(){
+      if(!valorTotalPreviewEl) return;
+      var q = Number(qtdInputPreview ? qtdInputPreview.value : 0) || 0;
+      var vu = (valorUnitInputPreview && valorUnitInputPreview.value!=='') ? Number(valorUnitInputPreview.value) : null;
+      valorTotalPreviewEl.value = vu==null ? '—' : fmtMoeda(Math.round(q*vu*100)/100);
+    }
+    if(qtdInputPreview) qtdInputPreview.addEventListener('input', atualizarValorTotalPreview);
+    if(valorUnitInputPreview) valorUnitInputPreview.addEventListener('input', atualizarValorTotalPreview);
 
     form.addEventListener('submit', function(e){
       e.preventDefault();
@@ -3186,7 +3433,13 @@
         material: document.getElementById('planMaterial').value.trim() || null,
         metodo: document.getElementById('planMetodo').value.trim() || null,
         profundidade_texto: document.getElementById('planProfundidadeTexto').value.trim() || null,
-        servico_proposta_texto: document.getElementById('planServicoProposta').value.trim() || null
+        servico_proposta_texto: document.getElementById('planServicoProposta').value.trim() || null,
+        complemento: document.getElementById('planComplemento').value.trim() || null,
+        bairro: document.getElementById('planBairro').value.trim() || null,
+        cidade: document.getElementById('planCidade').value.trim() || null,
+        estado: document.getElementById('planEstado').value.trim() || null,
+        cep: document.getElementById('planCep').value.trim() || null,
+        valor_unitario: document.getElementById('planValorUnitario').value===''?null:Number(document.getElementById('planValorUnitario').value)
       };
       if(!payload.servico_nome || !payload.unidade){ toast('Preencha o serviço e a unidade.','error'); return; }
       if(!(payload.quantidade_prevista>=0)){ toast('Quantidade prevista precisa ser um número válido.','error'); return; }
@@ -3194,6 +3447,7 @@
       if(state.planejamentoEditId){
         var anterior = state.planejamentoServicos.find(function(x){ return x.id===state.planejamentoEditId; });
         var editId = state.planejamentoEditId;
+        if(anterior && anterior.origem==='ia') payload.revisado_manualmente = true;
         supabaseClient.from('planejamento_servicos').update(payload).eq('id', editId).then(function(res){
           if(res.error){ toast('Erro ao salvar serviço: '+res.error.message,'error'); return; }
           if(anterior){
@@ -3205,6 +3459,7 @@
               {campo:'Data fim prevista', antes:anterior.dataFimPrevista, depois:payload.data_fim_prevista}
             ].filter(function(c){ return String(c.antes==null?'':c.antes) !== String(c.depois==null?'':c.depois); });
             registrarPlanejamentoHistorico(editId, payload.servico_nome, campos);
+            if(anterior.status !== payload.status) sincronizarStatusMarcacaoDoServico(editId, payload.status);
           }
           toast('Serviço atualizado.','ok');
           state.planejamentoEditId = null;
@@ -3237,6 +3492,11 @@
         });
       });
     });
+    root.querySelectorAll('[data-localizar]').forEach(function(b){
+      b.addEventListener('click', function(){
+        localizarServicoNoMapa(obra, b.getAttribute('data-localizar'));
+      });
+    });
     root.querySelectorAll('[data-edit]').forEach(function(b){
       b.addEventListener('click', function(){
         state.planejamentoEditId = b.getAttribute('data-edit');
@@ -3255,7 +3515,9 @@
           numero_local: s.numeroLocal, prioridade: s.prioridade, profundidade: s.profundidade, comprimento: s.comprimento,
           largura: s.largura, diametro: s.diametro, data_inicio_prevista: s.dataInicioPrevista||null, data_fim_prevista: s.dataFimPrevista||null,
           responsavel_id: s.responsavelId, equipe_id: s.equipeId, observacoes: s.observacoes,
-          material: s.material||null, metodo: s.metodo||null, profundidade_texto: s.profundidadeTexto||null, servico_proposta_texto: s.servicoPropostaTexto||null
+          material: s.material||null, metodo: s.metodo||null, profundidade_texto: s.profundidadeTexto||null, servico_proposta_texto: s.servicoPropostaTexto||null,
+          complemento: s.complemento||null, bairro: s.bairro||null, cidade: s.cidade||null, estado: s.estado||null, cep: s.cep||null,
+          valor_unitario: s.valorUnitario, projeto_id: s.projetoId||null, pagina_projeto: s.paginaProjeto||null
         };
         supabaseClient.from('planejamento_servicos').insert(payload).select().then(function(res){
           if(res.error){ toast('Erro ao duplicar serviço: '+res.error.message,'error'); return; }
@@ -3721,6 +3983,7 @@
       observacao: row.observacao || '',
       geom: row.geom || [],
       catalogoItemId: row.catalogo_item_id || null,
+      planejamentoServicoId: row.planejamento_servico_id || null,
       foto: row.foto || '',
       createdBy: row.created_by,
       createdByNome: row.created_by_nome || '',
@@ -3795,6 +4058,7 @@
       catalogoItemId:row.catalogo_item_id||null, endereco:row.endereco||'', numeroLocal:row.numero_local||'',
       observacoes:row.observacoes||'', geom:row.geom||null, status:row.status||'pendente', origem:row.origem||'ia',
       grupoId:row.grupo_id||null, createdBy:row.created_by, posicionadoMarcacaoId:row.posicionado_marcacao_id||null,
+      planejamentoServicoId:row.planejamento_servico_id||null,
       createdAt:row.created_at, updatedAt:row.updated_at
     };
   }
