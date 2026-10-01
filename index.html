@@ -596,6 +596,13 @@
     .obra-card{flex-direction:column;align-items:stretch;}
     .obra-actions{flex-wrap:wrap;width:100%;}
   }
+    .rdo-tile-cols-2{width:50%;}
+    .rdo-tile-cols-3{width:33.3334%;}
+    .rdo-tile-cols-6{width:16.6667%;}
+    /* RDO (ver detalhes/PDF): grades de cartao (Equipamentos, Gestao) viram 2 colunas no celular, nome sempre completo */
+    @media (max-width:680px){
+          .rdo-tile-cols-3, .rdo-tile-cols-6{width:50%;}
+    }
   @media print{
     body *{ visibility:hidden; }
     #finPrintArea, #finPrintArea *{ visibility:visible; }
@@ -6138,11 +6145,10 @@
   }
   function rdoTileGridHtml(items, cols){
     cols = cols || 6;
-    var w = (100/cols).toFixed(4)+'%';
-    var tiles = items.map(function(it){
+        var tiles = items.map(function(it){
       var bg = it.total ? RDO_HEAD : 'var(--surface)';
-      return '<div style="width:'+w+';box-sizing:border-box;padding:10px 12px;border-right:1px solid '+RDO_BORDER+';border-bottom:1px solid '+RDO_BORDER+';background:'+bg+';">'+
-        '<div style="font-size:10px;color:'+(it.total?'var(--ink)':'var(--venko-yellow-deep)')+';font-weight:'+(it.total?'bold':'normal')+';">'+esc(it.label)+'</div>'+
+      return '<div class="rdo-tile rdo-tile-cols-'+cols+'" style="box-sizing:border-box;padding:10px 12px;border-right:1px solid '+RDO_BORDER+';border-bottom:1px solid '+RDO_BORDER+';background:'+bg+';">'+
+        '<div style="font-size:10px;color:'+(it.total?'var(--ink)':'var(--venko-yellow-deep)')+';font-weight:'+(it.total?'bold':'normal')+';word-wrap:break-word;">'+esc(it.label)+'</div>'+
         '<div style="font-size:16px;font-weight:bold;margin-top:2px;">'+esc(it.value)+'</div>'+
       '</div>';
     }).join('');
