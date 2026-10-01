@@ -6205,10 +6205,17 @@
     '</div>';
   }
   function rdoResumoQtdEquipeRowHtml(nome, i, d){
-    var qtd = computeEquipeQtdFeita(d);
-    return '<div data-pdf-row="1" style="padding:9px 14px;border-bottom:1px solid '+RDO_LINE_SOFT+';font-weight:bold;">'+
-      'EQ '+(i+1)+' fez '+fmtQtd(qtd)+
-    '</div>';
+        var qtd = computeEquipeQtdFeita(d);
+      return '<div data-pdf-row="1" style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
+        '<div>'+
+          '<div style="font-size:10px;color:var(--venko-yellow-deep);font-weight:bold;text-transform:uppercase;letter-spacing:.3px;">EQ '+(i+1)+'</div>'+
+          '<div style="font-size:12.5px;font-weight:bold;margin-top:2px;">'+esc(nome)+'</div>'+
+        '</div>'+
+        '<div style="text-align:right;">'+
+          '<div style="font-size:19px;font-weight:bold;line-height:1;">'+fmtQtd(qtd)+'</div>'+
+          '<div style="font-size:9px;color:'+RDO_MUTED+';text-transform:uppercase;letter-spacing:.3px;margin-top:2px;">concluido(s)</div>'+
+        '</div>'+
+      '</div>';
   }
   function rdoResumoProducaoRowHtml(nome, i, d){
     return '<div data-pdf-row="1" style="display:flex;padding:9px 12px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
