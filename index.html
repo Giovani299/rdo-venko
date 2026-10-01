@@ -800,10 +800,10 @@
         <div id="departamentoList"></div>
       </div>
       <div class="card">
-        <h2><span class="idx">+</span>Cadastrar colaborador</h2>
+        <h2><span class="idx">+</span>Cadastrar função</h2>
         <form id="colaboradorForm">
           <div class="grid4">
-            <div class="field"><label>Nome</label><input type="text" id="colaboradorNome" required></div>
+            
             <div class="field"><label>Função</label>
               <select id="colaboradorFuncaoSel"></select>
               <input type="text" id="colaboradorFuncaoOutra" placeholder="Nome da função" style="margin-top:6px;display:none">
@@ -811,7 +811,7 @@
             <div class="field"><label>Departamento</label><select id="colaboradorDepto"></select></div>
             <div class="field"><label>Equipe</label><select id="colaboradorEquipe"></select></div>
           </div>
-          <div class="form-actions"><button type="submit" class="btn primary">Salvar colaborador</button></div>
+          <div class="form-actions"><button type="submit" class="btn primary">Salvar função</button></div>
         </form>
       </div>
       <div id="colaboradorList"></div>
@@ -5114,16 +5114,16 @@
   });
   document.getElementById('colaboradorForm').addEventListener('submit', function(e){
     e.preventDefault();
-    var nome = document.getElementById('colaboradorNome').value.trim();
-    if(!nome){ toast('Informe o nome do colaborador.','error'); return; }
+    
+
     var funcSel = document.getElementById('colaboradorFuncaoSel').value;
     var funcao = funcSel==='__custom__' ? document.getElementById('colaboradorFuncaoOutra').value.trim() : funcSel;
-    if(!funcao){ toast('Informe a função do colaborador.','error'); return; }
+    if(!funcao){ toast('Informe a função.','error'); return; }
     var deptoId = document.getElementById('colaboradorDepto').value || null;
     var equipeId = document.getElementById('colaboradorEquipe').value || null;
-    supabaseClient.from('colaboradores').insert({ nome: nome, funcao: funcao, departamento_id: deptoId, equipe_id: equipeId }).then(function(res){
-      if(res.error){ toast('Erro ao salvar colaborador: '+res.error.message,'error'); return; }
-      toast('Colaborador cadastrado.','ok');
+    supabaseClient.from('colaboradores').insert({ nome: funcao, funcao: funcao, departamento_id: deptoId, equipe_id: equipeId }).then(function(res){
+      if(res.error){ toast('Erro ao salvar função: '+res.error.message,'error'); return; }
+      toast('Função cadastrada.','ok');
       e.target.reset();
       document.getElementById('colaboradorFuncaoOutra').style.display = 'none';
       loadColaboradores();
