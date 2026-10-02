@@ -461,6 +461,9 @@
   .map-pin3d-wrap{position:relative;width:22px;height:28px;}
   .map-pin3d-shadow{position:absolute;left:3px;bottom:0;width:16px;height:6px;border-radius:50%;background:rgba(20,19,15,.4);filter:blur(1px);}
   .map-pin3d{position:absolute;left:2px;top:2px;width:18px;height:18px;border-radius:50%;border:1px solid rgba(255,255,255,.55);box-shadow:0 3px 4px rgba(20,19,15,.45), inset -2px -3px 4px rgba(0,0,0,.28), inset 2px 2px 3px rgba(255,255,255,.5);}
+  .map-circle-wrap{position:relative;width:26px;height:26px;}
+  .map-circle{position:absolute;left:1px;top:1px;width:24px;height:24px;border-radius:50%;border:2px solid #fff;box-shadow:0 2px 5px rgba(20,19,15,.45), inset -2px -3px 4px rgba(0,0,0,.25), inset 2px 2px 3px rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;font:800 9.5px/1 Inter,sans-serif;color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.45);}
+  .map-circle.is-grupo{box-shadow:0 2px 5px rgba(20,19,15,.45), inset -2px -3px 4px rgba(0,0,0,.25), inset 2px 2px 3px rgba(255,255,255,.45), 0 0 0 3px rgba(255,255,255,.65);}
   .modal h3{font-size:18px;margin-bottom:8px;}
   .modal p{color:var(--ink-soft);font-size:13.5px;margin:0 0 16px;}
   .modal .row{display:flex;justify-content:flex-end;gap:10px;}
@@ -1147,6 +1150,11 @@
     mapaFilaIA: [],
     mapaFilaAtivaId: null,
     mapaFilaImportAberto: false,
+    mapaFilaFiltro: 'all', // 'all' | 'revisar'
+    mapaFiltroProjeto: 'all',
+    mapaFiltroStatus: 'all',
+    mapaFiltroRegiao: '',
+    mapaFiltroNumeroLocal: '',
     projetos: []
   };
 
@@ -1672,6 +1680,7 @@
       responsavelId:row.responsavel_id||null, equipeId:row.equipe_id||null,
       prioridade:row.prioridade||'Média', status:row.status||'Previsto', origem:row.origem||'manual',
       confirmado:row.confirmado!==false, grupoId:row.grupo_id||null,
+      localKey:row.local_key||null,
       createdAt:row.created_at, updatedAt:row.updated_at
     };
   }
@@ -1896,7 +1905,7 @@
     });
   }
   function loadPlanejamentoServicos(obraId){
-    return supabaseClient.from('planejamento_servicos').select('*').eq('obra_id', obraId).then(function(res){
+    return supabaseClient.from('planejamento_servicos').select('*').eq('obra_id', obraId).is('deleted_at', null).then(function(res){
       if(res.error){ toast('Não foi possível carregar a matriz de serviços desta obra.','error'); return; }
       state.planejamentoServicos = (res.data||[]).map(mapPlanejamentoServicoRow);
       state.planejamentoServicos.sort(function(a,b){ return (a.servicoNome||'').localeCompare(b.servicoNome||''); });
@@ -1921,16 +1930,23 @@
       mensagemStatus:row.mensagem_status||'', enderecosIdentificados:row.enderecos_identificados,
       pontosLocalizados:row.pontos_localizados, valorTotalProjeto:row.valor_total_projeto,
       erroMensagem:row.erro_mensagem||'', analiseIniciadaEm:row.analise_iniciada_em||null,
-      analiseConcluidaEm:row.analise_concluida_em||null
+      analiseConcluidaEm:row.analise_concluida_em||null,
+      etapaAtual:row.etapa_atual||null,
+      locaisPendentesLocalizacao:row.locais_pendentes_localizacao,
+      locaisParaRevisar:row.locais_para_revisar
     };
   }
   function loadProjetosObra(obraId){
     return supabaseClient.from('projetos_obra').select('*').eq('obra_id', obraId).then(function(res){
       if(res.error){ toast('Não foi possível carregar os projetos desta obra.','error'); return; }
-      if(state.planejamentoObraId!==obraId) return;
+      // chamada tanto pelo Planejamento quanto pelo Mapeamento (filtro por
+      // projeto) — só descarta a resposta se nenhuma das duas telas ainda
+      // estiver olhando para esta obra (evita resposta tardia de outra obra).
+      if(state.planejamentoObraId!==obraId && state.mapaObraId!==obraId) return;
       state.projetos = (res.data||[]).map(mapProjetoObraRow);
       state.projetos.sort(function(a,b){ return (b.createdAt||'').localeCompare(a.createdAt||''); });
       if(state.view==='planejamento-obra') renderPlanejamentoObra();
+      if(state.view==='mapa-obra'){ refreshMapaFiltroProjeto(); renderMapaMarkersOnMap(); renderMapaMarcacoesList(); }
     });
   }
   function gerarCodigoProjeto(){
@@ -2907,16 +2923,19 @@
       '</div>';
     }).join('');
     list.querySelectorAll('[data-id]').forEach(function(card){
-      card.addEventListener('click', function(){
-        state.planejamentoObraId = card.getAttribute('data-id');
-        state.planejamentoFiltros = { status:'', busca:'' };
-        state.planejamentoEditId = null;
-        state.projetos = [];
-        goto('planejamento-obra');
-        loadPlanejamentoServicos(state.planejamentoObraId);
-        loadProjetosObra(state.planejamentoObraId);
-      });
+      card.addEventListener('click', function(){ abrirPlanejamentoObraPorId(card.getAttribute('data-id')); });
     });
+  }
+  // Reaberta tanto pelo clique na lista de obras quanto pelo link "Ver
+  // projeto"/"Ver no mapa" cruzado entre Planejamento e Mapeamento.
+  function abrirPlanejamentoObraPorId(obraId){
+    state.planejamentoObraId = obraId;
+    state.planejamentoFiltros = { status:'', busca:'' };
+    state.planejamentoEditId = null;
+    state.projetos = [];
+    goto('planejamento-obra');
+    loadPlanejamentoServicos(state.planejamentoObraId);
+    loadProjetosObra(state.planejamentoObraId);
   }
   function planejamentoFormHtml(){
     var editing = state.planejamentoEditId ? state.planejamentoServicos.find(function(x){return x.id===state.planejamentoEditId;}) : null;
@@ -3291,30 +3310,65 @@
     if(status==='erro') return '<span class="chip rejected">Erro</span>';
     return '<span class="chip draft">Pendente</span>';
   }
+  // Ordem REAL em que a edge function analisar-projeto avança etapa_atual
+  // (ver analisar-projeto_index_NOVO.ts) — usada para desenhar o checklist
+  // visual do requisito "tela de processamento". Os rótulos são os mesmos
+  // pedidos (✓ Projeto recebido, ✓ Documento analisado, ...); a ordem técnica
+  // real tem "Coordenadas processadas" antes de "Locais estruturados" porque
+  // a geocodificação precisa terminar antes do registro poder ser gravado
+  // como estruturado (com lat/lng já inclusos).
+  var ETAPAS_PROJETO_ORDEM = ['recebido','lendo_documento','extraindo_servicos','extraindo_enderecos','geocodificando','estruturando_locais','atualizando_mapa','concluido'];
+  var ETAPAS_PROJETO_LABEL = {
+    recebido:'Projeto recebido', lendo_documento:'Documento analisado', extraindo_servicos:'Serviços identificados',
+    extraindo_enderecos:'Endereços identificados', geocodificando:'Coordenadas processadas',
+    estruturando_locais:'Locais estruturados', atualizando_mapa:'Mapeamento atualizado', concluido:'Projeto concluído'
+  };
+  function projetoChecklistHtml(p){
+    var idxAtual = ETAPAS_PROJETO_ORDEM.indexOf(p.etapaAtual||'recebido');
+    if(idxAtual<0) idxAtual = 0;
+    return '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:4px;">'+
+      ETAPAS_PROJETO_ORDEM.map(function(et, i){
+        var feito = i<=idxAtual;
+        return '<div style="display:flex;align-items:center;gap:6px;">'+
+          '<span style="display:inline-flex;width:15px;height:15px;border-radius:50%;align-items:center;justify-content:center;font-size:9.5px;flex:none;'+
+            (feito?'background:var(--status-approved,#2E8F4E);color:#fff;':'background:#e7e7e2;color:#999;')+'">'+(feito?'✓':'')+'</span>'+
+          '<span style="font-size:12px;'+(feito?'':'color:var(--muted);')+'">'+ETAPAS_PROJETO_LABEL[et]+'</span>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }
   function projetoDetalheHtml(p){
     if(p.statusAnalise==='analisando'){
-      var pct = (p.paginasTotal && p.paginasProcessadas!=null) ? Math.round((p.paginasProcessadas/p.paginasTotal)*100) : null;
       return '<div class="hint" style="margin:6px 0 0;width:100%;">'+
-        (pct!=null ? '<div style="background:#eee;border-radius:6px;height:6px;overflow:hidden;margin-bottom:4px;"><div style="background:#7A5900;height:100%;width:'+pct+'%;"></div></div>' : '')+
-        esc(p.mensagemStatus||'Analisando projeto...')+
+        projetoChecklistHtml(p)+
+        '<div style="margin-top:2px;">'+esc(p.mensagemStatus||'Analisando projeto...')+'</div>'+
       '</div>';
     }
     if(p.statusAnalise==='analisado'){
       var partes = [];
-      if(p.qtdServicosIdentificados!=null) partes.push(p.qtdServicosIdentificados+' serviço(s)');
-      if(p.enderecosIdentificados!=null) partes.push(p.enderecosIdentificados+' endereço(s)');
-      if(p.pontosLocalizados!=null) partes.push(p.pontosLocalizados+' ponto(s) no mapa');
-      var naoLocalizadosChaves = {};
-      (state.planejamentoServicos||[]).forEach(function(s){
-        if(s.projetoId===p.id && (s.endereco||s.numeroLocal) && (s.latitude==null || s.longitude==null)){
-          naoLocalizadosChaves[normalizarEnderecoServico(s.endereco, s.numeroLocal)] = true;
-        }
-      });
-      var qtdNaoLocalizados = Object.keys(naoLocalizadosChaves).length;
-      if(qtdNaoLocalizados>0) partes.push(qtdNaoLocalizados+' endereço(s) não localizado(s)');
+      if(p.qtdServicosIdentificados!=null) partes.push('Serviços encontrados: '+p.qtdServicosIdentificados);
+      if(p.enderecosIdentificados!=null) partes.push('Locais encontrados: '+p.enderecosIdentificados);
+      if(p.pontosLocalizados!=null) partes.push('Locais georreferenciados: '+p.pontosLocalizados);
+      var qtdPendentes = p.locaisPendentesLocalizacao;
+      if(qtdPendentes==null){
+        // fallback para projetos analisados antes da migration 024 (ainda
+        // sem o contador granular vindo do banco) — aproxima pelo que já
+        // temos hoje em planejamento_servicos.
+        var naoLocalizadosChaves = {};
+        (state.planejamentoServicos||[]).forEach(function(s){
+          if(s.projetoId===p.id && (s.endereco||s.numeroLocal) && (s.latitude==null || s.longitude==null)){
+            naoLocalizadosChaves[normalizarEnderecoServico(s.endereco, s.numeroLocal)] = true;
+          }
+        });
+        qtdPendentes = Object.keys(naoLocalizadosChaves).length;
+      }
+      if(qtdPendentes>0) partes.push('Locais pendentes de localização: '+qtdPendentes);
       if(p.valorTotalProjeto!=null) partes.push('valor total '+fmtMoeda(p.valorTotalProjeto));
+      var avisoRevisar = (p.locaisParaRevisar>0) ?
+        ('<button type="button" class="btn ghost sm" data-revisarlocais="'+p.id+'" style="color:#a33;border-color:#e3b3b3;">⚠ '+p.locaisParaRevisar+' local(is) precisam de revisão</button>') : '';
       return '<div class="hint" style="margin:6px 0 0;width:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
         '<span>'+esc(partes.join(' · ')||'Análise concluída.')+'</span>'+
+        avisoRevisar+
         (p.excelUrl ? '<a href="'+esc(p.excelUrl)+'" target="_blank" rel="noopener" class="btn ghost sm">Baixar Excel</a>' : '')+
       '</div>';
     }
@@ -3330,11 +3384,15 @@
     return '<div class="checklist-wrap" style="margin-top:10px;">'+state.projetos.map(function(p){
       var kb = p.tamanhoBytes ? (p.tamanhoBytes/1024/1024).toFixed(1)+' MB' : '';
       var podeAnalisar = (p.statusAnalise==='pendente' || p.statusAnalise==='erro');
+      var locaisKeys = {};
+      (state.planejamentoServicos||[]).forEach(function(s){ if(s.projetoId===p.id && s.localKey) locaisKeys[s.localKey]=true; });
+      var qtdLocais = Object.keys(locaisKeys).length;
       return '<div class="checklist-item" data-id="'+p.id+'" style="justify-content:space-between;flex-wrap:wrap;">'+
         '<div><b>'+esc(p.nome)+'</b><div class="hint" style="margin:2px 0 0;">'+kb+'</div></div>'+
         '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
           projetoStatusChip(p.statusAnalise)+
           (podeAnalisar ? '<button type="button" class="btn primary sm" data-analisar="'+p.id+'">'+(p.statusAnalise==='erro'?'Analisar novamente':'Analisar projeto')+'</button>' : '')+
+          (qtdLocais ? '<button type="button" class="btn ghost sm" data-vernomapa="'+p.id+'">Ver no mapa ('+qtdLocais+' local(is))</button>' : '')+
           (p.arquivoUrl ? '<a href="'+esc(p.arquivoUrl)+'" target="_blank" rel="noopener" class="btn ghost sm">Abrir arquivo</a>' : '')+
           '<button type="button" class="btn danger sm" data-delprojeto="'+p.id+'">Excluir</button>'+
         '</div>'+
@@ -3387,6 +3445,12 @@
         invocarAnaliseAutomatica(id);
         loadProjetosObra(obra.id);
       });
+    });
+    root.querySelectorAll('[data-vernomapa]').forEach(function(b){
+      b.addEventListener('click', function(){ abrirMapaObra(obra.id, b.getAttribute('data-vernomapa')); });
+    });
+    root.querySelectorAll('[data-revisarlocais]').forEach(function(b){
+      b.addEventListener('click', function(){ abrirRevisarLocais(obra.id, b.getAttribute('data-revisarlocais')); });
     });
     root.querySelectorAll('[data-delprojeto]').forEach(function(b){
       b.addEventListener('click', function(){
@@ -4039,6 +4103,8 @@
       geom: row.geom || [],
       catalogoItemId: row.catalogo_item_id || null,
       planejamentoServicoId: row.planejamento_servico_id || null,
+      localKey: row.local_key || null,
+      projetoId: row.projeto_id || null,
       foto: row.foto || '',
       createdBy: row.created_by,
       createdByNome: row.created_by_nome || '',
@@ -4073,7 +4139,7 @@
     return '#'+(0x1000000+r*0x10000+g*0x100+b).toString(16).slice(1);
   }
 
-  function abrirMapaObra(obraId){
+  function abrirMapaObra(obraId, filtroProjetoId){
     state.mapaObraId = obraId;
     state.mapaMode = null;
     state.mapaRamalPoints = [];
@@ -4081,16 +4147,29 @@
     state.mapaEditId = null;
     state.mapaMarcacoes = [];
     state.mapaFiltroServico = 'all';
+    state.mapaFiltroProjeto = filtroProjetoId || 'all';
+    state.mapaFiltroStatus = 'all';
+    state.mapaFiltroRegiao = '';
+    state.mapaFiltroNumeroLocal = '';
     state.mapaFilaIA = [];
     state.mapaFilaAtivaId = null;
     state.mapaFilaImportAberto = false;
+    state.mapaFilaFiltro = 'all'; // 'all' | 'revisar' (tela de exceção "Revisar locais")
     mapaViewFitted = false;
+    mapaCurrentRenderedObraId = null; // força recriar a barra de filtros com o filtro de projeto já aplicado
     goto('mapa-obra');
     loadCatalogoProdutos();
     loadObraServicosContratados();
     loadMapaMarcacoes(obraId);
     loadMapaFilaIA(obraId);
     loadPlanejamentoServicos(obraId);
+    loadProjetosObra(obraId);
+  }
+  // Atalho do aviso "⚠ N locais precisam de revisão" no card do projeto —
+  // abre o Mapeamento já filtrado para a fila de exceção (requisito 16).
+  function abrirRevisarLocais(obraId, projetoId){
+    abrirMapaObra(obraId, projetoId);
+    state.mapaFilaFiltro = 'revisar';
   }
   function normalizarEnderecoServico(endereco, numeroLocal){
     function norm(v){ return String(v||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' '); }
@@ -4098,7 +4177,7 @@
   }
 
   function loadMapaMarcacoes(obraId){
-    return supabaseClient.from('mapa_marcacoes').select('*').eq('obra_id', obraId).then(function(res){
+    return supabaseClient.from('mapa_marcacoes').select('*').eq('obra_id', obraId).is('deleted_at', null).then(function(res){
       if(res.error){
         if(looksOffline(res.error)) return cacheGet('mapaMarcacoes-'+obraId).then(function(c){ if(c){ state.mapaMarcacoes=c; if(state.view==='mapa-obra' && state.mapaObraId===obraId) renderAll(); fitMapaViewParaMarcacoes(obraId); } });
         toast('Não foi possível carregar as marcações do mapa.','error');
@@ -4119,6 +4198,7 @@
       observacoes:row.observacoes||'', geom:row.geom||null, status:row.status||'pendente', origem:row.origem||'ia',
       grupoId:row.grupo_id||null, createdBy:row.created_by, posicionadoMarcacaoId:row.posicionado_marcacao_id||null,
       planejamentoServicoId:row.planejamento_servico_id||null,
+      motivoPendencia:row.motivo_pendencia||'sem_geocodificacao',
       createdAt:row.created_at, updatedAt:row.updated_at
     };
   }
@@ -4377,10 +4457,20 @@
       });
     });
   }
+  function mapaFilaMotivoBadgeHtml(f){
+    if(f.motivoPendencia==='ambiguo') return '<span class="tag-example" style="background:#FFE0E0;color:#a33;">⚠ dado ambíguo</span>';
+    if(f.motivoPendencia==='endereco_incompleto') return '<span class="tag-example" style="background:#FFE0E0;color:#a33;">⚠ endereço incompleto</span>';
+    return '';
+  }
   function renderMapaFilaIA(){
     var root = document.getElementById('mapaFilaIACard');
     if(!root) return;
-    var fila = state.mapaFilaIA||[];
+    var modoRevisar = state.mapaFilaFiltro==='revisar';
+    var filaTodas = state.mapaFilaIA||[];
+    // "Revisar locais" (requisito 16): tela de EXCEÇÃO que mostra só os
+    // registros com dado ambíguo/incompleto, reaproveitando esta mesma
+    // fila/UI em vez de criar uma tela nova do zero.
+    var fila = modoRevisar ? filaTodas.filter(function(f){ return f.motivoPendencia==='ambiguo' || f.motivoPendencia==='endereco_incompleto'; }) : filaTodas;
     var modoAtivoHtml = '';
     if(state.mapaFilaAtivaId){
       var itemAtivo = fila.find(function(f){ return f.id===state.mapaFilaAtivaId; });
@@ -4391,7 +4481,7 @@
     var listaHtml = !fila.length ? '' : ('<div class="table-wrap" style="margin-top:10px;"><table class="fin-list"><thead><tr><th>Serviço</th><th>Endereço/Local</th><th>Tipo</th><th></th></tr></thead><tbody>'+
       fila.map(function(f){
         return '<tr data-id="'+f.id+'">'+
-          '<td>'+esc(f.servicoTexto)+(f.observacoes?'<div style="color:var(--steel);font-size:11.5px;">'+esc(f.observacoes)+'</div>':'')+'</td>'+
+          '<td>'+esc(f.servicoTexto)+' '+mapaFilaMotivoBadgeHtml(f)+(f.observacoes?'<div style="color:var(--steel);font-size:11.5px;">'+esc(f.observacoes)+'</div>':'')+'</td>'+
           '<td>'+esc(f.endereco||'—')+(f.numeroLocal?', nº '+esc(f.numeroLocal):'')+'</td>'+
           '<td>'+(f.tipoSugerido==='ramal'?'Ramal':'PV')+(f.geom&&f.geom.length?' · coordenada do projeto':'')+'</td>'+
           '<td style="text-align:right;">'+
@@ -4402,25 +4492,33 @@
       }).join('')+
     '</tbody></table></div>');
     root.innerHTML =
-      '<h2 style="font-size:15px;">Locais extraídos por IA</h2>'+
-      (!state.mapaFilaImportAberto ?
-        ('<button type="button" class="btn ghost" id="mapaFilaImportToggle">Importar locais (lista da IA)</button>'+
-         '<p class="hint" style="margin:8px 0 0;">Cole a lista de serviços que a IA extraiu de um projeto para colocá-los na fila de posicionamento do mapa.</p>')
+      (modoRevisar ?
+        ('<h2 style="font-size:15px;color:#a33;">⚠ Revisar locais ('+fila.length+')</h2>'+
+         '<p class="hint" style="margin:4px 0 10px;">Locais com dado ambíguo ou incompleto na extração automática — confirme/corrija endereço e serviço antes de posicionar no mapa.</p>'+
+         '<button type="button" class="btn ghost sm" id="btnVoltarFilaCompleta">← Ver fila completa</button>')
         :
-        ('<textarea id="mapaFilaImportTexto" rows="8" style="width:100%;font-family:monospace;font-size:12.5px;" placeholder="'+esc(MAPA_FILA_IMPORT_EXEMPLO)+'"></textarea>'+
-         '<div class="form-actions" style="margin-top:10px;">'+
-           '<button type="button" class="btn ghost" id="mapaFilaImportCancelar">Cancelar</button>'+
-           '<button type="button" class="btn ghost" id="mapaFilaImportExemplo">Preencher com exemplo</button>'+
-           '<button type="button" class="btn primary" id="mapaFilaImportPreview">Pré-visualizar</button>'+
-         '</div>'+
-         '<div id="mapaFilaImportPreviewBox" style="margin-top:14px;"></div>')
+        ('<h2 style="font-size:15px;">Locais extraídos por IA</h2>'+
+        (!state.mapaFilaImportAberto ?
+          ('<button type="button" class="btn ghost" id="mapaFilaImportToggle">Importar locais (lista da IA)</button>'+
+           '<p class="hint" style="margin:8px 0 0;">Cole a lista de serviços que a IA extraiu de um projeto para colocá-los na fila de posicionamento do mapa.</p>')
+          :
+          ('<textarea id="mapaFilaImportTexto" rows="8" style="width:100%;font-family:monospace;font-size:12.5px;" placeholder="'+esc(MAPA_FILA_IMPORT_EXEMPLO)+'"></textarea>'+
+           '<div class="form-actions" style="margin-top:10px;">'+
+             '<button type="button" class="btn ghost" id="mapaFilaImportCancelar">Cancelar</button>'+
+             '<button type="button" class="btn ghost" id="mapaFilaImportExemplo">Preencher com exemplo</button>'+
+             '<button type="button" class="btn primary" id="mapaFilaImportPreview">Pré-visualizar</button>'+
+           '</div>'+
+           '<div id="mapaFilaImportPreviewBox" style="margin-top:14px;"></div>')
+        ))
       )+
       modoAtivoHtml+
-      (fila.some(function(f){ return f.geom && f.geom.length; }) ? ('<div class="form-actions" style="margin:10px 0 0;"><button type="button" class="btn primary" id="btnConverterFilaMapa">Converter para o Mapa ('+fila.filter(function(f){return f.geom&&f.geom.length;}).length+')</button></div>') : '')+
-      (fila.length ? ('<h2 style="font-size:15px;margin-top:14px;">Aguardando posicionamento ('+fila.length+')</h2>'+listaHtml) : '');
+      (!modoRevisar && fila.some(function(f){ return f.geom && f.geom.length; }) ? ('<div class="form-actions" style="margin:10px 0 0;"><button type="button" class="btn primary" id="btnConverterFilaMapa">Converter para o Mapa ('+fila.filter(function(f){return f.geom&&f.geom.length;}).length+')</button></div>') : '')+
+      (fila.length ? ('<h2 style="font-size:15px;margin-top:14px;">'+(modoRevisar?'Pendentes de revisão':'Aguardando posicionamento')+' ('+fila.length+')</h2>'+listaHtml) : (modoRevisar ? '<p class="hint" style="margin-top:10px;">Nenhum local pendente de revisão no momento.</p>' : ''));
     wireMapaFilaIA();
   }
   function wireMapaFilaIA(){
+    var voltar = document.getElementById('btnVoltarFilaCompleta');
+    if(voltar) voltar.addEventListener('click', function(){ state.mapaFilaFiltro = 'all'; renderMapaFilaIA(); });
     var toggle = document.getElementById('mapaFilaImportToggle');
     if(toggle) toggle.addEventListener('click', function(){ state.mapaFilaImportAberto = true; renderMapaFilaIA(); });
     var cancelar = document.getElementById('mapaFilaImportCancelar');
@@ -4496,7 +4594,18 @@
           '</div>')
           : ('<div class="map-toolbar">'+legendHtml+'</div>')
         )+
-        '<div class="map-filter-bar" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><label style="font-size:13px;color:var(--muted);">Filtrar por serviço:</label><select id="mapaFiltroServico" style="max-width:280px;"><option value="all">Todos os serviços</option>'+mapaServicoOptionsHtml(obra.id, state.mapaFiltroServico==='all'?null:state.mapaFiltroServico)+'</select></div>'+
+        '<div class="map-filter-bar" style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
+          '<label style="font-size:13px;color:var(--muted);">Projeto:</label><select id="mapaFiltroProjeto" style="max-width:200px;"><option value="all">Todos os projetos</option></select>'+
+          '<label style="font-size:13px;color:var(--muted);">Status:</label><select id="mapaFiltroStatus" style="max-width:160px;">'+
+            '<option value="all">Todos os status</option>'+
+            '<option value="parado">🔴 Parado</option>'+
+            '<option value="processando">🟡 Andamento</option>'+
+            '<option value="concluido">🟢 Concluído</option>'+
+          '</select>'+
+          '<label style="font-size:13px;color:var(--muted);">Serviço:</label><select id="mapaFiltroServico" style="max-width:200px;"><option value="all">Todos os serviços</option>'+mapaServicoOptionsHtml(obra.id, state.mapaFiltroServico==='all'?null:state.mapaFiltroServico)+'</select>'+
+          '<label style="font-size:13px;color:var(--muted);">Região/endereço:</label><input type="text" id="mapaFiltroRegiao" placeholder="Ex: Rua das Flores" style="max-width:160px;">'+
+          '<label style="font-size:13px;color:var(--muted);">Nº do local:</label><input type="text" id="mapaFiltroNumeroLocal" placeholder="Ex: 100" style="max-width:90px;">'+
+        '</div>'+
         '<div id="leafletMap"></div>'+
         (canGestao ? '<div class="card" id="mapaFilaIACard"></div>' : '')+
         '<div class="card"><h2 style="font-size:15px;">Marcações</h2><div id="mapaMarcacoesList"></div></div>';
@@ -4504,6 +4613,7 @@
       mapaCurrentRenderedCanGestao = canGestao;
       initLeafletMap(obra);
       if(canGestao) wireMapaToolbarEvents();
+      refreshMapaFiltroProjeto();
       var selServico = document.getElementById('mapaFiltroServico');
       if(selServico){
         selServico.value = state.mapaFiltroServico || 'all';
@@ -4513,10 +4623,57 @@
           renderMapaMarcacoesList();
         });
       }
+      var selStatus = document.getElementById('mapaFiltroStatus');
+      if(selStatus){
+        selStatus.value = state.mapaFiltroStatus || 'all';
+        selStatus.addEventListener('change', function(){
+          state.mapaFiltroStatus = selStatus.value;
+          renderMapaMarkersOnMap();
+          renderMapaMarcacoesList();
+        });
+      }
+      var inpRegiao = document.getElementById('mapaFiltroRegiao');
+      if(inpRegiao){
+        inpRegiao.value = state.mapaFiltroRegiao || '';
+        inpRegiao.addEventListener('input', function(){
+          state.mapaFiltroRegiao = inpRegiao.value;
+          renderMapaMarkersOnMap();
+          renderMapaMarcacoesList();
+        });
+      }
+      var inpNumero = document.getElementById('mapaFiltroNumeroLocal');
+      if(inpNumero){
+        inpNumero.value = state.mapaFiltroNumeroLocal || '';
+        inpNumero.addEventListener('input', function(){
+          state.mapaFiltroNumeroLocal = inpNumero.value;
+          renderMapaMarkersOnMap();
+          renderMapaMarcacoesList();
+        });
+      }
     }
     renderMapaMarkersOnMap();
     renderMapaMarcacoesList();
     renderMapaFilaIA();
+  }
+
+  function refreshMapaFiltroProjeto(){
+    var sel = document.getElementById('mapaFiltroProjeto');
+    if(!sel) return;
+    var current = sel.value || state.mapaFiltroProjeto || 'all';
+    sel.innerHTML = '<option value="all">Todos os projetos</option>'+(state.projetos||[]).map(function(p){
+      return '<option value="'+p.id+'">'+esc(p.codigo||p.nome)+'</option>';
+    }).join('');
+    var valido = current==='all' || (state.projetos||[]).some(function(p){ return p.id===current; });
+    sel.value = valido ? current : 'all';
+    state.mapaFiltroProjeto = sel.value;
+    if(!sel._wired){
+      sel._wired = true;
+      sel.addEventListener('change', function(){
+        state.mapaFiltroProjeto = sel.value;
+        renderMapaMarkersOnMap();
+        renderMapaMarcacoesList();
+      });
+    }
   }
 
   function initLeafletMap(obra){
@@ -4695,39 +4852,112 @@
     return '<b>'+principal+'</b>'+(numero?(' '+numero):'');
   }
 
+  // Filtros do Mapeamento (projeto / status / tipo de serviço / região /
+  // número do local) — usado tanto para desenhar os pontos no mapa quanto
+  // para a lista textual abaixo dele, para as duas visões nunca divergirem.
+  function mapaMarcacaoPassaFiltros(m){
+    if(state.mapaFiltroServico && state.mapaFiltroServico!=='all' && m.catalogoItemId!==state.mapaFiltroServico) return false;
+    if(state.mapaFiltroProjeto && state.mapaFiltroProjeto!=='all' && m.projetoId!==state.mapaFiltroProjeto) return false;
+    if(state.mapaFiltroStatus && state.mapaFiltroStatus!=='all' && (m.status||'processando')!==state.mapaFiltroStatus) return false;
+    if(state.mapaFiltroRegiao){
+      var alvo = normalizarTextoBusca(state.mapaFiltroRegiao);
+      var campo = normalizarTextoBusca((m.rua||'')+' '+(m.nomeLocal||''));
+      if(alvo && campo.indexOf(alvo)===-1) return false;
+    }
+    if(state.mapaFiltroNumeroLocal){
+      var alvoNum = normalizarTextoBusca(state.mapaFiltroNumeroLocal);
+      var campoNum = normalizarTextoBusca(m.numeroServico||'');
+      if(alvoNum && campoNum.indexOf(alvoNum)===-1) return false;
+    }
+    return true;
+  }
+  function normalizarTextoBusca(v){
+    return String(v||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  }
+
+  // "Pior status vence": um local só aparece verde no mapa quando TODOS os
+  // serviços daquele endereço estiverem concluídos; se qualquer um ainda
+  // está parado, o ponto inteiro aparece vermelho — reflete que o local
+  // como um todo ainda não está pronto (ver async-munching-pie.md).
+  function statusAgregadoPiorVence(statusList){
+    if(statusList.indexOf('parado')>-1) return 'parado';
+    if(statusList.some(function(s){ return s!=='concluido'; })) return 'processando';
+    return 'concluido';
+  }
+
+  // Agrupa as marcações elegíveis (1 único ponto de coordenada — tanto PV
+  // quanto um "ramal" que só tem 1 coordenada, caso de todo serviço vindo
+  // de PDF hoje) por local_key, para desenhar UM círculo numerado por
+  // endereço em vez de um pino por serviço. Marcações sem local_key (ex:
+  // criadas manualmente antes desta migration) cada uma vira seu próprio
+  // grupo, mantendo o comportamento de hoje. Um "ramal" de verdade (2+
+  // pontos, desenhado manualmente como trecho) nunca entra aqui — continua
+  // desenhado como polilinha, à parte.
+  function mapaAgruparMarcacoesPorLocal(lista){
+    var grupos = [];
+    var porChave = {};
+    lista.forEach(function(m){
+      if(!(m.geom && m.geom.length===1)) return;
+      var chave = m.localKey || ('__sem_chave__'+m.id);
+      if(!porChave[chave]){
+        var g = { key:chave, items:[], lat:m.geom[0].lat, lng:m.geom[0].lng, rua:m.rua, nomeLocal:m.nomeLocal, numeroServico:m.numeroServico };
+        porChave[chave] = g;
+        grupos.push(g);
+      }
+      porChave[chave].items.push(m);
+    });
+    grupos.sort(function(a,b){ return (a.nomeLocal||a.rua||'').localeCompare(b.nomeLocal||b.rua||''); });
+    grupos.forEach(function(g, i){
+      g.numero = String(i+1).padStart(3,'0');
+      g.status = statusAgregadoPiorVence(g.items.map(function(x){ return x.status||'processando'; }));
+    });
+    return grupos;
+  }
+
   function renderMapaMarkersOnMap(){
     if(!mapaLayerGroup) return;
     mapaLayerGroup.clearLayers();
     hideMapaFotoHover();
-    state.mapaMarcacoes.forEach(function(m){
-      if(state.mapaFiltroServico && state.mapaFiltroServico!=='all' && m.catalogoItemId!==state.mapaFiltroServico) return;
+    var marcacoesFiltradas = state.mapaMarcacoes.filter(mapaMarcacaoPassaFiltros);
+
+    // Grupos (PV, ou "ramal" com 1 só coordenada — ponto importado de PDF)
+    // → um círculo numerado por endereço, com a cor do pior status do grupo.
+    var grupos = mapaAgruparMarcacoesPorLocal(marcacoesFiltradas);
+    grupos.forEach(function(g){
+      var color = statusMapColor(g.status);
+      var light = shadeColor(color, 35);
+      var circleHtml = '<div class="map-circle-wrap">'+
+        '<div class="map-circle'+(g.items.length>1?' is-grupo':'')+'" style="background:radial-gradient(circle at 35% 28%, '+light+', '+color+' 60%, '+shadeColor(color,-25)+' 100%);">'+g.numero+'</div>'+
+      '</div>';
+      var icon = L.divIcon({ className:'', html:circleHtml, iconSize:[26,26], iconAnchor:[13,13] });
+      var marker = L.marker([g.lat, g.lng], { icon: icon }).addTo(mapaLayerGroup);
+      var principal = esc(g.nomeLocal || g.rua || '(sem endereço)');
+      var numeroTxt = g.numeroServico ? (' <span class="num">Nº '+esc(g.numeroServico)+'</span>') : '';
+      var qtdTxt = g.items.length>1 ? (' <span class="num">('+g.items.length+' serviços)</span>') : '';
+      marker.bindTooltip('<b>○ '+g.numero+' — '+principal+'</b>'+numeroTxt+qtdTxt, { permanent:true, direction:'top', offset:[0,-16], className:'map-pin-label', interactive:false });
+      marker.on('click', function(){ abrirModalMarcacao(g.items[0]); });
+      var itemComFoto = g.items.find(function(x){ return x.foto && x.status!=='processando'; });
+      if(itemComFoto){
+        marker.on('mouseover mousemove', function(e){ showMapaFotoHover(itemComFoto.foto, e.containerPoint); });
+        marker.on('mouseout', hideMapaFotoHover);
+      }
+    });
+
+    // Ramal "de verdade" (trecho desenhado manualmente com 2+ pontos) —
+    // continua como polilinha, fora do agrupamento por local.
+    marcacoesFiltradas.forEach(function(m){
+      if(!(m.tipo==='ramal' && m.geom && m.geom.length>1)) return;
       var color = statusMapColor(m.status);
-      if(m.tipo==='pv' && m.geom && m.geom[0]){
-        var light = shadeColor(color, 35);
-        var pinHtml = '<div class="map-pin3d-wrap">'+
-          '<div class="map-pin3d-shadow"></div>'+
-          '<div class="map-pin3d" style="background:radial-gradient(circle at 35% 28%, '+light+', '+color+' 60%, '+shadeColor(color,-25)+' 100%);"></div>'+
-        '</div>';
-        var icon = L.divIcon({ className:'', html:pinHtml, iconSize:[22,28], iconAnchor:[11,24] });
-        var marker = L.marker([m.geom[0].lat, m.geom[0].lng], { icon: icon }).addTo(mapaLayerGroup);
-        marker.bindTooltip(mapaPinLabelHtml(m), { permanent:true, direction:'top', offset:[0,-20], className:'map-pin-label', interactive:false });
-        marker.on('click', function(){ abrirModalMarcacao(m); });
-        if(m.foto && m.status!=='processando'){
-          marker.on('mouseover mousemove', function(e){ showMapaFotoHover(m.foto, e.containerPoint); });
-          marker.on('mouseout', hideMapaFotoHover);
-        }
-      } else if(m.tipo==='ramal' && m.geom && m.geom.length>1){
-        var latlngs = m.geom.map(function(p){ return [p.lat,p.lng]; });
-        var tubeDark = shadeColor(color, -35);
-        var tubeLight = shadeColor(color, 45);
-        L.polyline(latlngs, { color: tubeDark, weight:9, opacity:0.92, lineCap:'round', lineJoin:'round', interactive:false }).addTo(mapaLayerGroup);
-        var line = L.polyline(latlngs, { color: tubeLight, weight:3, opacity:0.95, lineCap:'round', lineJoin:'round' }).addTo(mapaLayerGroup);
-        line.bindTooltip(mapaPinLabelHtml(m), { permanent:true, direction:'center', className:'map-pin-label', interactive:false });
-        line.on('click', function(){ abrirModalMarcacao(m); });
-        if(m.foto && m.status!=='processando'){
-          line.on('mouseover mousemove', function(e){ showMapaFotoHover(m.foto, e.containerPoint); });
-          line.on('mouseout', hideMapaFotoHover);
-        }
+      var latlngs = m.geom.map(function(p){ return [p.lat,p.lng]; });
+      var tubeDark = shadeColor(color, -35);
+      var tubeLight = shadeColor(color, 45);
+      L.polyline(latlngs, { color: tubeDark, weight:9, opacity:0.92, lineCap:'round', lineJoin:'round', interactive:false }).addTo(mapaLayerGroup);
+      var line = L.polyline(latlngs, { color: tubeLight, weight:3, opacity:0.95, lineCap:'round', lineJoin:'round' }).addTo(mapaLayerGroup);
+      line.bindTooltip(mapaPinLabelHtml(m), { permanent:true, direction:'center', className:'map-pin-label', interactive:false });
+      line.on('click', function(){ abrirModalMarcacao(m); });
+      if(m.foto && m.status!=='processando'){
+        line.on('mouseover mousemove', function(e){ showMapaFotoHover(m.foto, e.containerPoint); });
+        line.on('mouseout', hideMapaFotoHover);
       }
     });
   }
@@ -4740,9 +4970,9 @@
       return;
     }
     var canGestao = obrasGestaoCanAccess();
-    var marcacoesFiltradas = state.mapaMarcacoes.filter(function(m){ return !(state.mapaFiltroServico && state.mapaFiltroServico!=='all' && m.catalogoItemId!==state.mapaFiltroServico); });
+    var marcacoesFiltradas = state.mapaMarcacoes.filter(mapaMarcacaoPassaFiltros);
     if(marcacoesFiltradas.length===0){
-      wrap.innerHTML = '<p class="empty-hint">Nenhuma marcação para o serviço selecionado.</p>';
+      wrap.innerHTML = '<p class="empty-hint">Nenhuma marcação para os filtros selecionados.</p>';
       return;
     }
     var ordenadas = marcacoesFiltradas.slice().sort(function(a,b){ return (a.nomeLocal||a.rua||'').localeCompare(b.nomeLocal||b.rua||''); });
@@ -4785,22 +5015,37 @@
     var wrap = document.createElement('div');
     wrap.className = 'overlay';
     var marcFotoAtual = m.foto || '';
+    var obraIdAtual = m.obraId || state.mapaObraId;
+    // Agrupamento por local_key (persistido pela edge function/migration
+    // 024) — mais robusto que recalcular na hora, e funciona mesmo quando
+    // planejamentoServicoId é nulo. Cai de volta no recálculo por endereço
+    // só para marcações antigas que ainda não têm local_key preenchida.
     var servicosRelacionados = [];
-    if(m.planejamentoServicoId){
-      var svcAtual = (state.planejamentoServicos||[]).find(function(x){ return x.id===m.planejamentoServicoId; });
-      if(svcAtual){
-        var chaveAtual = normalizarEnderecoServico(svcAtual.endereco, svcAtual.numeroLocal);
-        servicosRelacionados = (state.planejamentoServicos||[]).filter(function(x){
-          return x.id!==svcAtual.id && x.obraId===svcAtual.obraId && normalizarEnderecoServico(x.endereco, x.numeroLocal)===chaveAtual;
-        });
-      }
+    var svcAtual = m.planejamentoServicoId ? (state.planejamentoServicos||[]).find(function(x){ return x.id===m.planejamentoServicoId; }) : null;
+    if(m.localKey){
+      servicosRelacionados = (state.planejamentoServicos||[]).filter(function(x){
+        return x.obraId===obraIdAtual && x.localKey===m.localKey && (!svcAtual || x.id!==svcAtual.id);
+      });
+    } else if(svcAtual){
+      var chaveAtual = normalizarEnderecoServico(svcAtual.endereco, svcAtual.numeroLocal);
+      servicosRelacionados = (state.planejamentoServicos||[]).filter(function(x){
+        return x.id!==svcAtual.id && x.obraId===svcAtual.obraId && normalizarEnderecoServico(x.endereco, x.numeroLocal)===chaveAtual;
+      });
     }
     var servicosRelacionadosHtml = servicosRelacionados.length ?
-      ('<div class="field" style="margin-bottom:14px;"><label>Outros serviços neste endereço ('+servicosRelacionados.length+')</label>'+
+      ('<div class="field" style="margin-bottom:14px;"><label>Serviços previstos neste local ('+servicosRelacionados.length+')</label>'+
         '<div class="hint" style="margin:4px 0 0;display:flex;flex-direction:column;gap:4px;">'+
           servicosRelacionados.map(function(x){
-            return '<span>'+(x.codigo?esc(x.codigo)+' — ':'')+esc(x.servicoNome)+' · '+fmtQtd(x.quantidadePrevista)+' '+esc(x.unidade||'')+' · '+esc(x.status)+'</span>';
+            return '<span>'+(x.codigo?esc(x.codigo)+' — ':'')+esc(x.servicoNome)+' · '+fmtQtd(x.quantidadePrevista)+' '+esc(x.unidade||'')+(x.profundidade!=null?' · prof. '+fmtQtd(x.profundidade)+'m':'')+' · '+esc(x.status)+'</span>';
           }).join('')+
+        '</div>'+
+      '</div>') : '';
+    var projetoOrigem = m.projetoId ? (state.projetos||[]).find(function(p){ return p.id===m.projetoId; }) : null;
+    var projetoOrigemHtml = projetoOrigem ?
+      ('<div class="field" style="margin-bottom:10px;"><label>Projeto de origem</label>'+
+        '<div class="hint" style="margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+
+          '<span>'+esc(projetoOrigem.codigo||projetoOrigem.nome)+'</span>'+
+          '<button type="button" class="btn ghost sm" data-act="verprojeto">Ver projeto</button>'+
         '</div>'+
       '</div>') : '';
     var camposIdentificacao = canGestao ?
@@ -4812,6 +5057,7 @@
     wrap.innerHTML =
       '<div class="modal">'+
         '<h3>'+(isEdit ? (canGestao ? 'Editar marcação' : 'Atualizar marcação') : (m.tipo==='pv' ? 'Novo PV' : 'Novo ramal'))+'</h3>'+
+        projetoOrigemHtml+
         camposIdentificacao+
         '<div class="field" style="margin-bottom:10px;"><label>Status</label>'+
           '<select id="marcStatus">'+
@@ -4848,6 +5094,7 @@
       if(e.target===wrap){ wrap.remove(); return; }
       var act = e.target.getAttribute('data-act');
       if(act==='cancel'){ wrap.remove(); return; }
+      if(act==='verprojeto'){ if(!projetoOrigem) return; wrap.remove(); abrirPlanejamentoObraPorId(obraIdAtual); return; }
       if(act==='del'){ if(!canGestao) return; wrap.remove(); excluirMarcacao(m.id); return; }
       if(act==='fotoremove'){
         marcFotoAtual = '';
