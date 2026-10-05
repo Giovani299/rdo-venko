@@ -1149,7 +1149,7 @@
     mapaEditId: null,
     planejamentoObraId: null,
     planejamentoServicos: [],
-    planejamentoFiltros: { status:'', busca:'' },
+    planejamentoFiltros: { status:'', busca:'', escopo:'' },
     planejamentoEditId: null,
     planejamentoImportAberto: false,
     planejamentoImportProjetoId: null,
@@ -1688,6 +1688,7 @@
       prioridade:row.prioridade||'Média', status:row.status||'Previsto', origem:row.origem||'manual',
       confirmado:row.confirmado!==false, grupoId:row.grupo_id||null,
       localKey:row.local_key||null,
+      escopo:row.escopo||null,
       createdAt:row.created_at, updatedAt:row.updated_at
     };
   }
@@ -2743,6 +2744,10 @@
     var busca = (f.busca||'').trim().toLowerCase();
     return state.planejamentoServicos.filter(function(s){
       if(f.status && s.status!==f.status) return false;
+      if(f.escopo){
+        if(f.escopo==='nao'){ if(s.escopo) return false; }
+        else if(s.escopo!==f.escopo) return false;
+      }
       if(busca){
         var hay = [s.servicoNome,s.endereco,s.trecho,s.numeroLocal,s.observacoes].join(' ').toLowerCase();
         if(hay.indexOf(busca)===-1) return false;
@@ -2937,7 +2942,7 @@
   // projeto"/"Ver no mapa" cruzado entre Planejamento e Mapeamento.
   function abrirPlanejamentoObraPorId(obraId){
     state.planejamentoObraId = obraId;
-    state.planejamentoFiltros = { status:'', busca:'' };
+    state.planejamentoFiltros = { status:'', busca:'', escopo:'' };
     state.planejamentoEditId = null;
     state.projetos = [];
     goto('planejamento-obra');
@@ -3066,6 +3071,9 @@
     var andamento = todos.filter(function(s){ return s.status==='Em andamento' || s.status==='Parcialmente concluído'; }).length;
     var bloqueados = todos.filter(function(s){ return s.status==='Bloqueado'; }).length;
     var pendenteIA = todos.filter(function(s){ return s.origem==='ia' && !s.confirmado; }).length;
+    var qtdContratados = todos.filter(function(s){ return s.escopo==='contratado'; }).length;
+    var qtdAparte = todos.filter(function(s){ return s.escopo==='a_parte'; }).length;
+    var temEscopoNosServicos = (qtdContratados+qtdAparte)>0;
     var f = state.planejamentoFiltros;
     root.innerHTML =
       '<div class="page-head">'+
@@ -3078,9 +3086,11 @@
         kpiTile(andamento, 'Em andamento', 'pend')+
         kpiTile(bloqueados, 'Bloqueados', 'warn')+
         kpiTile(pendenteIA, 'Aguardando confirmação (IA)', pendenteIA>0?'pend':'')+
+        (temEscopoNosServicos ? kpiTile(qtdContratados, 'Contratados', '')+kpiTile(qtdAparte, 'À parte (fora do contrato)', qtdAparte>0?'pend':'') : '')+
       '</div>'+
       '<div class="filters" id="planFilterBar">'+
         '<div class="field"><label>Status</label><select id="planFStatus"><option value="">Todos</option>'+PLANEJAMENTO_STATUS_OPTS.map(function(o){return '<option value="'+esc(o)+'"'+(f.status===o?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select></div>'+
+        (temEscopoNosServicos ? '<div class="field"><label>Escopo</label><select id="planFEscopo">'+[['','Todos'],['contratado','Contratados'],['a_parte','À parte'],['nao','Não classificados']].map(function(o){return '<option value="'+o[0]+'"'+(f.escopo===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></div>' : '')+
         '<div class="field full"><label>Buscar</label><input type="text" id="planFBusca" placeholder="Serviço, endereço, trecho..." value="'+esc(f.busca)+'"></div>'+
       '</div>'+
       planejamentoImportarCardHtml()+
@@ -3390,7 +3400,7 @@
     }
     return '<div class="checklist-wrap" style="margin-top:10px;">'+state.projetos.map(function(p){
       var kb = p.tamanhoBytes ? (p.tamanhoBytes/1024/1024).toFixed(1)+' MB' : '';
-      var podeAnalisar = (p.statusAnalise==='pendente' || p.statusAnalise==='erro');
+      var podeAnalisar = (p.statusAnalise==='pendente' || p.statusAnalise==='erro' || p.statusAnalise==='analisado');
       var locaisKeys = {};
       (state.planejamentoServicos||[]).forEach(function(s){ if(s.projetoId===p.id && s.localKey) locaisKeys[s.localKey]=true; });
       var qtdLocais = Object.keys(locaisKeys).length;
@@ -3398,7 +3408,7 @@
         '<div><b>'+esc(p.nome)+'</b><div class="hint" style="margin:2px 0 0;">'+kb+'</div></div>'+
         '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
           projetoStatusChip(p.statusAnalise)+
-          (podeAnalisar ? '<button type="button" class="btn primary sm" data-analisar="'+p.id+'">'+(p.statusAnalise==='erro'?'Analisar novamente':'Analisar projeto')+'</button>' : '')+
+          (podeAnalisar ? '<button type="button" class="btn primary sm" data-analisar="'+p.id+'">'+(p.statusAnalise==='erro'?'Analisar novamente':(p.statusAnalise==='analisado'?'Reanalisar':'Analisar projeto'))+'</button>' : '')+
           (qtdLocais ? '<button type="button" class="btn ghost sm" data-vernomapa="'+p.id+'">Ver no mapa ('+qtdLocais+' local(is))</button>' : '')+
           (p.arquivoUrl ? '<a href="'+esc(p.arquivoUrl)+'" target="_blank" rel="noopener" class="btn ghost sm">Abrir arquivo</a>' : '')+
           '<button type="button" class="btn danger sm" data-delprojeto="'+p.id+'">Excluir</button>'+
@@ -3432,15 +3442,27 @@
           toast('Sem conexão: envio de projeto exige internet.','error');
           return;
         }
-        Promise.all(files.map(function(f){
-          return uploadProjetoFile(f, obra.id).then(function(){ return true; }).catch(function(err){
-            toast('Falha ao enviar "'+f.name+'": '+(err && err.message ? err.message : err),'error');
-            return false;
+        // Mesmo nome + mesmo tamanho de um projeto já anexado = provável duplicata.
+        var repetidos = files.filter(function(f){
+          return state.projetos.some(function(p){ return p.nome===f.name && Number(p.tamanhoBytes)===f.size; });
+        });
+        var etapaConfirma = repetidos.length ? confirmModal({
+          title:'Arquivo já anexado',
+          msg:'Já existe nesta obra um projeto com o mesmo nome e tamanho: '+repetidos.map(function(f){return f.name;}).join(', ')+'. Anexar de novo cria uma segunda análise. Para atualizar o que já existe, use "Reanalisar" no projeto. Anexar mesmo assim?',
+          okLabel:'Anexar mesmo assim'
+        }) : Promise.resolve(true);
+        etapaConfirma.then(function(seguir){
+          if(!seguir) return;
+          Promise.all(files.map(function(f){
+            return uploadProjetoFile(f, obra.id).then(function(){ return true; }).catch(function(err){
+              toast('Falha ao enviar "'+f.name+'": '+(err && err.message ? err.message : err),'error');
+              return false;
+            });
+          })).then(function(resultados){
+            var okCount = resultados.filter(Boolean).length;
+            if(okCount) toast(okCount+' de '+files.length+' projeto(s) enviado(s).','ok');
+            loadProjetosObra(obra.id);
           });
-        })).then(function(resultados){
-          var okCount = resultados.filter(Boolean).length;
-          if(okCount) toast(okCount+' de '+files.length+' projeto(s) enviado(s).','ok');
-          loadProjetosObra(obra.id);
         });
       });
     }
@@ -3448,9 +3470,16 @@
     root.querySelectorAll('[data-analisar]').forEach(function(b){
       b.addEventListener('click', function(){
         var id = b.getAttribute('data-analisar');
-        toast('Análise automática iniciada — acompanhe o progresso aqui mesmo.','ok');
-        invocarAnaliseAutomatica(id);
-        loadProjetosObra(obra.id);
+        var pj = state.projetos.find(function(x){ return x.id===id; });
+        var iniciar = function(){
+          toast('Análise automática iniciada — acompanhe o progresso aqui mesmo.','ok');
+          invocarAnaliseAutomatica(id);
+          loadProjetosObra(obra.id);
+        };
+        if(pj && pj.statusAnalise==='analisado'){
+          confirmModal({ title:'Reanalisar projeto', msg:'O projeto será lido de novo e os serviços, locais e marcações serão atualizados sem duplicar. O status, a foto e o nome do local que você já ajustou nas marcações são mantidos. Deseja continuar?', okLabel:'Reanalisar' })
+            .then(function(ok){ if(ok) iniciar(); });
+        } else { iniciar(); }
       });
     });
     root.querySelectorAll('[data-vernomapa]').forEach(function(b){
@@ -3481,6 +3510,8 @@
     if(!bar) return;
     var st = document.getElementById('planFStatus');
     if(st) st.addEventListener('change', function(){ state.planejamentoFiltros.status = st.value; renderPlanejamentoObra(); });
+    var esc2 = document.getElementById('planFEscopo');
+    if(esc2) esc2.addEventListener('change', function(){ state.planejamentoFiltros.escopo = esc2.value; renderPlanejamentoObra(); });
     var bs = document.getElementById('planFBusca');
     if(bs){
       bs.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); state.planejamentoFiltros.busca = bs.value; renderPlanejamentoObra(); } });
@@ -4111,6 +4142,8 @@
       catalogoItemId: row.catalogo_item_id || null,
       planejamentoServicoId: row.planejamento_servico_id || null,
       localKey: row.local_key || null,
+      escopo: row.escopo || null,
+      temEscopo: ('escopo' in row),
       projetoId: row.projeto_id || null,
       foto: row.foto || '',
       createdBy: row.created_by,
@@ -4919,9 +4952,14 @@
     if(!lista.length) return null;
     return (catalogoItemId && lista.some(function(s){ return s.catalogoItemId===catalogoItemId; })) ? 'contratado' : 'aparte';
   }
+  // O escopo agora é GRAVADO no banco (coluna `escopo`, migration 042): quem
+  // classifica é a análise (IA comparando com a lista contratada da obra) ou
+  // o usuário ao trocar o serviço da marcação. Linha sem escopo = não
+  // classificada (ex.: dado antigo ou marcação feita à mão), nunca "à parte".
+  function escopoDbParaUi(v){ return v==='contratado' ? 'contratado' : (v==='a_parte' ? 'aparte' : null); }
   function mapaEscopoMarcacao(m){
-    if(!m || !m.planejamentoServicoId) return null;
-    return escopoServicoObra(m.obraId||state.mapaObraId, m.catalogoItemId);
+    if(!m) return null;
+    return escopoDbParaUi(m.escopo);
   }
   function escopoChipHtml(escopo, extra){
     if(escopo==='contratado') return '<span class="chip chip-contratado">Contratado</span>'+(extra?' <span class="hint" style="margin:0;">'+esc(extra)+'</span>':'');
@@ -4929,8 +4967,8 @@
     return '';
   }
   function planejamentoEscopoChipHtml(s){
-    if(!s || s.origem!=='ia') return '';
-    var chip = escopoChipHtml(escopoServicoObra(s.obraId, s.catalogoItemId));
+    if(!s) return '';
+    var chip = escopoChipHtml(escopoDbParaUi(s.escopo));
     return chip ? chip+' ' : '';
   }
 
@@ -5304,12 +5342,24 @@
     // também troca o serviço no Planejamento, para contratado/à parte não
     // divergir entre as duas telas.
     var marcAnterior = (state.mapaMarcacoes||[]).find(function(x){ return x.id===id; });
-    if(marcAnterior && marcAnterior.planejamentoServicoId && (marcAnterior.catalogoItemId||null)!==(vals.catalogoItemId||null)){
-      supabaseClient.from('planejamento_servicos').update({ catalogo_item_id: vals.catalogoItemId || null }).eq('id', marcAnterior.planejamentoServicoId).then(function(r){
+    var mudouServico = !!marcAnterior && (marcAnterior.catalogoItemId||null)!==(vals.catalogoItemId||null);
+    // Novo escopo (só quando o banco já tem a coluna): se a obra tem lista
+    // contratada, o serviço escolhido define contratado/à parte; sem lista, volta a "não classificado".
+    var novoEscopo = null;
+    if(mudouServico){
+      var escUi = escopoServicoObra((marcAnterior.obraId||state.mapaObraId), vals.catalogoItemId||null);
+      novoEscopo = escUi==='contratado' ? 'contratado' : (escUi==='aparte' ? 'a_parte' : null);
+    }
+    var temEscopoCol = !!marcAnterior && marcAnterior.temEscopo;
+    if(mudouServico && marcAnterior.planejamentoServicoId){
+      var upPlan = { catalogo_item_id: vals.catalogoItemId || null };
+      if(temEscopoCol) upPlan.escopo = novoEscopo;
+      supabaseClient.from('planejamento_servicos').update(upPlan).eq('id', marcAnterior.planejamentoServicoId).then(function(r){
         if(r.error) console.error('Falha ao sincronizar o serviço no Planejamento:', r.error.message);
+        else if(state.planejamentoObraId) loadPlanejamentoServicos(state.planejamentoObraId);
       });
     }
-    supabaseClient.from('mapa_marcacoes').update({
+    var upMarc = {
       rua: vals.rua || null,
       nome_local: vals.nomeLocal || null,
       numero_servico: vals.numeroServico || null,
@@ -5318,7 +5368,9 @@
       catalogo_item_id: vals.catalogoItemId || null,
       foto: vals.foto || null,
       updated_at: new Date().toISOString()
-    }).eq('id', id).then(function(res){
+    };
+    if(mudouServico && temEscopoCol) upMarc.escopo = novoEscopo;
+    supabaseClient.from('mapa_marcacoes').update(upMarc).eq('id', id).then(function(res){
       if(res.error){ toast('Erro ao atualizar: '+res.error.message,'error'); return; }
       toast('Marcação atualizada.','ok');
       loadMapaMarcacoes(state.mapaObraId);
