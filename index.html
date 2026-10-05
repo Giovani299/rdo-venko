@@ -463,6 +463,12 @@
   .map-pin3d{position:absolute;left:2px;top:2px;width:18px;height:18px;border-radius:50%;border:1px solid rgba(255,255,255,.55);box-shadow:0 3px 4px rgba(20,19,15,.45), inset -2px -3px 4px rgba(0,0,0,.28), inset 2px 2px 3px rgba(255,255,255,.5);}
   .map-circle-wrap{position:relative;width:26px;height:26px;}
   .map-circle{position:absolute;left:1px;top:1px;width:24px;height:24px;border-radius:50%;border:2px solid #fff;box-shadow:0 2px 5px rgba(20,19,15,.45), inset -2px -3px 4px rgba(0,0,0,.25), inset 2px 2px 3px rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;font:800 9.5px/1 Inter,sans-serif;color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.45);}
+  .map-aparte-wrap{position:relative;width:26px;height:26px;}
+  .map-aparte{position:absolute;left:1px;top:1px;width:24px;height:24px;box-sizing:border-box;border-radius:6px;border:3px solid #fff;box-shadow:0 2px 5px rgba(20,19,15,.45);display:flex;align-items:center;justify-content:center;font:800 9px/1 Inter,sans-serif;color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.5);}
+  .map-aparte-mini{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:18px;padding:0 3px;border-radius:4px;color:#fff;font:800 9px/1 Inter,sans-serif;}
+  .chip-contratado{background:#DDF3E4;color:#1E6B3A;}
+  .chip-aparte{background:#FFE3CC;color:#9A3412;}
+  .map-legend-aparte{margin:0 0 10px;margin-left:0;}
   .map-circle.is-grupo{box-shadow:0 2px 5px rgba(20,19,15,.45), inset -2px -3px 4px rgba(0,0,0,.25), inset 2px 2px 3px rgba(255,255,255,.45), 0 0 0 3px rgba(255,255,255,.65);}
   .modal h3{font-size:18px;margin-bottom:8px;}
   .modal p{color:var(--ink-soft);font-size:13.5px;margin:0 0 16px;}
@@ -1153,6 +1159,7 @@
     mapaFilaFiltro: 'all', // 'all' | 'revisar'
     mapaFiltroProjeto: 'all',
     mapaFiltroStatus: 'all',
+    mapaFiltroEscopo: 'all', // 'all' | 'contratado' | 'aparte'
     mapaFiltroRegiao: '',
     mapaFiltroNumeroLocal: '',
     projetos: []
@@ -1893,7 +1900,7 @@
       if(res.error){ return; }
       state.obraServicosContratados = (res.data||[]).map(mapObraServicoRow);
       if(state.view==='obras') renderObraList();
-      if(state.view==='mapa-obra') refreshMapaFiltroServico();
+      if(state.view==='mapa-obra'){ refreshMapaFiltroServico(); renderMapaMarkersOnMap(); renderMapaMarcacoesList(); }
     });
   }
   function loadFinanceiroItens(obraId){
@@ -3024,7 +3031,7 @@
       while(numero.length<3) numero = '0'+numero;
       return '<tr data-id="'+s.id+'">'+
         '<td data-label="Nº">'+numero+'</td>'+
-        '<td data-label="Serviço">'+(s.origem==='ia'&&!s.confirmado?'<span class="chip" style="background:#FFC400;color:#1a1a1a;margin-right:6px;">IA · revisar</span>':'')+(s.codigo?'<span class="hint" style="font-family:monospace;margin-right:6px;">'+esc(s.codigo)+'</span>':'')+esc(s.servicoNome)+(s.observacoes?'<div style="color:var(--steel);font-size:11.5px;">'+esc(s.observacoes)+'</div>':'')+planejamentoAvisosHtml(s)+'</td>'+
+        '<td data-label="Serviço">'+(s.origem==='ia'&&!s.confirmado?'<span class="chip" style="background:#FFC400;color:#1a1a1a;margin-right:6px;">IA · revisar</span>':'')+planejamentoEscopoChipHtml(s)+(s.codigo?'<span class="hint" style="font-family:monospace;margin-right:6px;">'+esc(s.codigo)+'</span>':'')+esc(s.servicoNome)+(s.observacoes?'<div style="color:var(--steel);font-size:11.5px;">'+esc(s.observacoes)+'</div>':'')+planejamentoAvisosHtml(s)+'</td>'+
         '<td data-label="Endereço/Local">'+esc(s.endereco||'—')+(s.numeroLocal?', nº '+esc(s.numeroLocal):'')+(s.trecho?'<div style="color:var(--steel);font-size:11.5px;">'+esc(s.trecho)+'</div>':'')+'</td>'+
         '<td class="num" data-label="Quantidade">'+fmtQtd(s.quantidadePrevista)+' '+esc(s.unidade)+'</td>'+
         '<td data-label="Profundidade">'+(s.profundidadeTexto?esc(s.profundidadeTexto):(s.profundidade!=null?fmtQtd(s.profundidade)+' m':'—'))+'</td>'+
@@ -4149,6 +4156,7 @@
     state.mapaFiltroServico = 'all';
     state.mapaFiltroProjeto = filtroProjetoId || 'all';
     state.mapaFiltroStatus = 'all';
+    state.mapaFiltroEscopo = 'all';
     state.mapaFiltroRegiao = '';
     state.mapaFiltroNumeroLocal = '';
     state.mapaFilaIA = [];
@@ -4603,9 +4611,15 @@
             '<option value="concluido">🟢 Concluído</option>'+
           '</select>'+
           '<label style="font-size:13px;color:var(--muted);">Serviço:</label><select id="mapaFiltroServico" style="max-width:200px;"><option value="all">Todos os serviços</option>'+mapaServicoOptionsHtml(obra.id, state.mapaFiltroServico==='all'?null:state.mapaFiltroServico)+'</select>'+
+          '<label style="font-size:13px;color:var(--muted);">Escopo:</label><select id="mapaFiltroEscopo" style="max-width:160px;">'+
+            '<option value="all">Todos</option>'+
+            '<option value="contratado">Contratados</option>'+
+            '<option value="aparte">À parte</option>'+
+          '</select>'+
           '<label style="font-size:13px;color:var(--muted);">Região/endereço:</label><input type="text" id="mapaFiltroRegiao" placeholder="Ex: Rua das Flores" style="max-width:160px;">'+
           '<label style="font-size:13px;color:var(--muted);">Nº do local:</label><input type="text" id="mapaFiltroNumeroLocal" placeholder="Ex: 100" style="max-width:90px;">'+
         '</div>'+
+        '<div id="mapaLegendaAparte" class="map-legend map-legend-aparte" style="display:none;"></div>'+
         '<div id="leafletMap"></div>'+
         (canGestao ? '<div class="card" id="mapaFilaIACard"></div>' : '')+
         '<div class="card"><h2 style="font-size:15px;">Marcações</h2><div id="mapaMarcacoesList"></div></div>';
@@ -4628,6 +4642,15 @@
         selStatus.value = state.mapaFiltroStatus || 'all';
         selStatus.addEventListener('change', function(){
           state.mapaFiltroStatus = selStatus.value;
+          renderMapaMarkersOnMap();
+          renderMapaMarcacoesList();
+        });
+      }
+      var selEscopo = document.getElementById('mapaFiltroEscopo');
+      if(selEscopo){
+        selEscopo.value = state.mapaFiltroEscopo || 'all';
+        selEscopo.addEventListener('change', function(){
+          state.mapaFiltroEscopo = selEscopo.value;
           renderMapaMarkersOnMap();
           renderMapaMarcacoesList();
         });
@@ -4858,6 +4881,7 @@
   function mapaMarcacaoPassaFiltros(m){
     if(state.mapaFiltroServico && state.mapaFiltroServico!=='all' && m.catalogoItemId!==state.mapaFiltroServico) return false;
     if(state.mapaFiltroProjeto && state.mapaFiltroProjeto!=='all' && m.projetoId!==state.mapaFiltroProjeto) return false;
+    if(state.mapaFiltroEscopo && state.mapaFiltroEscopo!=='all' && mapaEscopoMarcacao(m)!==state.mapaFiltroEscopo) return false;
     if(state.mapaFiltroStatus && state.mapaFiltroStatus!=='all' && (m.status||'processando')!==state.mapaFiltroStatus) return false;
     if(state.mapaFiltroRegiao){
       var alvo = normalizarTextoBusca(state.mapaFiltroRegiao);
@@ -4883,6 +4907,75 @@
     if(statusList.indexOf('parado')>-1) return 'parado';
     if(statusList.some(function(s){ return s!=='concluido'; })) return 'processando';
     return 'concluido';
+  }
+
+  /* ---------------- Escopo: serviço CONTRATADO x À PARTE ---------------- */
+  // "Contratado" = o item da tabela de preços ligado ao serviço está na lista
+  // de serviços contratados da obra. "À parte" = a obra TEM lista contratada
+  // e o serviço não está nela. Obra sem lista, ou marcação feita à mão (sem
+  // serviço de planejamento por trás), não é classificada (retorna null).
+  function escopoServicoObra(obraId, catalogoItemId){
+    var lista = (state.obraServicosContratados||[]).filter(function(s){ return s.obraId===obraId; });
+    if(!lista.length) return null;
+    return (catalogoItemId && lista.some(function(s){ return s.catalogoItemId===catalogoItemId; })) ? 'contratado' : 'aparte';
+  }
+  function mapaEscopoMarcacao(m){
+    if(!m || !m.planejamentoServicoId) return null;
+    return escopoServicoObra(m.obraId||state.mapaObraId, m.catalogoItemId);
+  }
+  function escopoChipHtml(escopo, extra){
+    if(escopo==='contratado') return '<span class="chip chip-contratado">Contratado</span>'+(extra?' <span class="hint" style="margin:0;">'+esc(extra)+'</span>':'');
+    if(escopo==='aparte') return '<span class="chip chip-aparte">À parte</span>';
+    return '';
+  }
+  function planejamentoEscopoChipHtml(s){
+    if(!s || s.origem!=='ia') return '';
+    var chip = escopoChipHtml(escopoServicoObra(s.obraId, s.catalogoItemId));
+    return chip ? chip+' ' : '';
+  }
+
+  // Tópico de um serviço à parte: define cor e sigla do marcador. PV e PI são
+  // pontos; tubulação/rede é traço; o resto ganha cor própria derivada do nome,
+  // então cada tipo de serviço à parte fica distinguível no mapa.
+  var MAPA_TOPICOS_APARTE = [
+    { id:'pi',  rx:/inspecao/,                                      sigla:'PI', nome:'Poço de inspeção (PI)',          cor:'#0E7490' },
+    { id:'pv',  rx:/poco de visita/,                                sigla:'PV', nome:'Poço de visita (PV)',            cor:'#6D28D9' },
+    { id:'tub', rx:/tubula|rede|ramal|coletor|interceptor|emissario/, sigla:'TB', nome:'Tubulação / rede',              cor:'#C2410C' },
+    { id:'lig', rx:/ligacao/,                                       sigla:'LG', nome:'Ligação',                        cor:'#047857' },
+    { id:'pav', rx:/pavimenta|recomposi|asfalto|calcada|concreto/,  sigla:'PA', nome:'Pavimentação / recomposição',    cor:'#A16207' },
+    { id:'esc', rx:/escava|sondagem|liner|natm|armco/,              sigla:'ES', nome:'Escavação / método não destrutivo', cor:'#1D4ED8' },
+    { id:'pv',  rx:/\bpv\b/,                                        sigla:'PV', nome:'Poço de visita (PV)',            cor:'#6D28D9' },
+    { id:'pi',  rx:/\bpi\b/,                                        sigla:'PI', nome:'Poço de inspeção (PI)',          cor:'#0E7490' }
+  ];
+  var MAPA_TOPICO_CORES_EXTRA = ['#BE185D','#0F766E','#7E22CE','#B45309','#4D7C0F','#9F1239'];
+  function mapaServicoDaMarcacao(m){
+    return m.planejamentoServicoId ? ((state.planejamentoServicos||[]).find(function(x){ return x.id===m.planejamentoServicoId; }) || null) : null;
+  }
+  function mapaTopicoAparte(m){
+    var svc = mapaServicoDaMarcacao(m);
+    var t = normalizarTextoBusca(svc ? svc.servicoNome : (m.observacao||''));
+    for(var i=0;i<MAPA_TOPICOS_APARTE.length;i++){ if(MAPA_TOPICOS_APARTE[i].rx.test(t)) return MAPA_TOPICOS_APARTE[i]; }
+    if(m.tipo==='ramal') return MAPA_TOPICOS_APARTE[2];
+    var h = 0; for(var j=0;j<t.length;j++){ h = (h*31 + t.charCodeAt(j))>>>0; }
+    var pal = t.split(/[^a-z0-9]+/).filter(function(w){ return w.length>2; });
+    var sigla = pal.length>1 ? (pal[0].charAt(0)+pal[1].charAt(0)) : ((pal[0]||'??').slice(0,2));
+    return { id:'x'+h, sigla:sigla.toUpperCase(), nome:(svc&&svc.servicoNome)||'Outro serviço', cor:MAPA_TOPICO_CORES_EXTRA[h % MAPA_TOPICO_CORES_EXTRA.length] };
+  }
+  function mapaChaveCoord(lat, lng){ return Number(lat).toFixed(5)+'|'+Number(lng).toFixed(5); }
+  function mapaTooltipAparteHtml(m, topico){
+    var svc = mapaServicoDaMarcacao(m);
+    var nome = svc ? svc.servicoNome : (m.observacao||'');
+    var trecho = svc && svc.trecho ? (' ['+svc.trecho+']') : '';
+    return '<b>À parte · '+esc(topico.nome)+'</b><br>'+esc(nome+trecho)+'<br><span style="opacity:.8;">'+esc(m.rua||m.nomeLocal||'(sem endereço)')+' · '+esc(statusMapLabel(m.status))+'</span>';
+  }
+  function renderMapaLegendaAparte(usados){
+    var el = document.getElementById('mapaLegendaAparte');
+    if(!el) return;
+    var ids = Object.keys(usados);
+    if(!ids.length){ el.innerHTML=''; el.style.display='none'; return; }
+    el.style.display='';
+    el.innerHTML = '<span class="map-legend-item"><b>Serviços à parte</b> — um marcador por serviço, a borda mostra o status:</span>'+
+      ids.map(function(id){ var t = usados[id]; return '<span class="map-legend-item"><span class="map-aparte-mini" style="background:'+t.cor+';">'+esc(t.sigla)+'</span>'+esc(t.nome)+'</span>'; }).join('');
   }
 
   // Agrupa as marcações elegíveis (1 único ponto de coordenada — tanto PV
@@ -4919,6 +5012,10 @@
     mapaLayerGroup.clearLayers();
     hideMapaFotoHover();
     var marcacoesFiltradas = state.mapaMarcacoes.filter(mapaMarcacaoPassaFiltros);
+    // Serviço À PARTE (fora do contrato) não entra no círculo numerado do local:
+    // cada um ganha o seu próprio marcador (ponto) ou traço, desenhados mais abaixo.
+    var marcacoesAparte = marcacoesFiltradas.filter(function(m){ return mapaEscopoMarcacao(m)==='aparte'; });
+    marcacoesFiltradas = marcacoesFiltradas.filter(function(m){ return mapaEscopoMarcacao(m)!=='aparte'; });
 
     // Grupos (PV, ou "ramal" com 1 só coordenada — ponto importado de PDF)
     // → um círculo numerado por endereço, com a cor do pior status do grupo.
@@ -4960,6 +5057,55 @@
         line.on('mouseout', hideMapaFotoHover);
       }
     });
+
+    // Serviços À PARTE — um marcador por serviço, com cor/sigla do tópico e a
+    // borda na cor do status. PV/PI = ponto (quadradinho); tubulação com
+    // traçado = traço tracejado na cor do tópico. Vários marcadores no mesmo
+    // ponto (ou no ponto de um círculo numerado) são afastados em círculo,
+    // em pixels, para nunca ficarem um por cima do outro.
+    var coordsComCirculo = {};
+    grupos.forEach(function(g){ coordsComCirculo[mapaChaveCoord(g.lat, g.lng)] = true; });
+    var porCoord = {};
+    marcacoesAparte.forEach(function(m){
+      if(m.geom && m.geom.length===1){
+        var kc = mapaChaveCoord(m.geom[0].lat, m.geom[0].lng);
+        (porCoord[kc] = porCoord[kc] || []).push(m);
+      }
+    });
+    var topicosUsados = {};
+    marcacoesAparte.forEach(function(m){
+      if(!(m.geom && m.geom.length)) return;
+      var topico = mapaTopicoAparte(m);
+      topicosUsados[topico.id] = topico;
+      var corStatus = statusMapColor(m.status);
+      if(m.geom.length>1){
+        var pts = m.geom.map(function(p){ return [p.lat,p.lng]; });
+        L.polyline(pts, { color:'#FFFFFF', weight:9, opacity:0.9, lineCap:'round', lineJoin:'round', interactive:false }).addTo(mapaLayerGroup);
+        var traco = L.polyline(pts, { color:topico.cor, weight:5, opacity:0.95, dashArray:'10 7', lineCap:'round', lineJoin:'round' }).addTo(mapaLayerGroup);
+        traco.bindTooltip(mapaTooltipAparteHtml(m, topico), { sticky:true, className:'map-pin-label' });
+        traco.on('click', function(){ abrirModalMarcacao(m); });
+        return;
+      }
+      var k = mapaChaveCoord(m.geom[0].lat, m.geom[0].lng);
+      var irmaos = porCoord[k] || [m];
+      var n = irmaos.length, idx = Math.max(0, irmaos.indexOf(m));
+      var dx = 0, dy = 0;
+      var raio = coordsComCirculo[k] ? 27 : (n>1 ? 19 : 0);
+      if(raio){
+        var ang = (2*Math.PI*idx/n) - Math.PI/2;
+        dx = Math.round(raio*Math.cos(ang)); dy = Math.round(raio*Math.sin(ang));
+      }
+      var html = '<div class="map-aparte-wrap"><div class="map-aparte" style="background:'+topico.cor+';border-color:'+corStatus+';">'+esc(topico.sigla)+'</div></div>';
+      var icone = L.divIcon({ className:'', html:html, iconSize:[26,26], iconAnchor:[13-dx, 13-dy] });
+      var mk = L.marker([m.geom[0].lat, m.geom[0].lng], { icon:icone }).addTo(mapaLayerGroup);
+      mk.bindTooltip(mapaTooltipAparteHtml(m, topico), { direction:'top', offset:[0,-14], className:'map-pin-label' });
+      mk.on('click', function(){ abrirModalMarcacao(m); });
+      if(m.foto && m.status!=='processando'){
+        mk.on('mouseover mousemove', function(e){ showMapaFotoHover(m.foto, e.containerPoint); });
+        mk.on('mouseout', hideMapaFotoHover);
+      }
+    });
+    renderMapaLegendaAparte(topicosUsados);
   }
 
   function renderMapaMarcacoesList(){
@@ -4980,7 +5126,7 @@
       return '<div class="marcacao-row" data-id="'+m.id+'">'+
         (m.nomeLocal ? '<span class="rua" style="font-weight:700;">'+esc(m.nomeLocal)+'</span>' : '')+
         '<span class="rua"'+(m.nomeLocal?' style="color:var(--muted);font-weight:400;"':'')+'>'+esc(m.rua||'(sem rua informada)')+'</span>'+
-        '<span class="tag-example" style="background:transparent;">'+(m.tipo==='pv'?'PV':'Ramal')+'</span>'+
+        '<span class="tag-example" style="background:transparent;">'+(m.tipo==='pv'?'PV':'Ramal')+'</span>'+escopoChipHtml(mapaEscopoMarcacao(m))+
         (m.numeroServico?'<span class="tag-example" style="background:transparent;">Nº '+esc(m.numeroServico)+'</span>':'')+
         '<select class="status-select" data-statusid="'+m.id+'">'+
           '<option value="processando"'+(m.status==='processando'?' selected':'')+'>Em andamento</option>'+
@@ -5036,10 +5182,17 @@
       ('<div class="field" style="margin-bottom:14px;"><label>Serviços previstos neste local ('+servicosRelacionados.length+')</label>'+
         '<div class="hint" style="margin:4px 0 0;display:flex;flex-direction:column;gap:4px;">'+
           servicosRelacionados.map(function(x){
-            return '<span>'+(x.codigo?esc(x.codigo)+' — ':'')+esc(x.servicoNome)+' · '+fmtQtd(x.quantidadePrevista)+' '+esc(x.unidade||'')+(x.profundidade!=null?' · prof. '+fmtQtd(x.profundidade)+'m':'')+' · '+esc(x.status)+'</span>';
+            return '<span>'+planejamentoEscopoChipHtml(x)+(x.codigo?esc(x.codigo)+' — ':'')+esc(x.servicoNome)+' · '+fmtQtd(x.quantidadePrevista)+' '+esc(x.unidade||'')+(x.profundidade!=null?' · prof. '+fmtQtd(x.profundidade)+'m':'')+' · '+esc(x.status)+'</span>';
           }).join('')+
         '</div>'+
       '</div>') : '';
+    var escopoMarc = mapaEscopoMarcacao(m);
+    var itemCatMarc = m.catalogoItemId ? catalogoItemById(m.catalogoItemId) : null;
+    var escopoMarcacaoHtml = escopoMarc ?
+      ('<div class="field" style="margin-bottom:10px;"><label>Escopo</label>'+
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+escopoChipHtml(escopoMarc, itemCatMarc?itemCatMarc.descricao:'')+
+        (escopoMarc==='aparte' ? '<span class="hint" style="margin:0;">Fora da lista de serviços contratados desta obra — tem marcador próprio no mapa.</span>' : '')+
+        '</div></div>') : '';
     var projetoOrigem = m.projetoId ? (state.projetos||[]).find(function(p){ return p.id===m.projetoId; }) : null;
     var projetoOrigemHtml = projetoOrigem ?
       ('<div class="field" style="margin-bottom:10px;"><label>Projeto de origem</label>'+
@@ -5058,6 +5211,7 @@
       '<div class="modal">'+
         '<h3>'+(isEdit ? (canGestao ? 'Editar marcação' : 'Atualizar marcação') : (m.tipo==='pv' ? 'Novo PV' : 'Novo ramal'))+'</h3>'+
         projetoOrigemHtml+
+        escopoMarcacaoHtml+
         camposIdentificacao+
         '<div class="field" style="margin-bottom:10px;"><label>Status</label>'+
           '<select id="marcStatus">'+
@@ -5146,6 +5300,15 @@
   }
 
   function atualizarMarcacao(id, vals){
+    // Trocar o "Serviço (tabela de preços)" de uma marcação que veio da análise
+    // também troca o serviço no Planejamento, para contratado/à parte não
+    // divergir entre as duas telas.
+    var marcAnterior = (state.mapaMarcacoes||[]).find(function(x){ return x.id===id; });
+    if(marcAnterior && marcAnterior.planejamentoServicoId && (marcAnterior.catalogoItemId||null)!==(vals.catalogoItemId||null)){
+      supabaseClient.from('planejamento_servicos').update({ catalogo_item_id: vals.catalogoItemId || null }).eq('id', marcAnterior.planejamentoServicoId).then(function(r){
+        if(r.error) console.error('Falha ao sincronizar o serviço no Planejamento:', r.error.message);
+      });
+    }
     supabaseClient.from('mapa_marcacoes').update({
       rua: vals.rua || null,
       nome_local: vals.nomeLocal || null,
