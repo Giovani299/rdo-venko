@@ -5311,6 +5311,26 @@
     setTimeout(function(){ var el=document.getElementById(canGestao?'marcRua':'marcStatus'); if(el) el.focus(); }, 0);
   }
 
+  // Liga o payload de uma marcação ao serviço do Planejamento de origem
+  // (mesmo vínculo que a análise automática grava), para o Mapeamento e o
+  // Planejamento ficarem coerentes e o escopo (contratado / à parte) valer
+  // também para marcações posicionadas à mão.
+  function aplicarVinculoPlano(payload, plano){
+    if(!plano) return payload;
+    payload.planejamento_servico_id = plano.id;
+    payload.projeto_id = plano.projeto_id || null;
+    payload.local_key = plano.local_key || null;
+    if('escopo' in plano) payload.escopo = plano.escopo || null;
+    if(!payload.catalogo_item_id && plano.catalogo_item_id) payload.catalogo_item_id = plano.catalogo_item_id;
+    return payload;
+  }
+  function buscarPlanosPorIds(ids){
+    ids = (ids||[]).filter(Boolean);
+    if(!ids.length) return Promise.resolve([]);
+    return supabaseClient.from('planejamento_servicos').select('*').in('id', ids).is('deleted_at', null).then(function(r){
+      return (r && !r.error && r.data) ? r.data : [];
+    }, function(){ return []; });
+  }
   function criarMarcacao(vals){
     var payload = {
       obra_id: state.mapaObraId,
@@ -5326,14 +5346,75 @@
       created_by: state.currentUser ? state.currentUser.id : null,
       created_by_nome: state.currentUser ? state.currentUser.nome : null
     };
-    supabaseClient.from('mapa_marcacoes').insert(payload).select().then(function(res){
-      if(res.error){ toast('Erro ao salvar marcação: '+res.error.message,'error'); return; }
-      toast('Marcação salva.','ok');
-      if(vals.filaId){
-        var novaMarcacaoId = res.data && res.data[0] && res.data[0].id;
-        supabaseClient.from('mapa_fila_ia').update({ status:'posicionado', posicionado_marcacao_id: novaMarcacaoId||null }).eq('id', vals.filaId).then(function(){ loadMapaFilaIA(state.mapaObraId); });
-      }
-      loadMapaMarcacoes(state.mapaObraId);
+    var filaItem = vals.filaId ? (state.mapaFilaIA||[]).find(function(f){ return f.id===vals.filaId; }) : null;
+    var preparo = (filaItem && filaItem.planejamentoServicoId) ? buscarPlanosPorIds([filaItem.planejamentoServicoId]) : Promise.resolve([]);
+    preparo.then(function(planos){
+      var plano = planos[0] || null;
+      aplicarVinculoPlano(payload, plano);
+      return supabaseClient.from('mapa_marcacoes').insert(payload).select().then(function(res){
+        if(res.error){ toast('Erro ao salvar marcação: '+res.error.message,'error'); return; }
+        toast('Marcação salva.','ok');
+        if(vals.filaId){
+          var novaMarcacaoId = res.data && res.data[0] && res.data[0].id;
+          supabaseClient.from('mapa_fila_ia').update({ status:'posicionado', posicionado_marcacao_id: novaMarcacaoId||null }).eq('id', vals.filaId).then(function(){ loadMapaFilaIA(state.mapaObraId); });
+        }
+        if(plano && vals.geom && vals.geom[0]){
+          supabaseClient.from('planejamento_servicos').update({ latitude: vals.geom[0].lat, longitude: vals.geom[0].lng }).eq('id', plano.id).then(function(){});
+        }
+        loadMapaMarcacoes(state.mapaObraId);
+        if(filaItem && plano) oferecerReplicarNoLocal(filaItem, vals);
+      });
+    });
+  }
+
+  // Depois de posicionar UM serviço da fila, oferece aplicar a mesma posição
+  // aos outros serviços pendentes do mesmo endereço e do mesmo tipo (ponto ou
+  // traço) — assim um local com vários serviços exige um clique, não vários.
+  function oferecerReplicarNoLocal(origem, vals){
+    var chave = normalizarEnderecoServico(origem.endereco, origem.numeroLocal);
+    var tipoDesenhado = vals.tipo==='ramal' ? 'ramal' : 'pv';
+    var outros = (state.mapaFilaIA||[]).filter(function(f){
+      return f.id!==origem.id && f.status==='pendente' && f.planejamentoServicoId &&
+        normalizarEnderecoServico(f.endereco, f.numeroLocal)===chave &&
+        (f.tipoSugerido==='ramal'?'ramal':'pv')===tipoDesenhado;
+    });
+    if(!outros.length) return;
+    confirmModal({
+      title:'Aplicar aos outros serviços deste local',
+      msg:'Há mais '+outros.length+' serviço(s) pendente(s) em "'+(origem.endereco||'este local')+'" do mesmo tipo. Posicionar todos neste mesmo ponto/trecho?',
+      okLabel:'Aplicar a todos'
+    }).then(function(ok){
+      if(!ok) return;
+      buscarPlanosPorIds(outros.map(function(f){ return f.planejamentoServicoId; })).then(function(planos){
+        var planoPorId = {}; planos.forEach(function(pl){ planoPorId[pl.id] = pl; });
+        var itens = outros.filter(function(f){ return planoPorId[f.planejamentoServicoId]; });
+        if(!itens.length){ toast('Não foi possível localizar os serviços no Planejamento.','error'); return; }
+        var uid = state.currentUser ? state.currentUser.id : null;
+        var uidNome = state.currentUser ? state.currentUser.nome : null;
+        var rows = itens.map(function(f){
+          return aplicarVinculoPlano({
+            obra_id: state.mapaObraId, tipo: tipoDesenhado, rua: f.endereco||null, nome_local: null,
+            numero_servico: f.numeroLocal||null, status: vals.status || 'processando',
+            observacao: f.observacoes || null, geom: vals.geom, catalogo_item_id: f.catalogoItemId || null,
+            foto: null, created_by: uid, created_by_nome: uidNome
+          }, planoPorId[f.planejamentoServicoId]);
+        });
+        supabaseClient.from('mapa_marcacoes').insert(rows).select().then(function(res){
+          if(res.error){ toast('Erro ao posicionar os outros serviços: '+res.error.message,'error'); return; }
+          var criadas = res.data||[];
+          Promise.all(criadas.map(function(m){
+            var f = itens.find(function(x){ return x.planejamentoServicoId===m.planejamento_servico_id; });
+            return f ? supabaseClient.from('mapa_fila_ia').update({ status:'posicionado', posicionado_marcacao_id: m.id }).eq('id', f.id) : Promise.resolve();
+          })).then(function(){
+            if(vals.geom && vals.geom[0]){
+              supabaseClient.from('planejamento_servicos').update({ latitude: vals.geom[0].lat, longitude: vals.geom[0].lng }).in('id', itens.map(function(f){ return f.planejamentoServicoId; })).then(function(){});
+            }
+            toast(criadas.length+' serviço(s) posicionado(s) no mesmo local.','ok');
+            loadMapaFilaIA(state.mapaObraId);
+            loadMapaMarcacoes(state.mapaObraId);
+          });
+        });
+      });
     });
   }
 
