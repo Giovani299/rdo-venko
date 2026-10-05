@@ -684,7 +684,7 @@
       <div class="kpi-row" id="kpiRow"></div>
       <div class="filters" id="filterBar"></div>
       <div style="display:flex;justify-content:flex-end;margin:-6px 0 12px;">
-        <button class="btn ghost sm" id="btnExportCsv" type="button">⬇ Exportar CSV</button>
+        <button class="btn ghost sm" id="btnExportCdm" type="button" style="display:none">⬇ Exportar CDM</button>
       </div>
       <div class="table-wrap">
         <table class="rdo-list">
@@ -1571,9 +1571,6 @@
     goto(g.getAttribute('data-goto'));
   });
 
-  document.getElementById('btnExportCsv').addEventListener('click', function(){
-    exportRdoCsv(filteredRdos());
-  });
   function csvField(v){
     var s = String(v==null?'':v);
     if(/[;"\n\r]/.test(s)){ s = '"'+s.replace(/"/g,'""')+'"'; }
@@ -2274,6 +2271,7 @@
 
   function financeiroCanAccess(){
     var u = state.currentUser;
+    if(state.cdmGerando && typeof cdmCanAccess==='function' && cdmCanAccess()) return true;   // CDM mostra valores nas RDOs
     return !!(u && (u.is_admin || u.acesso_financeiro));
   }
   function obrasCanAccess(){
@@ -3844,6 +3842,8 @@
       '<button class="btn ghost sm" id="fClear" type="button">Limpar filtros</button>'+
       (canGestao ? ('<button class="btn ghost sm'+(state.showingTrash?' active':'')+'" id="fTrash" type="button" title="Ver RDOs excluídas">'+(state.showingTrash?'← Voltar':'🗑 Lixeira')+'</button>') : '');
 
+    var btnCdm = document.getElementById('btnExportCdm');
+    if(btnCdm) btnCdm.style.display = cdmCanAccess() ? '' : 'none';
     document.getElementById('fObra').addEventListener('change', function(e){ f.obraId=e.target.value; renderRdoTable(); });
     document.getElementById('fDe').addEventListener('change', function(e){ f.dataIni=e.target.value; renderRdoTable(); });
     document.getElementById('fAte').addEventListener('change', function(e){ f.dataFim=e.target.value; renderRdoTable(); });
@@ -7367,6 +7367,403 @@
       return 'Relatório de serviços contratados exportado ('+n+' página'+(n>1?'s':'')+').';
     });
   }
+
+  /* ---------------- Caderno de Medição (CDM) ---------------- */
+  // PDF único: capa + planilha "Apontamento de produção por equipe" + as RDOs
+  // do período (3 páginas cada, mesmo layout do PDF individual da RDO).
+  var CDM_MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  function cdmCanAccess(){
+    var u = state.currentUser;
+    return !!(u && (u.is_admin || u.acesso_financeiro || /engenheir/i.test(u.cargo||'')));
+  }
+  function cdmMesAno(iso){
+    var p = String(iso||'').split('-');
+    return p.length===3 ? (CDM_MESES[(+p[1])-1]||'') + ' ' + p[0] : '';
+  }
+  function cdmRdosDoPeriodo(obraId, de, ate){
+    return state.rdos.filter(function(r){
+      return r.obraId===obraId && !r.deletedAt && r.data && r.data>=de && r.data<=ate;
+    }).sort(function(a,b){
+      return (a.data||'').localeCompare(b.data||'') || (new Date(a.createdAt)-new Date(b.createdAt));
+    });
+  }
+
+  // Lê o texto livre "Atividades do dia" da equipe: rua, "Trecho: ..." e
+  // "Imóveis: ..." por bloco (blocos separados por linha em branco).
+  function cdmParseAtividades(txt){
+    var blocos = [], atual = [];
+    String(txt||'').split(/\r?\n/).forEach(function(l){
+      if(!l.trim()){ if(atual.length){ blocos.push(atual); atual = []; } }
+      else atual.push(l.trim());
+    });
+    if(atual.length) blocos.push(atual);
+    function limpa(s){ return String(s||'').replace(/\s*\.\s*$/,'').trim(); }
+    var rua = '';
+    var info = blocos.map(function(linhas){
+      var b = { texto: linhas.join('\n'), trecho:'', imoveis:'' };
+      linhas.forEach(function(l, i){
+        var mt = l.match(/^trecho\s*:\s*(.+)$/i);
+        var mi = l.match(/^(im[óo]ve(?:l|is))\s*:\s*(.+)$/i);
+        if(mt) b.trecho = limpa(mt[1]).replace(/\s+ao\s+/i, ' ao ');
+        else if(mi) b.imoveis = (/^imóveis$/i.test(mi[1])||/^imoveis$/i.test(mi[1]) ? 'Imóveis' : 'Imóvel') + ': ' + limpa(mi[2]);
+        else if(!rua && i===0 && !/^(execu|produ)/i.test(l)) rua = l;
+      });
+      return b;
+    });
+    var trechoGeral = '', imoveisGeral = '';
+    info.forEach(function(b){ if(!trechoGeral && b.trecho) trechoGeral = b.trecho; if(!imoveisGeral && b.imoveis) imoveisGeral = b.imoveis; });
+    return { blocos: info, rua: rua, trechoGeral: trechoGeral, imoveisGeral: imoveisGeral };
+  }
+
+  function cdmLinhasPlanilha(rdos){
+    var linhas = [], seq = 0;
+    rdos.forEach(function(r){
+      (r.equipesDia||[]).forEach(function(nomeEq, i){
+        var d = (r.equipesDetalhe||[])[i] || {};
+        var conc = (d.concluidos||[]).filter(function(c){ return c.tipo==='Concluído' && c.catalogoItemId; });
+        if(!conc.length) return;
+        var info = cdmParseAtividades(d.atividades);
+        var frente = String(d.frente||'').replace(/\s*-\s*\d+[A-Za-z]\s*$/,'').trim();
+        var local = [frente, info.rua].filter(Boolean).join(' - ');
+        conc.forEach(function(c){
+          var item = catalogoItemById(c.catalogoItemId);
+          if(!item) return;
+          var ehLig = /lig|ramal/i.test(item.descricao||'');
+          var bloco = null;
+          info.blocos.forEach(function(b){
+            if(bloco) return;
+            var temLig = /lig|ramal|im[óo]ve/i.test(b.texto);
+            if(ehLig ? temLig : (!temLig && b.trecho)) bloco = b;
+          });
+          var qtd = Number(c.quantidade)||0;
+          var preco = Number(item.custoUnitario)||0;
+          linhas.push({
+            id: ++seq, data: r.data, medicao: (CDM_MESES[(+String(r.data).split('-')[1])-1]||''),
+            equipe: 'EQ'+(i+1), codigo: item.itemNumero||'', atividade: item.descricao||'', unidade: item.unidade||'',
+            qtd: qtd, preco: preco, fat: Math.round(qtd*preco*100)/100,
+            trecho: (bloco && bloco.trecho) || info.trechoGeral || '',
+            local: local, status: 'Executado',
+            obs: ehLig ? ((bloco && bloco.imoveis) || info.imoveisGeral || '') : ''
+          });
+        });
+      });
+    });
+    return linhas;
+  }
+
+  var CDM_NAVY = [18,58,99];
+  function cdmDesenharCapa(doc, obra, de, ate){
+    var PW = 841.89, PH = 595.28;
+    doc.setFillColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]);
+    doc.rect(0, 0, PW, 90, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(30);
+    doc.text('VENKO', PW/2, 56, {align:'center'});
+    doc.setTextColor(34,34,34);
+    doc.setFontSize(26);
+    doc.text('CADERNO DE MEDIÇÃO', PW/2, 190, {align:'center'});
+    var mesDe = cdmMesAno(de), mesAte = cdmMesAno(ate);
+    doc.setFontSize(16);
+    doc.text((mesDe===mesAte ? mesDe : (mesDe+' a '+mesAte)).toUpperCase(), PW/2, 226, {align:'center'});
+    doc.setDrawColor(0); doc.setLineWidth(1);
+    doc.line(PW*0.14, 258, PW*0.86, 258);
+    doc.setFont('helvetica','normal'); doc.setFontSize(12);
+    doc.text('Período: '+fmtDate(de)+' a '+fmtDate(ate), PW/2, 300, {align:'center'});
+    var proj = (obra && obra.nome ? obra.nome : '') + (obra && obra.contrato ? ' — '+obra.contrato : '');
+    doc.setFontSize(11);
+    doc.text('Contrato / Projeto: ' + proj, PW/2, 500, {align:'center'});
+  }
+
+  function cdmDesenharPlanilha(doc, linhas, obra, de, ate){
+    var PW = 841.89, PH = 595.28, M = 24;
+    var cols = [
+      {k:'id', t:'ID', w:22, a:'c'},
+      {k:'data', t:'Data', w:46, a:'c', y:1},
+      {k:'medicao', t:'Medição', w:42, a:'c', y:1},
+      {k:'equipe', t:'Equipe', w:28, a:'c', y:1},
+      {k:'codigo', t:'Código do serviço', w:44, a:'c', y:1},
+      {k:'atividade', t:'Atividade', w:146, a:'l'},
+      {k:'unidade', t:'Unidade', w:32, a:'c'},
+      {k:'qtd', t:'Quantidade executada', w:46, a:'r', y:1},
+      {k:'preco', t:'Preço unitário', w:48, a:'r'},
+      {k:'fat', t:'Faturamento', w:54, a:'r'},
+      {k:'trecho', t:'Frente/Trecho', w:58, a:'l'},
+      {k:'local', t:'Local', w:112, a:'l', y:1},
+      {k:'status', t:'Status', w:38, a:'c'},
+      {k:'obs', t:'Observações', w:74, a:'l'}
+    ];
+    var totalW = cols.reduce(function(s,c){ return s + c.w; }, 0);
+    var FS = 6.5, LH = 7.6, HEAD_H = 28;
+
+    function fmtQ(v){ return Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+    function valor(l, k){
+      if(k==='data') return fmtDate(l.data);
+      if(k==='qtd') return fmtQ(l.qtd);
+      if(k==='preco') return fmtMoeda(l.preco);
+      if(k==='fat') return fmtMoeda(l.fat);
+      return String(l[k]==null?'':l[k]);
+    }
+    function novaPagina(primeira){
+      if(!primeira) doc.addPage([PW,PH],'landscape');
+      doc.setFillColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]);
+      doc.rect(M, M, totalW, 22, 'F');
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      doc.text('APONTAMENTO DE PRODUÇÃO POR EQUIPE', M+8, M+15);
+      doc.setTextColor(90,90,90); doc.setFont('helvetica','normal'); doc.setFontSize(7);
+      doc.text((obra&&obra.nome?obra.nome:'')+'  ·  Período: '+fmtDate(de)+' a '+fmtDate(ate)+'  ·  '+linhas.length+' apontamento'+(linhas.length===1?'':'s'), M, M+33);
+      var y = M + 40, x = M;
+      doc.setFillColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]);
+      doc.rect(M, y, totalW, HEAD_H, 'F');
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(6.2);
+      cols.forEach(function(c){
+        var ls = doc.splitTextToSize(c.t, c.w-4);
+        var sy = y + (HEAD_H - ls.length*7)/2 + 5.4;
+        ls.forEach(function(s, i){ doc.text(s, x + c.w/2, sy + i*7, {align:'center'}); });
+        x += c.w;
+      });
+      doc.setFont('helvetica','normal'); doc.setFontSize(FS);
+      return y + HEAD_H;
+    }
+
+    var y = novaPagina(true);
+    doc.setLineWidth(0.3);
+    if(!linhas.length){
+      doc.setTextColor(90,90,90);
+      doc.text('Nenhum serviço concluído nas RDOs deste período.', M+4, y+14);
+      y += 22;
+    }
+    linhas.forEach(function(l){
+      doc.setFont('helvetica','normal'); doc.setFontSize(FS);
+      var cel = cols.map(function(c){ return doc.splitTextToSize(valor(l,c.k), c.w-6); });
+      var n = cel.reduce(function(m,ls){ return Math.max(m, ls.length); }, 1);
+      var rowH = Math.max(14, n*LH + 5);
+      if(y + rowH > PH - M - 22){ y = novaPagina(false); }
+      var x = M;
+      cols.forEach(function(c, ci){
+        if(c.y) doc.setFillColor(255,244,214); else doc.setFillColor(255,255,255);
+        doc.setDrawColor(205,205,205);
+        doc.rect(x, y, c.w, rowH, 'FD');
+        doc.setTextColor(30,30,30);
+        var ls = cel[ci];
+        var sy = y + (rowH - ls.length*LH)/2 + 5.6;
+        ls.forEach(function(s, i){
+          var tx = c.a==='c' ? x + c.w/2 : (c.a==='r' ? x + c.w - 3 : x + 3);
+          doc.text(s, tx, sy + i*LH, c.a==='c' ? {align:'center'} : (c.a==='r' ? {align:'right'} : undefined));
+        });
+        x += c.w;
+      });
+      y += rowH;
+    });
+
+    // SUB-TOTAL
+    if(y + 22 > PH - M){ y = novaPagina(false); }
+    var total = sumMoeda(linhas, function(l){ return l.fat; });
+    var xFat = M; for(var i=0;i<cols.length;i++){ if(cols[i].k==='fat') break; xFat += cols[i].w; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(30,30,30);
+    doc.text('SUB-TOTAL:', M+4, y+13);
+    doc.setDrawColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]); doc.setLineWidth(0.8);
+    doc.rect(xFat, y+3, 54, 15, 'S');
+    doc.setTextColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]);
+    doc.text(fmtMoeda(total), xFat+51, y+13.2, {align:'right'});
+  }
+
+  // Rasteriza `target` e acrescenta as páginas A4 (retrato) ao `doc` — mesma
+  // regra de paginação do PDF individual da RDO (nunca corta um cartão/linha).
+  function cdmPaginarNoDoc(target, doc){
+    var PAGE_W = 595.28, PAGE_H = 841.89, MARGIN_TOP = 26, MARGIN_BOTTOM = 26;
+    var ptPerPx = PAGE_W / target.offsetWidth;
+    var pageContentHeightPx = (PAGE_H - MARGIN_TOP - MARGIN_BOTTOM) / ptPerPx;
+    var targetTop = target.getBoundingClientRect().top;
+    function relTop(el){ return el.getBoundingClientRect().top - targetTop; }
+    function relBottom(el){ return el.getBoundingClientRect().bottom - targetTop; }
+    var atoms = [];
+    Array.prototype.slice.call(target.querySelectorAll('[data-pdf-card]')).forEach(function(card){
+      var top = relTop(card), bottom = relBottom(card);
+      if((bottom - top) > pageContentHeightPx){
+        var rows = Array.prototype.slice.call(card.querySelectorAll('[data-pdf-row]'));
+        if(rows.length){
+          rows.forEach(function(row, idx){
+            atoms.push({ top: idx===0 ? top : relTop(row), bottom: idx===rows.length-1 ? bottom : relBottom(row) });
+          });
+          return;
+        }
+      }
+      atoms.push({top:top, bottom:bottom});
+    });
+    var pages = [], pageStart = 0, pageEnd = 0;
+    atoms.forEach(function(atom, idx){
+      if(idx===0){ pageStart = atom.top; pageEnd = atom.bottom; return; }
+      if((atom.bottom - pageStart) > pageContentHeightPx){
+        pages.push({start:pageStart, end:pageEnd});
+        pageStart = atom.top; pageEnd = atom.bottom;
+      } else { pageEnd = atom.bottom; }
+    });
+    pages.push({start:pageStart, end:pageEnd});
+
+    return window.html2canvas(target, { scale:2, useCORS:true, backgroundColor:'#ffffff' }).then(function(canvas){
+      var scaleFactor = canvas.width / target.offsetWidth;
+      pages.forEach(function(pg, i){
+        doc.addPage([PAGE_W, PAGE_H], 'portrait');
+        var sliceTopPx = Math.max(0, Math.round(pg.start * scaleFactor));
+        var sliceHeightPx = Math.min(canvas.height - sliceTopPx, Math.round((pg.end - pg.start) * scaleFactor));
+        var sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = Math.max(1, sliceHeightPx);
+        var ctx = sliceCanvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+        ctx.drawImage(canvas, 0, sliceTopPx, canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
+        var sliceHeightPt = sliceCanvas.height / scaleFactor * ptPerPx;
+        doc.addImage(sliceCanvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, MARGIN_TOP, PAGE_W, sliceHeightPt, undefined, 'FAST');
+        doc.setFontSize(8); doc.setTextColor(140);
+        doc.text('Página '+(i+1)+' de '+pages.length, PAGE_W-70, PAGE_H-14);
+        sliceCanvas.width = 1; sliceCanvas.height = 1;
+      });
+      return pages.length;
+    });
+  }
+
+  function cdmAdicionarRdo(doc, r){
+    var html =
+      '<div style="width:800px;background:'+RDO_SHELL+';color:var(--ink);font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.45;padding:18px 16px 24px;">' +
+        rdoCard(
+          '<div style="display:flex;align-items:center;justify-content:center;padding:14px 0 6px;">' +
+            '<img src="'+LOGO_DATA+'" style="height:30px;">' +
+          '</div>' +
+          '<div style="text-align:center;font-weight:bold;font-size:14.5px;padding:0 16px 14px;">Relatório Diário de Obra (RDO)</div>'
+        ) +
+        rdoBodyHtml(r, {print:true}) +
+      '</div>';
+    var container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;';
+    container.setAttribute('data-theme','light');
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    return cdmPaginarNoDoc(container.firstChild, doc).then(function(n){
+      document.body.removeChild(container); return n;
+    }, function(err){
+      try{ document.body.removeChild(container); }catch(e){}
+      throw err;
+    });
+  }
+
+  function gerarCdm(obraId, de, ate){
+    if(!window.jspdf || !window.jspdf.jsPDF || !window.html2canvas){
+      toast('Gerador de PDF indisponível neste momento.','error');
+      return;
+    }
+    var obra = state.obras.find(function(o){ return o.id===obraId; }) || { nome: '' };
+    var rdos = cdmRdosDoPeriodo(obraId, de, ate);
+    if(!rdos.length){ toast('Nenhuma RDO desta obra no período.','error'); return; }
+
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div');
+    wrap.className = 'overlay';
+    wrap.innerHTML = '<div class="modal"><h3>Gerando Caderno de Medição</h3><p id="cdmProg">Preparando…</p><p class="hint">Não feche esta janela até terminar.</p></div>';
+    root.appendChild(wrap);
+    var prog = wrap.querySelector('#cdmProg');
+
+    state.cdmGerando = true;   // mostra os valores (R$) nas RDOs do caderno
+    function pausa(){ return new Promise(function(res){ setTimeout(res, 30); }); }
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({ unit:'pt', format:'a4', orientation:'landscape', compress:true });
+    var chain;
+    try{
+      prog.textContent = 'Montando capa e planilha de medição…';
+      cdmDesenharCapa(doc, obra, de, ate);
+      doc.addPage([841.89, 595.28], 'landscape');
+      cdmDesenharPlanilha(doc, cdmLinhasPlanilha(rdos), obra, de, ate);
+    }catch(err){
+      console.error('CDM: erro ao montar capa/planilha', err);
+      state.cdmGerando = false; wrap.remove();
+      toast('Erro ao montar o Caderno de Medição.','error');
+      return;
+    }
+    chain = Promise.resolve();
+    rdos.forEach(function(r, idx){
+      chain = chain.then(function(){
+        prog.textContent = 'Adicionando RDO '+(idx+1)+' de '+rdos.length+' ('+fmtDate(r.data)+')…';
+        return pausa().then(function(){ return cdmAdicionarRdo(doc, r); });
+      });
+    });
+    chain.then(function(){
+      prog.textContent = 'Finalizando o arquivo…';
+      var nome = 'CDM_'+(obra.nome||'obra').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+de+'_a_'+ate+'.pdf';
+      doc.save(nome);
+      toast('Caderno de Medição gerado ('+rdos.length+' RDO'+(rdos.length>1?'s':'')+', '+doc.getNumberOfPages()+' páginas).','ok');
+    }).catch(function(err){
+      console.error('CDM: erro ao gerar', err);
+      toast('Erro ao gerar o Caderno de Medição.','error');
+    }).then(function(){
+      state.cdmGerando = false;
+      wrap.remove();
+    });
+  }
+
+  function openCdmModal(){
+    if(!cdmCanAccess()) return;
+    var f = state.filters || {};
+    var obraId = f.obraId || '';
+    if(!obraId){
+      if(state.obras.length===1) obraId = state.obras[0].id;
+      else if(state.rdos.length) obraId = state.rdos[0].obraId;   // RDO mais recente
+    }
+    var de = f.dataIni || '', ate = f.dataFim || '';
+    if(!de || !ate){
+      var ult = state.rdos.filter(function(r){ return r.obraId===obraId; })[0];
+      if(ult && ult.data){
+        var ym = ult.data.slice(0,7).split('-');
+        var ultimo = new Date(+ym[0], +ym[1], 0).getDate();
+        if(!de) de = ym[0]+'-'+ym[1]+'-01';
+        if(!ate) ate = ym[0]+'-'+ym[1]+'-'+String(ultimo).padStart(2,'0');
+      }
+    }
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div');
+    wrap.className = 'overlay';
+    wrap.innerHTML =
+      '<div class="modal" style="max-width:460px;">'+
+        '<h3>Exportar Caderno de Medição (CDM)</h3>'+
+        '<p>Gera um PDF com a capa, a planilha de medição e as RDOs da obra no período escolhido.</p>'+
+        '<div class="field"><label>Obra</label><select id="cdmObra">'+
+          '<option value="">Selecione…</option>'+
+          state.obras.map(function(o){ return '<option value="'+esc(o.id)+'"'+(o.id===obraId?' selected':'')+'>'+esc(o.nome)+'</option>'; }).join('')+
+        '</select></div>'+
+        '<div class="grid2" style="margin-top:10px;">'+
+          '<div class="field"><label>De</label><div class="date-wrap"><input type="date" id="cdmDe" value="'+esc(de)+'"><span class="date-ph" data-for="cdmDe">dd/mm/aaaa</span></div></div>'+
+          '<div class="field"><label>Até</label><div class="date-wrap"><input type="date" id="cdmAte" value="'+esc(ate)+'"><span class="date-ph" data-for="cdmAte">dd/mm/aaaa</span></div></div>'+
+        '</div>'+
+        '<p class="hint" id="cdmInfo" style="margin:10px 0 0;"></p>'+
+        '<div class="row" style="margin-top:14px;">'+
+          '<button class="btn ghost" data-act="cancel" type="button">Cancelar</button>'+
+          '<button class="btn primary" data-act="ok" type="button" id="cdmGerar">Gerar CDM</button>'+
+        '</div>'+
+      '</div>';
+    root.appendChild(wrap);
+    wireDatePlaceholder('cdmDe'); wireDatePlaceholder('cdmAte');
+    var selObra = wrap.querySelector('#cdmObra'), inDe = wrap.querySelector('#cdmDe'), inAte = wrap.querySelector('#cdmAte');
+    var info = wrap.querySelector('#cdmInfo'), btn = wrap.querySelector('#cdmGerar');
+    function atualiza(){
+      var ok = selObra.value && inDe.value && inAte.value && inDe.value<=inAte.value;
+      var n = ok ? cdmRdosDoPeriodo(selObra.value, inDe.value, inAte.value).length : 0;
+      if(!selObra.value || !inDe.value || !inAte.value) info.textContent = 'Escolha a obra e o período.';
+      else if(inDe.value>inAte.value) info.textContent = 'A data inicial deve ser anterior à data final.';
+      else info.textContent = n ? (n+' RDO'+(n>1?'s':'')+' no período.') : 'Nenhuma RDO desta obra no período.';
+      btn.disabled = !n;
+    }
+    ['change','input'].forEach(function(ev){ [selObra,inDe,inAte].forEach(function(el){ el.addEventListener(ev, atualiza); }); });
+    atualiza();
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap){ wrap.remove(); return; }
+      var act = e.target.getAttribute && e.target.getAttribute('data-act');
+      if(act==='cancel'){ wrap.remove(); }
+      if(act==='ok' && !btn.disabled){
+        var o = selObra.value, d1 = inDe.value, d2 = inAte.value;
+        wrap.remove();
+        gerarCdm(o, d1, d2);
+      }
+    });
+  }
+  document.getElementById('btnExportCdm').addEventListener('click', openCdmModal);
 
   /* ---------------- boot ---------------- */
   bootAuth();
