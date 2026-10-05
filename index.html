@@ -3096,7 +3096,7 @@
       planejamentoImportarCardHtml()+
       planejamentoFormHtml()+
       '<div class="card">'+
-        '<h2><span class="idx">M</span><span>Matriz de serviços'+(filtrados.length!==todos.length?' ('+filtrados.length+' de '+todos.length+')':'')+'</span>'+(pendenteIA>0?'<button type="button" class="btn primary sm" id="btnConfirmarPendentesMapa" style="margin-left:auto;">Confirmar pendentes e enviar ao Mapa ('+pendenteIA+')</button>':'')+'<button type="button" class="btn ghost sm" id="btnExportarMatrizExcel" style="margin-left:'+(pendenteIA>0?'8px':'auto')+';">Exportar Excel</button></h2>'+
+        '<h2><span class="idx">M</span><span>Matriz de serviços'+(filtrados.length!==todos.length?' ('+filtrados.length+' de '+todos.length+')':'')+'</span>'+(pendenteIA>0?'<button type="button" class="btn primary sm" id="btnConfirmarPendentesMapa" style="margin-left:auto;">Confirmar pendentes e enviar ao Mapa ('+pendenteIA+')</button>':'')+'<button type="button" class="btn ghost sm" id="btnExportarMatrizExcel" style="margin-left:'+(pendenteIA>0?'8px':'auto')+';">Exportar Excel</button>'+((todos.length||(state.projetos||[]).length)?'<button type="button" class="btn danger sm" id="btnExcluirTudoMatriz" style="margin-left:8px;">Excluir tudo</button>':'')+'</h2>'+
         planejamentoTabelaHtml(filtrados)+
       '</div>';
     wireProjetosCard(obra);
@@ -3106,6 +3106,8 @@
     wirePlanejamentoTableActions(obra);
     var btnExportarExcel = document.getElementById('btnExportarMatrizExcel');
     if(btnExportarExcel) btnExportarExcel.addEventListener('click', function(){ exportarMatrizExcel(obra, state.planejamentoServicos); });
+    var btnExcluirTudo = document.getElementById('btnExcluirTudoMatriz');
+    if(btnExcluirTudo) btnExcluirTudo.addEventListener('click', function(){ excluirTudoDaMatriz(obra); });
     var btnConfirmarPendentes = document.getElementById('btnConfirmarPendentesMapa');
     if(btnConfirmarPendentes) btnConfirmarPendentes.addEventListener('click', function(){ confirmarPendentesEEnviarAoMapa(obra); });
   }
@@ -3492,17 +3494,96 @@
       b.addEventListener('click', function(){
         var id = b.getAttribute('data-delprojeto');
         var p = state.projetos.find(function(x){ return x.id===id; });
-        confirmModal({ title:'Excluir projeto', msg:'Isso remove o arquivo e o registro deste projeto. Deseja continuar?', okLabel:'Excluir', danger:true })
+        confirmModal({ title:'Excluir projeto', msg:'Isso remove o arquivo, o registro deste projeto e os serviços e marcadores do mapa gerados por ele. Deseja continuar?', okLabel:'Excluir', danger:true })
           .then(function(ok){
             if(!ok) return;
-            supabaseClient.from('projetos_obra').delete().eq('id', id).then(function(res){
+            limparServicosDoProjeto(id).then(function(r0){
+              if(r0 && r0.error) return r0;
+              return supabaseClient.from('projetos_obra').delete().eq('id', id);
+            }).then(function(res){
               if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
               if(p && p.arquivoPath) supabaseClient.storage.from('projetos-obras').remove([p.arquivoPath]);
               toast('Projeto removido.','ok');
               loadProjetosObra(obra.id);
+              loadPlanejamentoServicos(obra.id);
             });
           });
       });
+    });
+  }
+
+  /* ---- limpeza em massa (Matriz de serviços e Mapeamento) ---- */
+  function dbApagar(tabela, aplicar){
+    return aplicar(supabaseClient.from(tabela).delete()).then(function(res){
+      if(res && res.error) throw new Error(tabela+': '+res.error.message);
+    });
+  }
+  function limparServicosDoProjeto(projetoId){
+    return supabaseClient.from('planejamento_servicos').select('id').eq('projeto_id', projetoId).then(function(r){
+      if(r.error) return r;
+      var ids = (r.data||[]).map(function(x){ return x.id; });
+      var p = Promise.resolve();
+      if(ids.length){
+        p = p.then(function(){ return dbApagar('mapa_fila_ia', function(q){ return q.in('planejamento_servico_id', ids); }); })
+             .then(function(){ return dbApagar('mapa_marcacoes', function(q){ return q.in('planejamento_servico_id', ids); }); });
+      }
+      return p.then(function(){ return dbApagar('mapa_marcacoes', function(q){ return q.eq('projeto_id', projetoId); }); })
+              .then(function(){ return dbApagar('planejamento_servicos', function(q){ return q.eq('projeto_id', projetoId); }); })
+              .then(function(){ return {}; })
+              .catch(function(e){ return { error:{ message:e.message } }; });
+    });
+  }
+  function excluirTudoDaMatriz(obra){
+    var projetos = (state.projetos||[]).filter(function(p){ return p.obraId===obra.id; });
+    confirmModal({
+      title:'Excluir tudo da matriz',
+      msg:'Isso apaga TODOS os serviços da matriz desta obra, TODOS os projetos anexados ('+projetos.length+' arquivo(s)) e os marcadores e pendências do mapa que vieram deles. Não dá para desfazer. Deseja continuar?',
+      okLabel:'Excluir tudo', danger:true
+    }).then(function(ok){
+      if(!ok) return;
+      var oid = obra.id;
+      var paths = [];
+      projetos.forEach(function(p){ if(p.arquivoPath) paths.push(p.arquivoPath); if(p.excelPath) paths.push(p.excelPath); });
+      dbApagar('mapa_fila_ia', function(q){ return q.eq('obra_id', oid).not('planejamento_servico_id','is',null); })
+        .then(function(){ return dbApagar('mapa_marcacoes', function(q){ return q.eq('obra_id', oid).or('planejamento_servico_id.not.is.null,projeto_id.not.is.null'); }); })
+        .then(function(){ return dbApagar('planejamento_servicos', function(q){ return q.eq('obra_id', oid); }); })
+        .then(function(){ return dbApagar('projetos_obra', function(q){ return q.eq('obra_id', oid); }); })
+        .then(function(){
+          if(paths.length) supabaseClient.storage.from('projetos-obras').remove(paths);
+          state.planejamentoEditId = null;
+          toast('Matriz e projetos da obra foram excluídos.','ok');
+          loadPlanejamentoServicos(oid);
+          loadProjetosObra(oid);
+        })
+        .catch(function(e){
+          toast('Não foi possível excluir tudo: '+e.message,'error');
+          loadPlanejamentoServicos(oid);
+          loadProjetosObra(oid);
+        });
+    });
+  }
+  function limparMapeamentoDaObra(obra){
+    confirmModal({
+      title:'Limpar mapeamento',
+      msg:'Isso apaga TODOS os marcadores, traços de tubulação e pendências de posicionamento do mapa desta obra. A matriz de serviços não é alterada. Não dá para desfazer. Deseja continuar?',
+      okLabel:'Limpar tudo', danger:true
+    }).then(function(ok){
+      if(!ok) return;
+      var oid = obra.id;
+      dbApagar('mapa_fila_ia', function(q){ return q.eq('obra_id', oid); })
+        .then(function(){ return dbApagar('mapa_marcacoes', function(q){ return q.eq('obra_id', oid); }); })
+        .then(function(){
+          toast('Mapeamento limpo.','ok');
+          state.mapaMarcacoes = [];
+          state.mapaFilaIA = [];
+          loadMapaMarcacoes(oid);
+          loadMapaFilaIA(oid);
+        })
+        .catch(function(e){
+          toast('Não foi possível limpar o mapeamento: '+e.message,'error');
+          loadMapaMarcacoes(oid);
+          loadMapaFilaIA(oid);
+        });
     });
   }
   function wirePlanejamentoFilterBar(obra){
@@ -4655,11 +4736,13 @@
         '<div id="mapaLegendaAparte" class="map-legend map-legend-aparte" style="display:none;"></div>'+
         '<div id="leafletMap"></div>'+
         (canGestao ? '<div class="card" id="mapaFilaIACard"></div>' : '')+
-        '<div class="card"><h2 style="font-size:15px;">Marcações</h2><div id="mapaMarcacoesList"></div></div>';
+        '<div class="card"><h2 style="font-size:15px;display:flex;align-items:center;gap:8px;">Marcações'+(canGestao?'<button type="button" class="btn danger sm" id="btnLimparMapa" style="margin-left:auto;">Limpar mapeamento</button>':'')+'</h2><div id="mapaMarcacoesList"></div></div>';
       mapaCurrentRenderedObraId = state.mapaObraId;
       mapaCurrentRenderedCanGestao = canGestao;
       initLeafletMap(obra);
       if(canGestao) wireMapaToolbarEvents();
+      var btnLimparMapa = document.getElementById('btnLimparMapa');
+      if(btnLimparMapa) btnLimparMapa.addEventListener('click', function(){ limparMapeamentoDaObra(obra); });
       refreshMapaFiltroProjeto();
       var selServico = document.getElementById('mapaFiltroServico');
       if(selServico){
