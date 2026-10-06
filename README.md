@@ -55,3 +55,4 @@ para uso futuro até alguém adicioná-lo na aba Equipamentos).
 - "Remover acesso" de um usuário é soft-delete (remove o perfil do
   sistema, mas o login no Supabase Auth continua existindo — para apagar
   de vez, use o painel do Supabase em Authentication → Users).
+
