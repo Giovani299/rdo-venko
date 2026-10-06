@@ -7451,7 +7451,34 @@
     return linhas;
   }
 
-  var CDM_NAVY = [18,58,99];
+  var CDM_NAVY = [29,31,35];       // preto Venko
+  var CDM_YELLOW = [245,196,0];    // amarelo Venko
+  var CDM_LOGO = null, CDM_LOGO_RATIO = 163/34;
+  // Recorta a área útil do logotipo (sem as margens transparentes) para usar na planilha.
+  function cdmPrepararLogo(){
+    if(CDM_LOGO) return Promise.resolve();
+    return new Promise(function(resolve){
+      try{
+        var im = new Image();
+        im.onload = function(){
+          try{
+            var k = im.width/272;
+            var sx = 53*k, sy = 35*k, sw = 163*k, sh = 34*k;
+            var cv = document.createElement('canvas');
+            cv.width = Math.round(sw*3); cv.height = Math.round(sh*3);
+            var cx = cv.getContext('2d');
+            cx.fillStyle = '#ffffff'; cx.fillRect(0,0,cv.width,cv.height);
+            cx.drawImage(im, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+            CDM_LOGO = cv.toDataURL('image/png');
+            CDM_LOGO_RATIO = sw/sh;
+          }catch(e){ CDM_LOGO = null; }
+          resolve();
+        };
+        im.onerror = function(){ resolve(); };
+        im.src = LOGO_DATA;
+      }catch(e){ resolve(); }
+    });
+  }
   // Capa oficial (layout Venko): montada em HTML e rasterizada em 1 página A4 paisagem.
   function cdmCarregarFontes(){
     return new Promise(function(resolve){
@@ -7607,16 +7634,28 @@
     }
     function novaPagina(primeira){
       if(!primeira) doc.addPage([PW,PH],'landscape');
+      // faixa de título: preto Venko, logo em caixa branca à esquerda, filete amarelo
       doc.setFillColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]);
-      doc.rect(M, M, totalW, 22, 'F');
-      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(10);
-      doc.text('APONTAMENTO DE PRODUÇÃO POR EQUIPE', M+8, M+15);
+      doc.rect(M, M, totalW, 30, 'F');
+      doc.setFillColor(255,255,255);
+      doc.rect(M, M, 94, 30, 'F');
+      if(CDM_LOGO){ try{ doc.addImage(CDM_LOGO, 'PNG', M+8, M+15-(78/CDM_LOGO_RATIO)/2, 78, 78/CDM_LOGO_RATIO, undefined, 'FAST'); }catch(e){} }
+      else { doc.setTextColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]); doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.text('VENKO', M+47, M+19.5, {align:'center'}); }
+      doc.setFillColor(CDM_YELLOW[0],CDM_YELLOW[1],CDM_YELLOW[2]);
+      doc.rect(M, M+30, totalW, 3, 'F');
+      doc.setTextColor(CDM_YELLOW[0],CDM_YELLOW[1],CDM_YELLOW[2]); doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
+      doc.text('APONTAMENTO DE PRODUÇÃO POR EQUIPE', M+106, M+19.5);
+      doc.setTextColor(255,255,255); doc.setFontSize(7);
+      doc.text('CADERNO DE MEDIÇÃO', M+totalW-8, M+18.5, {align:'right'});
       doc.setTextColor(90,90,90); doc.setFont('helvetica','normal'); doc.setFontSize(7);
-      doc.text((obra&&obra.nome?obra.nome:'')+'  ·  Período: '+fmtDate(de)+' a '+fmtDate(ate)+'  ·  '+linhas.length+' apontamento'+(linhas.length===1?'':'s'), M, M+33);
-      var y = M + 40, x = M;
-      doc.setFillColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]);
+      doc.text((obra&&obra.nome?obra.nome:'')+'  ·  Período: '+fmtDate(de)+' a '+fmtDate(ate)+'  ·  '+linhas.length+' apontamento'+(linhas.length===1?'':'s'), M, M+46);
+      var y = M + 53, x = M;
+      // cabeçalho das colunas: amarelo Venko, texto escuro
+      doc.setFillColor(CDM_YELLOW[0],CDM_YELLOW[1],CDM_YELLOW[2]);
       doc.rect(M, y, totalW, HEAD_H, 'F');
-      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(6.2);
+      doc.setDrawColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]); doc.setLineWidth(0.8);
+      doc.line(M, y+HEAD_H, M+totalW, y+HEAD_H);
+      doc.setTextColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]); doc.setFont('helvetica','bold'); doc.setFontSize(6.2);
       cols.forEach(function(c){
         var ls = doc.splitTextToSize(c.t, c.w-4);
         var sy = y + (HEAD_H - ls.length*7)/2 + 5.4;
@@ -7639,7 +7678,7 @@
       var cel = cols.map(function(c){ return doc.splitTextToSize(valor(l,c.k), c.w-6); });
       var n = cel.reduce(function(m,ls){ return Math.max(m, ls.length); }, 1);
       var rowH = Math.max(14, n*LH + 5);
-      if(y + rowH > PH - M - 22){ y = novaPagina(false); }
+      if(y + rowH > PH - M - 22){ y = novaPagina(false); doc.setLineWidth(0.3); }
       var x = M;
       cols.forEach(function(c, ci){
         if(c.y) doc.setFillColor(255,244,214); else doc.setFillColor(255,255,255);
@@ -7657,16 +7696,26 @@
       y += rowH;
     });
 
-    // SUB-TOTAL
-    if(y + 22 > PH - M){ y = novaPagina(false); }
+    // SUB-TOTAL: linha de tabela de largura total, alinhada às colunas
+    if(y + 18 > PH - M){ y = novaPagina(false); doc.setLineWidth(0.3); }
     var total = sumMoeda(linhas, function(l){ return l.fat; });
     var xFat = M; for(var i=0;i<cols.length;i++){ if(cols[i].k==='fat') break; xFat += cols[i].w; }
-    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(30,30,30);
-    doc.text('SUB-TOTAL:', M+4, y+13);
-    doc.setDrawColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]); doc.setLineWidth(0.8);
-    doc.rect(xFat, y+3, 54, 15, 'S');
+    var wFat = 54, hSub = 16;
+    doc.setLineWidth(0.3); doc.setDrawColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]);
+    // rótulo: preto Venko, ocupa todas as colunas até Faturamento
+    doc.setFillColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]);
+    doc.rect(M, y, xFat-M, hSub, 'FD');
+    doc.setFont('helvetica','bold'); doc.setFontSize(8);
+    doc.setTextColor(CDM_YELLOW[0],CDM_YELLOW[1],CDM_YELLOW[2]);
+    doc.text('SUB-TOTAL', xFat-6, y+10.8, {align:'right'});
+    // valor: amarelo Venko
+    doc.setFillColor(CDM_YELLOW[0],CDM_YELLOW[1],CDM_YELLOW[2]);
+    doc.rect(xFat, y, wFat, hSub, 'FD');
     doc.setTextColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]);
-    doc.text(fmtMoeda(total), xFat+51, y+13.2, {align:'right'});
+    doc.text(fmtMoeda(total), xFat+wFat-3, y+10.8, {align:'right'});
+    // colunas restantes: células vazias para fechar a linha
+    doc.setFillColor(255,255,255); doc.setDrawColor(205,205,205);
+    doc.rect(xFat+wFat, y, M+totalW-(xFat+wFat), hSub, 'FD');
   }
 
   // Rasteriza `target` e acrescenta as páginas A4 (retrato) ao `doc` — mesma
@@ -7769,7 +7818,7 @@
     function pausa(){ return new Promise(function(res){ setTimeout(res, 30); }); }
     var jsPDF = window.jspdf.jsPDF;
     var doc = new jsPDF({ unit:'pt', format:'a4', orientation:'landscape', compress:true });
-    var chain = Promise.resolve().then(function(){
+    var chain = cdmPrepararLogo().then(function(){
       prog.textContent = 'Montando capa e planilha de medição…';
       return cdmDesenharCapa(doc, obra, de, ate).catch(function(err){
         console.warn('CDM: capa oficial indisponível, usando capa simples', err);
