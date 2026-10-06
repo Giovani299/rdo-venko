@@ -7420,13 +7420,15 @@
     rdos.forEach(function(r){
       (r.equipesDia||[]).forEach(function(nomeEq, i){
         var d = (r.equipesDetalhe||[])[i] || {};
-        var conc = (d.concluidos||[]).filter(function(c){ return c.tipo==='Concluído' && c.catalogoItemId; });
+        var conc = (d.concluidos||[]).filter(function(c){ return c.catalogoItemId; });   // TUDO: concluído, pendente ou em andamento
         if(!conc.length) return;
         var info = cdmParseAtividades(d.atividades);
         var frente = String(d.frente||'').replace(/\s*-\s*\d+[A-Za-z]\s*$/,'').trim();
         var local = [frente, info.rua].filter(Boolean).join(' - ');
         conc.forEach(function(c){
           var item = catalogoItemById(c.catalogoItemId);
+          var inativo = false;
+          if(!item){ item = (state.cdmCatInativos||{})[c.catalogoItemId] || null; inativo = !!item; }
           if(!item) return;
           var ehLig = /lig|ramal/i.test(item.descricao||'');
           var bloco = null;
@@ -7442,8 +7444,9 @@
             equipe: 'EQ'+(i+1), codigo: item.itemNumero||'', atividade: item.descricao||'', unidade: item.unidade||'',
             qtd: qtd, preco: preco, fat: Math.round(qtd*preco*100)/100,
             trecho: (bloco && bloco.trecho) || info.trechoGeral || '',
-            local: local, status: 'Executado',
-            obs: ehLig ? ((bloco && bloco.imoveis) || info.imoveisGeral || '') : ''
+            local: local,
+            status: (c.tipo==='Pendente') ? 'Pendente' : (d.status==='Em andamento' ? 'Em andamento' : 'Concluído'),
+            obs: (function(o){ return inativo ? (o ? o+' · ' : '')+'Item fora da tabela vigente' : o; })(ehLig ? ((bloco && bloco.imoveis) || info.imoveisGeral || '') : '')
           });
         });
       });
@@ -7451,6 +7454,15 @@
     return linhas;
   }
 
+  // Itens que saíram da tabela de preços (inativos) continuam aparecendo no caderno.
+  function cdmCarregarInativos(){
+    state.cdmCatInativos = {};
+    try{
+      return Promise.resolve(supabaseClient.from('produtos_catalogo').select('*').eq('ativo', false)).then(function(res){
+        if(res && !res.error) (res.data||[]).forEach(function(row){ var it = mapCatalogoItemRow(row); state.cdmCatInativos[it.id] = it; });
+      }).catch(function(){});
+    }catch(e){ return Promise.resolve(); }
+  }
   var CDM_NAVY = [29,31,35];       // preto Venko
   var CDM_YELLOW = [245,196,0];    // amarelo Venko
   var CDM_LOGO = null, CDM_LOGO_RATIO = 163/34;
@@ -7617,8 +7629,8 @@
       {k:'preco', t:'Preço unitário', w:48, a:'r'},
       {k:'fat', t:'Faturamento', w:54, a:'r'},
       {k:'trecho', t:'Frente/Trecho', w:58, a:'l'},
-      {k:'local', t:'Local', w:112, a:'l', y:1},
-      {k:'status', t:'Status', w:38, a:'c'},
+      {k:'local', t:'Local', w:100, a:'l', y:1},
+      {k:'status', t:'Status', w:50, a:'c'},
       {k:'obs', t:'Observações', w:74, a:'l'}
     ];
     var totalW = cols.reduce(function(s,c){ return s + c.w; }, 0);
@@ -7670,7 +7682,7 @@
     doc.setLineWidth(0.3);
     if(!linhas.length){
       doc.setTextColor(90,90,90);
-      doc.text('Nenhum serviço concluído nas RDOs deste período.', M+4, y+14);
+      doc.text('Nenhum serviço lançado nas RDOs deste período.', M+4, y+14);
       y += 22;
     }
     linhas.forEach(function(l){
@@ -7818,7 +7830,7 @@
     function pausa(){ return new Promise(function(res){ setTimeout(res, 30); }); }
     var jsPDF = window.jspdf.jsPDF;
     var doc = new jsPDF({ unit:'pt', format:'a4', orientation:'landscape', compress:true });
-    var chain = cdmPrepararLogo().then(function(){
+    var chain = cdmCarregarInativos().then(cdmPrepararLogo).then(function(){
       prog.textContent = 'Montando capa e planilha de medição…';
       return cdmDesenharCapa(doc, obra, de, ate).catch(function(err){
         console.warn('CDM: capa oficial indisponível, usando capa simples', err);
