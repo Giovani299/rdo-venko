@@ -7452,7 +7452,110 @@
   }
 
   var CDM_NAVY = [18,58,99];
+  // Capa oficial (layout Venko): montada em HTML e rasterizada em 1 página A4 paisagem.
+  function cdmCarregarFontes(){
+    return new Promise(function(resolve){
+      var feito = false;
+      function fim(){ if(feito) return; feito = true; resolve(); }
+      setTimeout(fim, 4000);
+      try{
+        var l = document.getElementById('cdmFontLink');
+        function carrega(){
+          try{
+            Promise.all([
+              document.fonts.load('700 60px "Barlow Condensed"'),
+              document.fonts.load('600 22px "Barlow Condensed"'),
+              document.fonts.load('500 24px "Barlow Condensed"')
+            ]).then(fim, fim);
+          }catch(e){ fim(); }
+        }
+        if(l){ carrega(); return; }
+        l = document.createElement('link');
+        l.id = 'cdmFontLink'; l.rel = 'stylesheet';
+        l.href = 'https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap';
+        l.onload = carrega; l.onerror = fim;
+        document.head.appendChild(l);
+      }catch(e){ fim(); }
+    });
+  }
+
+  function cdmCapaHtml(obra, de, ate){
+    var COND = "'Barlow Condensed','Big Shoulders Display','Arial Narrow',Arial,sans-serif";
+    var BODY = "'Inter',Arial,Helvetica,sans-serif";
+    var mesDe = cdmMesAno(de), mesAte = cdmMesAno(ate);
+    var mes = (mesDe===mesAte ? mesDe : (mesDe+' a '+mesAte)).toUpperCase();
+    var nomeObra = String((obra && obra.nome) || '').toUpperCase();
+    var contrato = (obra && obra.contrato) ? String(obra.contrato) : '';
+    var stripe = 'linear-gradient(90deg,#F5C400 0,#F5C400 9%,#1D1F23 9%,#1D1F23 10.8%,#A8820A 10.8%,#A8820A 14%,#1D1F23 14%,#1D1F23 91%,#F5C400 91%,#F5C400 100%)';
+    return '' +
+    '<div style="width:1123px;height:794px;position:relative;overflow:hidden;background:#F3F4F6;font-family:'+BODY+';color:#1D1F23;">' +
+      // cabeçalho
+      '<div style="position:absolute;left:0;top:0;right:0;height:64px;background:#F8F9FB;border-bottom:1px solid #E7E9EE;display:flex;align-items:center;padding:0 32px;">' +
+        '<div style="width:104px;height:40px;background:#fff;display:flex;align-items:center;overflow:hidden;"><img src="'+LOGO_DATA+'" style="height:60px;margin-left:-25px;flex:none;"></div>' +
+        '<div style="width:1px;height:34px;background:#D7DAE0;margin:0 14px;"></div>' +
+        '<div>' +
+          '<div style="font-family:'+COND+';font-weight:700;font-size:17px;letter-spacing:.8px;line-height:1.1;">VENKO ENGENHARIA</div>' +
+          '<div style="font-family:'+COND+';font-weight:600;font-size:11px;letter-spacing:1.6px;color:#555B66;margin-top:2px;">SISTEMA DE GESTÃO TÉCNICA</div>' +
+        '</div>' +
+      '</div>' +
+      // cartão
+      '<div style="position:absolute;left:56px;right:56px;top:92px;height:590px;background:#fff;box-shadow:0 14px 34px rgba(29,31,35,.16);">' +
+        '<div style="height:26px;background:#1D1F23;display:flex;align-items:center;padding:0 20px;font-family:'+COND+';font-weight:700;font-size:11.5px;letter-spacing:1.2px;">' +
+          '<span style="display:inline-block;width:10px;height:10px;background:#A8820A;margin-right:9px;"></span>' +
+          '<span style="color:#F5C400;">SISTEMA INTEGRADO DE MEDIÇÃO DE OBRAS</span>' +
+          '<span style="width:1px;height:13px;background:#5A5D64;margin:0 12px;"></span>' +
+          '<span style="color:#fff;">RELATÓRIO OFICIAL DE FISCALIZAÇÃO</span>' +
+        '</div>' +
+        '<div style="padding:30px 50px 0;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;height:86px;border-bottom:1px solid #EEF0F3;">' +
+            '<div>' +
+              '<div style="height:48px;display:flex;align-items:center;"><img src="'+LOGO_DATA+'" style="height:84px;margin-left:-26px;"></div>' +
+              '<div style="font-family:'+COND+';font-weight:600;font-size:12px;letter-spacing:1.6px;color:#3C4048;margin-top:8px;">ENGENHARIA E INFRAESTRUTURA</div>' +
+            '</div>' +
+            '<div style="font-family:'+COND+';font-weight:600;font-size:12px;letter-spacing:1.6px;color:#3C4048;margin-top:4px;">LIVRO DE MEDIÇÃO TÉCNICA</div>' +
+          '</div>' +
+          '<div style="height:10px;margin-top:28px;background:'+stripe+';"></div>' +
+        '</div>' +
+        '<div style="text-align:center;margin-top:62px;">' +
+          '<span style="display:inline-block;background:#0B0B0C;color:#fff;font-family:'+COND+';font-weight:700;font-size:12px;letter-spacing:1.4px;padding:4px 11px;">RELATÓRIO EXECUTIVO OFICIAL</span>' +
+          '<div style="font-family:'+COND+';font-weight:700;font-size:68px;line-height:1.05;color:#0B0B0C;margin-top:8px;letter-spacing:-.5px;">CADERNO DE MEDIÇÃO</div>' +
+          '<div style="font-family:'+COND+';font-weight:500;font-size:24px;letter-spacing:.4px;color:#444850;margin-top:8px;">ACOMPANHAMENTO FÍSICO-FINANCEIRO &amp; REGISTRO TÉCNICO DE OBRAS</div>' +
+          '<div style="width:70px;height:3px;background:#F5C400;margin:26px auto 16px;"></div>' +
+          '<div style="font-family:'+COND+';font-weight:700;font-size:25px;letter-spacing:.8px;color:#1D1F23;">'+esc(nomeObra)+'</div>' +
+          (contrato ? '<div style="font-family:'+COND+';font-weight:500;font-size:16px;letter-spacing:.8px;color:#555B66;margin-top:3px;">CONTRATO '+esc(contrato)+'</div>' : '') +
+          '<div style="font-family:'+COND+';font-weight:600;font-size:16px;letter-spacing:1px;color:#555B66;margin-top:'+(contrato?'3':'6')+'px;">'+esc(mes)+'  ·  PERÍODO: '+esc(fmtDate(de))+' A '+esc(fmtDate(ate))+'</div>' +
+        '</div>' +
+        '<div style="position:absolute;left:0;right:0;bottom:0;height:10px;background:linear-gradient(90deg,#F5C400 0,#A8820A 30%,#0B0B0C 50%,#A8820A 70%,#F5C400 100%);"></div>' +
+      '</div>' +
+      // rodapé
+      '<div style="position:absolute;left:56px;right:56px;top:714px;display:flex;justify-content:space-between;align-items:center;">' +
+        '<div style="display:flex;align-items:center;">' +
+          '<span style="font-family:'+COND+';font-weight:700;font-size:15px;letter-spacing:.9px;">VENKO ENGENHARIA CIVIL E INFRAESTRUTURA</span>' +
+          '<span style="width:1px;height:16px;background:#9AA0AA;margin:0 12px;"></span>' +
+          '<span style="font-size:11px;color:#4A4F58;">RT CREA-SP N° 481920-SP</span>' +
+        '</div>' +
+        '<div style="font-size:10px;color:#4A4F58;">© 2024 Venko Engenharia. Todos os direitos reservados. Emissão técnica controlada.</div>' +
+      '</div>' +
+    '</div>';
+  }
+
   function cdmDesenharCapa(doc, obra, de, ate){
+    var container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;';
+    container.setAttribute('data-theme','light');
+    container.innerHTML = cdmCapaHtml(obra, de, ate);
+    document.body.appendChild(container);
+    function limpa(){ try{ document.body.removeChild(container); }catch(e){} }
+    return cdmCarregarFontes().then(function(){
+      return window.html2canvas(container.firstChild, { scale:2, useCORS:true, backgroundColor:'#F3F4F6', width:1123, height:794 });
+    }).then(function(canvas){
+      doc.addImage(canvas.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, 841.89, 595.28, undefined, 'FAST');
+      canvas.width = 1; canvas.height = 1;
+      limpa();
+    }, function(err){ limpa(); throw err; });
+  }
+
+  function cdmDesenharCapaSimples(doc, obra, de, ate){
     var PW = 841.89, PH = 595.28;
     doc.setFillColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]);
     doc.rect(0, 0, PW, 90, 'F');
@@ -7666,19 +7769,16 @@
     function pausa(){ return new Promise(function(res){ setTimeout(res, 30); }); }
     var jsPDF = window.jspdf.jsPDF;
     var doc = new jsPDF({ unit:'pt', format:'a4', orientation:'landscape', compress:true });
-    var chain;
-    try{
+    var chain = Promise.resolve().then(function(){
       prog.textContent = 'Montando capa e planilha de medição…';
-      cdmDesenharCapa(doc, obra, de, ate);
+      return cdmDesenharCapa(doc, obra, de, ate).catch(function(err){
+        console.warn('CDM: capa oficial indisponível, usando capa simples', err);
+        cdmDesenharCapaSimples(doc, obra, de, ate);
+      });
+    }).then(function(){
       doc.addPage([841.89, 595.28], 'landscape');
       cdmDesenharPlanilha(doc, cdmLinhasPlanilha(rdos), obra, de, ate);
-    }catch(err){
-      console.error('CDM: erro ao montar capa/planilha', err);
-      state.cdmGerando = false; wrap.remove();
-      toast('Erro ao montar o Caderno de Medição.','error');
-      return;
-    }
-    chain = Promise.resolve();
+    });
     rdos.forEach(function(r, idx){
       chain = chain.then(function(){
         prog.textContent = 'Adicionando RDO '+(idx+1)+' de '+rdos.length+' ('+fmtDate(r.data)+')…';
