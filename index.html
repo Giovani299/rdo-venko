@@ -7415,6 +7415,8 @@
     return { blocos: info, rua: rua, trechoGeral: trechoGeral, imoveisGeral: imoveisGeral };
   }
 
+  // Rótulo da equipe pelo número do nome ("Equipe 03" -> EQ3); sem número, usa a posição.
+  function cdmEquipeLabel(nome, i){ var m = String(nome||'').match(/(\d+)/); return 'EQ' + (m ? parseInt(m[1],10) : (i+1)); }
   function cdmLinhasPlanilha(rdos){
     var linhas = [], seq = 0;
     rdos.forEach(function(r){
@@ -7441,7 +7443,7 @@
           var preco = Number(item.custoUnitario)||0;
           linhas.push({
             id: ++seq, data: r.data, medicao: (CDM_MESES[(+String(r.data).split('-')[1])-1]||''),
-            equipe: 'EQ'+(i+1), codigo: item.itemNumero||'', atividade: item.descricao||'', unidade: item.unidade||'',
+            equipe: cdmEquipeLabel(nomeEq, i), codigo: item.itemNumero||'', atividade: item.descricao||'', unidade: item.unidade||'',
             qtd: qtd, preco: preco, fat: Math.round(qtd*preco*100)/100,
             trecho: (bloco && bloco.trecho) || info.trechoGeral || '',
             local: local,
