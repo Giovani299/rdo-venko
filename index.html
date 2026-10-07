@@ -5506,6 +5506,7 @@
           '<option value="parado"'+(m.status==='parado'?' selected':'')+'>Pendente</option>'+
           '<option value="concluido"'+(m.status==='concluido'?' selected':'')+'>Concluído</option>'+
         '</select>'+
+        mapaValorMarcacaoHtml(m)+
         '<span class="obs">'+esc(m.observacao||'')+'</span>'+
         '<button type="button" class="btn ghost sm" data-editmarc="'+m.id+'">'+(m.foto?'Editar':'Adicionar foto')+'</button>'+
         (canGestao ? ('<button type="button" class="btn danger sm" data-delmarc="'+m.id+'">Excluir</button>') : '')+
@@ -5605,6 +5606,21 @@
     return '<label>Valor do serviço</label>'+destaque+
       '<div class="hint" style="margin:4px 0 0;display:flex;flex-direction:column;">'+linhas+'</div>'+
       (itens.length>1 ? '<div class="hint" style="margin:8px 0 0;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:6px;"><span>Previsto no local: <b>'+fmtMoeda(totPrev)+'</b></span><span>Ganho (concluído): <b>'+fmtMoeda(totConcl)+'</b></span></div>' : '');
+  }
+
+  // Valor de uma marcação na lista (só Financeiro/Admin): previsto enquanto não concluída, ganho quando concluída.
+  function mapaValorMarcacaoHtml(m){
+    if(!financeiroCanAccess()) return '';
+    var svc = m.planejamentoServicoId ? (state.planejamentoServicos||[]).find(function(x){ return x.id===m.planejamentoServicoId; }) : null;
+    var v = mapaValorDoServico(svc, m.catalogoItemId);
+    var base = 'white-space:nowrap;font-size:12.5px;';
+    if(v.total!=null){
+      return (m.status==='concluido')
+        ? '<span class="valor" style="'+base+'font-weight:700;color:var(--map-verde);" title="Ganho: serviço concluído">Ganho '+fmtMoeda(v.total)+'</span>'
+        : '<span class="valor" style="'+base+'font-weight:700;" title="Valor previsto: vira ganho quando for concluído">Previsto '+fmtMoeda(v.total)+'</span>';
+    }
+    if(v.unit!=null) return '<span class="valor" style="'+base+'color:var(--muted);">'+fmtMoeda(v.unit)+'/un. · quantidade não informada</span>';
+    return '<span class="valor" style="'+base+'color:var(--muted);">Valor não informado</span>';
   }
 
   function abrirModalMarcacao(m){
