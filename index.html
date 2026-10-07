@@ -4342,9 +4342,11 @@
     if(pts.length===1){
       leafletMapInstance.setView(pts[0], 17);
       mapaViewFitted = true;
+      mapaVerificarForaDaCidade(obraId, pts);
     } else if(pts.length>1){
       leafletMapInstance.fitBounds(pts, { padding:[40,40], maxZoom:18 });
       mapaViewFitted = true;
+      mapaVerificarForaDaCidade(obraId, pts);
     } else {
       var obraAtual = state.obras.find(function(o){ return o.id===obraId; });
       if(obraAtual){ geocodeObraEndereco(obraAtual); mapaViewFitted = true; }
@@ -4734,6 +4736,7 @@
           '<label style="font-size:13px;color:var(--muted);">Nº do local:</label><input type="text" id="mapaFiltroNumeroLocal" placeholder="Ex: 100" style="max-width:90px;">'+
         '</div>'+
         '<div id="mapaLegendaAparte" class="map-legend map-legend-aparte" style="display:none;"></div>'+
+        '<div id="mapaAvisoForaCidade" style="display:none;"></div>'+
         '<div id="leafletMap"></div>'+
         (canGestao ? '<div class="card" id="mapaFilaIACard"></div>' : '')+
         '<div class="card"><h2 style="font-size:15px;display:flex;align-items:center;gap:8px;">Marcações'+(canGestao?'<button type="button" class="btn danger sm" id="btnLimparMapa" style="margin-left:auto;">Limpar mapeamento</button>':'')+'</h2><div id="mapaMarcacoesList"></div></div>';
@@ -4874,6 +4877,58 @@
   function hideMapaFotoHover(){
     var el = document.getElementById('mapaFotoHover');
     if(el) el.style.display = 'none';
+  }
+
+  // Confere se os pontos do mapa estão na cidade da obra. Se estiverem a mais de
+  // 40 km dela (ex.: endereço homônimo achado em outra cidade, ou até no mar),
+  // o fundo do mapa fica cinza liso sem ruas — então centraliza na cidade e
+  // mostra um aviso claro em vez de deixar a tela "vazia".
+  var mapaCidadeCache = {};
+  function mapaDistKm(a, b){
+    var R = 6371, rad = Math.PI/180;
+    var dLat = (b[0]-a[0])*rad, dLng = (b[1]-a[1])*rad;
+    var h = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(a[0]*rad)*Math.cos(b[0]*rad)*Math.sin(dLng/2)*Math.sin(dLng/2);
+    return 2*R*Math.asin(Math.sqrt(h));
+  }
+  function mapaCentroDaCidade(obra){
+    var loc = String(obra.localidade||'').replace(/\//g, ', ').trim();
+    if(!loc) return Promise.resolve(null);
+    if(mapaCidadeCache[loc]) return Promise.resolve(mapaCidadeCache[loc]);
+    return fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q='+encodeURIComponent(loc))
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(list){
+        if(list && list[0]){ var c = [parseFloat(list[0].lat), parseFloat(list[0].lon)]; mapaCidadeCache[loc] = c; return c; }
+        return null;
+      })
+      .catch(function(){ return null; });
+  }
+  function mapaVerificarForaDaCidade(obraId, pts){
+    var obra = state.obras.find(function(o){ return o.id===obraId; });
+    var box = document.getElementById('mapaAvisoForaCidade');
+    if(!obra || !box || !pts.length) return;
+    mapaCentroDaCidade(obra).then(function(centro){
+      if(!centro || state.mapaObraId!==obraId || !leafletMapInstance) return;
+      var lats = pts.map(function(p){ return p[0]; }).sort(function(a,b){ return a-b; });
+      var lngs = pts.map(function(p){ return p[1]; }).sort(function(a,b){ return a-b; });
+      var med = [lats[Math.floor(lats.length/2)], lngs[Math.floor(lngs.length/2)]];
+      var km = mapaDistKm(med, centro);
+      if(km <= 40){ box.style.display = 'none'; return; }
+      leafletMapInstance.setView(centro, 14);
+      var cidade = String(obra.localidade||'').split('/')[0].trim().toLowerCase().replace(/(^|\s)\S/g, function(m){ return m.toUpperCase(); }) || 'a cidade da obra';
+      box.innerHTML =
+        '<div style="background:rgba(255,200,0,.16);border:1px solid var(--venko-yellow);border-radius:var(--radius);padding:10px 12px;margin-bottom:10px;font-size:13px;line-height:1.45;">'+
+          '<b>⚠ Os pontos deste mapa estão fora de '+esc(cidade)+'.</b> Eles ficam a cerca de '+Math.round(km)+' km da obra, num lugar sem ruas mapeadas — por isso o fundo aparece cinza. '+
+          'Provavelmente o endereço foi encontrado em outra cidade. Para corrigir, exclua o projeto e anexe o PDF de novo (a leitura agora confere a cidade) ou reposicione os pontos pela fila “Revisar locais”.'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'+
+            '<button type="button" class="btn ghost sm" id="btnMapaVerCidade">Ver '+esc(cidade)+'</button>'+
+            '<button type="button" class="btn ghost sm" id="btnMapaVerPontos">Ver onde estão os pontos</button>'+
+          '</div>'+
+        '</div>';
+      box.style.display = 'block';
+      var b1 = document.getElementById('btnMapaVerCidade'), b2 = document.getElementById('btnMapaVerPontos');
+      if(b1) b1.addEventListener('click', function(){ if(leafletMapInstance) leafletMapInstance.setView(centro, 14); });
+      if(b2) b2.addEventListener('click', function(){ if(leafletMapInstance) leafletMapInstance.fitBounds(pts, { padding:[40,40], maxZoom:18 }); });
+    });
   }
 
   function geocodeObraEndereco(obra){
