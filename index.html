@@ -5527,43 +5527,50 @@
     });
   }
 
-  // Resumo do Mapeamento (só Financeiro/Admin): valor previsto x ganho (marcações concluídas).
-  // Respeita os filtros da tela, menos o de status. Cada serviço do Planejamento conta uma vez.
+  // Resumo do Mapeamento (só Financeiro/Admin):
+  //   Valor previsto = soma de TODOS os serviços contratados da obra (quantidade contratada x valor da tabela de preços)
+  //   Total feito    = soma do valor dos serviços marcados como Concluído no mapa (qtd. do Planejamento x valor)
+  // Os dois valem para a obra inteira (não mudam com os filtros da tela).
   function mapaValorResumoCalc(){
-    var porServico = {}, r = { n:0, nConcl:0, semValor:0, previsto:0, ganho:0 };
-    var cp = 0, cg = 0;
-    var stSalvo = state.mapaFiltroStatus, lista;
-    state.mapaFiltroStatus = 'all';   // o filtro de status não entra: é o que separa previsto de ganho
-    try{ lista = (state.mapaMarcacoes||[]).filter(mapaMarcacaoPassaFiltros); } finally { state.mapaFiltroStatus = stSalvo; }
-    lista.forEach(function(m){
+    var obraId = state.mapaObraId, r = { previsto:0, feito:0, nContr:0, semQtd:0, nMarc:0, nConcl:0, semValor:0 };
+    var cp = 0, cf = 0;
+    (state.obraServicosContratados||[]).filter(function(s){ return s.obraId===obraId; }).forEach(function(s){
+      r.nContr++;
+      var it = catalogoItemById(s.catalogoItemId);
+      var unit = it ? Number(it.custoUnitario) : 0;
+      if(s.quantidade==null || !(unit>0)){ r.semQtd++; return; }
+      cp += centsRound(Number(s.quantidade)*unit);
+    });
+    var porServico = {};
+    (state.mapaMarcacoes||[]).forEach(function(m){
       var svc = m.planejamentoServicoId ? (state.planejamentoServicos||[]).find(function(x){ return x.id===m.planejamentoServicoId; }) : null;
       var key = svc ? 's'+svc.id : 'm'+m.id;
       var concl = m.status==='concluido';
-      if(porServico[key]){ porServico[key].concl = porServico[key].concl && concl; return; }   // só conta como ganho quando todas as marcações do serviço estão concluídas
+      if(porServico[key]){ porServico[key].concl = porServico[key].concl && concl; return; }   // só vira "feito" quando todas as marcações do serviço estão concluídas
       porServico[key] = { v:mapaValorDoServico(svc, m.catalogoItemId), concl:concl };
     });
     Object.keys(porServico).forEach(function(k){
-      var it = porServico[k]; r.n++; if(it.concl) r.nConcl++;
-      if(it.v.total==null){ r.semValor++; return; }
-      cp += centsRound(it.v.total); if(it.concl) cg += centsRound(it.v.total);
+      var it = porServico[k]; r.nMarc++; if(it.concl) r.nConcl++;
+      if(it.concl){ if(it.v.total==null){ r.semValor++; } else { cf += centsRound(it.v.total); } }
     });
-    r.previsto = cp/100; r.ganho = cg/100;
+    r.previsto = cp/100; r.feito = cf/100;
     return r;
   }
   function renderMapaValorResumo(){
     var el = document.getElementById('mapaValorResumo');
     if(!el) return;
-    if(!financeiroCanAccess() || !(state.mapaMarcacoes||[]).length){ el.innerHTML = ''; return; }
+    if(!financeiroCanAccess()){ el.innerHTML = ''; return; }
     var r = mapaValorResumoCalc();
-    var pct = r.previsto>0 ? Math.min(100, Math.round(r.ganho/r.previsto*100)) : 0;
+    if(!r.nContr && !r.nMarc){ el.innerHTML = ''; return; }
+    var pctN = r.previsto>0 ? Math.min(100, r.feito/r.previsto*100) : 0;
+    var pct = pctN>=10 ? String(Math.round(pctN)) : pctN.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
     el.innerHTML =
       '<div class="kpi-row" style="margin-bottom:6px;">'+
-        kpiTile(fmtMoeda(r.previsto), 'Valor previsto', 'accent')+
-        kpiTile(fmtMoeda(r.ganho), 'Ganho (serviços concluídos)', '')+
-        kpiTile(fmtMoeda(Math.max(0, r.previsto-r.ganho)), 'Falta executar', 'pend')+
+        '<div class="kpi accent"><div class="n" style="font-size:26px;white-space:nowrap;">'+fmtMoeda(r.previsto)+'</div><div class="l">Valor previsto</div></div>'+
+        '<div class="kpi"><div class="n" style="font-size:26px;white-space:nowrap;">'+fmtMoeda(r.feito)+'</div><div class="l">Total feito</div></div>'+
       '</div>'+
-      '<div style="height:8px;border-radius:6px;background:var(--line);overflow:hidden;margin-bottom:4px;"><div style="height:100%;width:'+pct+'%;background:var(--map-verde);"></div></div>'+
-      '<p class="hint" style="margin:0 0 12px;">'+pct+'% do valor previsto já foi ganho · '+r.nConcl+' de '+r.n+' serviço(s) concluído(s) no mapa'+(r.semValor ? ' · '+r.semValor+' sem valor informado' : '')+'. Respeita os filtros abaixo (menos o de status).</p>';
+      '<div style="height:8px;border-radius:6px;background:var(--line);overflow:hidden;margin-bottom:4px;"><div style="height:100%;width:'+(pctN>0?Math.max(pctN,0.5):0)+'%;background:var(--map-verde);"></div></div>'+
+      '<p class="hint" style="margin:0 0 12px;">'+pct+'% do previsto · Previsto = soma dos '+r.nContr+' serviço(s) contratados da obra (quantidade × valor da tabela)'+(r.semQtd ? ' · '+r.semQtd+' contratado(s) sem quantidade ou sem valor ficaram de fora' : '')+' · Feito = '+r.nConcl+' serviço(s) concluído(s) no mapa'+(r.semValor ? ' · '+r.semValor+' concluído(s) sem valor informado' : '')+'.</p>';
   }
 
   // Valor de um serviço do Planejamento (Mapeamento, só Financeiro/Admin):
