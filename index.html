@@ -4821,16 +4821,34 @@
     leafletMapInstance.createPane('mapaLabelsPane');
     leafletMapInstance.getPane('mapaLabelsPane').style.zIndex = 350;
     leafletMapInstance.getPane('mapaLabelsPane').style.pointerEvents = 'none';
-    L.tileLayer('https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+    // Fundo do mapa: Esri (cinza claro). Se esse servidor estiver bloqueado ou
+    // fora do ar (firewall, bloqueador de anúncios, rede da obra), troca sozinho
+    // para o OpenStreetMap, para o mapa nunca ficar cinza liso.
+    var mapaInst = leafletMapInstance;
+    var baseEsri = L.tileLayer('https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 19,
       maxNativeZoom: 16,
       attribution: 'Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community'
-    }).addTo(leafletMapInstance);
-    L.tileLayer('https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+    }).addTo(mapaInst);
+    var refEsri = L.tileLayer('https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 19,
       maxNativeZoom: 16,
       pane: 'mapaLabelsPane'
-    }).addTo(leafletMapInstance);
+    }).addTo(mapaInst);
+    var tilesOk = false, tilesErro = 0, baseReserva = null;
+    function usarBaseReserva(){
+      if(baseReserva || mapaInst !== leafletMapInstance) return;
+      try{ mapaInst.removeLayer(baseEsri); mapaInst.removeLayer(refEsri); }catch(e){}
+      baseReserva = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(mapaInst);
+      baseReserva.bringToBack();
+      console.warn('Mapa: servidor Esri indisponível, usando OpenStreetMap como reserva.');
+    }
+    baseEsri.on('tileload', function(){ tilesOk = true; });
+    baseEsri.on('tileerror', function(){ tilesErro++; if(!tilesOk && tilesErro >= 3) usarBaseReserva(); });
+    setTimeout(function(){ if(!tilesOk && mapaInst.getSize().x > 0) usarBaseReserva(); }, 8000);
     mapaLayerGroup = L.layerGroup().addTo(leafletMapInstance);
     mapaTempLayerGroup = L.layerGroup().addTo(leafletMapInstance);
     leafletMapInstance.on('click', onMapaClick);
