@@ -3938,7 +3938,7 @@
     if(state.view==='clientes'){ renderClienteList(); }
     if(state.view==='obras'){ populateObraClienteSelect(); renderObraList(); }
     if(state.view==='mapa'){ renderMapaObraList(); }
-    if(state.view==='mapa-obra' && state.mapaObraId){ renderMapaObraContent(); }
+    if(state.view==='mapa-obra' && state.mapaObraId){ renderMapaObraContent(); renderMapaValorResumo(); }
     if(state.view==='equipamentos'){ renderEquipamentoList(); }
     if(state.view==='colaboradores'){ populateColaboradorFormSelects(); renderDepartamentoList(); renderColaboradorList(); }
     if(state.view==='equipes'){ renderEquipeList(); }
@@ -4895,6 +4895,7 @@
           '</div>')
           : ('<div class="map-toolbar">'+legendHtml+'</div>')
         )+
+        '<div id="mapaValorResumo"></div>'+
         '<div class="map-filter-bar" style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
           '<label style="font-size:13px;color:var(--muted);">Projeto:</label><select id="mapaFiltroProjeto" style="max-width:200px;"><option value="all">Todos os projetos</option></select>'+
           '<label style="font-size:13px;color:var(--muted);">Status:</label><select id="mapaFiltroStatus" style="max-width:160px;">'+
@@ -5482,6 +5483,7 @@
   function renderMapaMarcacoesList(){
     var wrap = document.getElementById('mapaMarcacoesList');
     if(!wrap) return;
+    renderMapaValorResumo();
     if(state.mapaMarcacoes.length===0){
       wrap.innerHTML = '<p class="empty-hint">Nenhuma marcação registrada ainda nesta obra.</p>';
       return;
@@ -5524,6 +5526,87 @@
     });
   }
 
+  // Resumo do Mapeamento (só Financeiro/Admin): valor previsto x ganho (marcações concluídas).
+  // Respeita os filtros da tela, menos o de status. Cada serviço do Planejamento conta uma vez.
+  function mapaValorResumoCalc(){
+    var porServico = {}, r = { n:0, nConcl:0, semValor:0, previsto:0, ganho:0 };
+    var cp = 0, cg = 0;
+    var stSalvo = state.mapaFiltroStatus, lista;
+    state.mapaFiltroStatus = 'all';   // o filtro de status não entra: é o que separa previsto de ganho
+    try{ lista = (state.mapaMarcacoes||[]).filter(mapaMarcacaoPassaFiltros); } finally { state.mapaFiltroStatus = stSalvo; }
+    lista.forEach(function(m){
+      var svc = m.planejamentoServicoId ? (state.planejamentoServicos||[]).find(function(x){ return x.id===m.planejamentoServicoId; }) : null;
+      var key = svc ? 's'+svc.id : 'm'+m.id;
+      var concl = m.status==='concluido';
+      if(porServico[key]){ porServico[key].concl = porServico[key].concl && concl; return; }   // só conta como ganho quando todas as marcações do serviço estão concluídas
+      porServico[key] = { v:mapaValorDoServico(svc, m.catalogoItemId), concl:concl };
+    });
+    Object.keys(porServico).forEach(function(k){
+      var it = porServico[k]; r.n++; if(it.concl) r.nConcl++;
+      if(it.v.total==null){ r.semValor++; return; }
+      cp += centsRound(it.v.total); if(it.concl) cg += centsRound(it.v.total);
+    });
+    r.previsto = cp/100; r.ganho = cg/100;
+    return r;
+  }
+  function renderMapaValorResumo(){
+    var el = document.getElementById('mapaValorResumo');
+    if(!el) return;
+    if(!financeiroCanAccess() || !(state.mapaMarcacoes||[]).length){ el.innerHTML = ''; return; }
+    var r = mapaValorResumoCalc();
+    var pct = r.previsto>0 ? Math.min(100, Math.round(r.ganho/r.previsto*100)) : 0;
+    el.innerHTML =
+      '<div class="kpi-row" style="margin-bottom:6px;">'+
+        kpiTile(fmtMoeda(r.previsto), 'Valor previsto', 'accent')+
+        kpiTile(fmtMoeda(r.ganho), 'Ganho (serviços concluídos)', '')+
+        kpiTile(fmtMoeda(Math.max(0, r.previsto-r.ganho)), 'Falta executar', 'pend')+
+      '</div>'+
+      '<div style="height:8px;border-radius:6px;background:var(--line);overflow:hidden;margin-bottom:4px;"><div style="height:100%;width:'+pct+'%;background:var(--map-verde);"></div></div>'+
+      '<p class="hint" style="margin:0 0 12px;">'+pct+'% do valor previsto já foi ganho · '+r.nConcl+' de '+r.n+' serviço(s) concluído(s) no mapa'+(r.semValor ? ' · '+r.semValor+' sem valor informado' : '')+'. Respeita os filtros abaixo (menos o de status).</p>';
+  }
+
+  // Valor de um serviço do Planejamento (Mapeamento, só Financeiro/Admin):
+  // quantidade prevista x valor unitário. Se o serviço não traz valor, usa o preço da tabela de preços.
+  function mapaValorDoServico(svc, catId){
+    var cid = (svc && svc.catalogoItemId) || catId || null;
+    var cat = cid ? catalogoItemById(cid) : null;
+    var unit = (svc && svc.valorUnitario!=null) ? Number(svc.valorUnitario) : ((cat && Number(cat.custoUnitario)>0) ? Number(cat.custoUnitario) : null);
+    var qtd = (svc && svc.quantidadePrevista!=null && isFinite(Number(svc.quantidadePrevista))) ? Number(svc.quantidadePrevista) : null;
+    var total = (svc && svc.valorTotal!=null) ? Number(svc.valorTotal) : ((unit!=null && qtd!=null) ? unit*qtd : null);
+    return { unit:unit, qtd:qtd, total:total,
+      nome: svc ? svc.servicoNome : (cat ? cat.descricao : ''),
+      unidade: svc ? (svc.unidade||'') : (cat ? (cat.unidade||'') : '') };
+  }
+  function mapaValorBoxInner(m, svcAtual, rel, statusAtual){
+    var concl = statusAtual==='concluido';
+    var principal = (svcAtual || m.catalogoItemId) ? mapaValorDoServico(svcAtual, m.catalogoItemId) : null;
+    var itens = [];
+    if(principal) itens.push({ v:principal, feito:concl, principal:true });
+    (rel||[]).forEach(function(x){ itens.push({ v:mapaValorDoServico(x, null), feito:x.status==='Concluído', principal:false }); });
+    if(!itens.length) return '';
+    var linhas = itens.map(function(it){
+      var v = it.v;
+      var conta = (v.unit!=null)
+        ? ((v.qtd!=null ? fmtQtd(v.qtd)+' '+esc(v.unidade)+' × ' : '')+fmtMoeda(v.unit)+(v.qtd!=null ? ' = <b>'+fmtMoeda(v.total)+'</b>' : ' <span style="color:var(--muted);">(quantidade não informada)</span>'))
+        : '<span style="color:var(--muted);">valor não informado</span>';
+      return '<div style="display:flex;flex-direction:column;gap:2px;padding-bottom:5px;">'+
+        '<span>'+(it.principal?'<b>':'')+esc(v.nome||'Serviço')+(it.principal?'</b>':'')+
+          ' <span class="chip '+(it.feito?'map-concluido':'')+'" style="font-size:11px;">'+(it.feito?'Concluído':'Previsto')+'</span></span>'+
+        '<span>'+conta+'</span></div>';
+    }).join('');
+    var totPrev = sumMoeda(itens, function(it){ return it.v.total||0; });
+    var totConcl = sumMoeda(itens.filter(function(it){ return it.feito; }), function(it){ return it.v.total||0; });
+    var destaque = '';
+    if(principal){
+      destaque = (concl && principal.total!=null)
+        ? '<div style="padding:8px 10px;border-radius:7px;background:var(--map-verde-bg);color:var(--map-verde);font-weight:700;margin-bottom:8px;">Ganho neste serviço: '+fmtMoeda(principal.total)+'</div>'
+        : ((principal.total!=null) ? '<div class="hint" style="margin:0 0 8px;">Valor previsto deste serviço: '+fmtMoeda(principal.total)+'. Vira ganho quando for marcado como Concluído.</div>' : '');
+    }
+    return '<label>Valor do serviço</label>'+destaque+
+      '<div class="hint" style="margin:4px 0 0;display:flex;flex-direction:column;">'+linhas+'</div>'+
+      (itens.length>1 ? '<div class="hint" style="margin:8px 0 0;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:6px;"><span>Previsto no local: <b>'+fmtMoeda(totPrev)+'</b></span><span>Ganho (concluído): <b>'+fmtMoeda(totConcl)+'</b></span></div>' : '');
+  }
+
   function abrirModalMarcacao(m){
     hideMapaFotoHover();
     var isEdit = !!m.id;
@@ -5557,6 +5640,8 @@
           }).join('')+
         '</div>'+
       '</div>') : '';
+    var valorBoxInner = financeiroCanAccess() ? mapaValorBoxInner(m, svcAtual, servicosRelacionados, m.status||'processando') : '';
+    var valorBoxHtml = valorBoxInner ? ('<div class="field" id="marcValorBox" style="margin-bottom:14px;">'+valorBoxInner+'</div>') : '';
     var escopoMarc = mapaEscopoMarcacao(m);
     var itemCatMarc = m.catalogoItemId ? catalogoItemById(m.catalogoItemId) : null;
     var escopoMarcacaoHtml = escopoMarc ?
@@ -5592,7 +5677,7 @@
           '</select>'+
         '</div>'+
         '<div class="field" style="margin-bottom:14px;"><label>Observação</label><textarea id="marcObs" rows="2" style="width:100%;font-family:inherit;padding:8px;border:1px solid var(--line);border-radius:7px;">'+esc(m.observacao||'')+'</textarea></div>'+
-        servicosRelacionadosHtml+
+        servicosRelacionadosHtml+valorBoxHtml+
         '<div class="field" style="margin-bottom:14px;"><label>Foto do serviço</label><div id="marcFotoPreviewWrap" style="margin-bottom:6px;">'+(m.foto?('<img src="'+m.foto+'" class="foto-clicavel" style="max-width:160px;max-height:120px;border-radius:6px;border:1px solid var(--line);display:block;cursor:zoom-in;">'):'<span class="hint" style="margin:0;">Nenhuma foto selecionada.</span>')+'</div><input type="file" accept="image/*" id="marcFotoInput">'+(m.foto?'<button type="button" class="btn ghost sm" data-act="fotoremove" style="margin-top:6px;">Remover foto</button>':'')+'</div>'+
         '<div class="row" style="justify-content:space-between;">'+
           (isEdit && canGestao ? '<button class="btn danger" data-act="del">Excluir</button>' : '<span></span>')+
@@ -5603,6 +5688,8 @@
         '</div>'+
       '</div>';
     root.appendChild(wrap);
+    var marcStatusEl = document.getElementById('marcStatus'), marcValorEl = document.getElementById('marcValorBox');
+    if(marcStatusEl && marcValorEl) marcStatusEl.addEventListener('change', function(){ marcValorEl.innerHTML = mapaValorBoxInner(m, svcAtual, servicosRelacionados, marcStatusEl.value); });
     var marcFotoInputEl = document.getElementById('marcFotoInput');
     if(marcFotoInputEl){
       marcFotoInputEl.addEventListener('change', function(){
