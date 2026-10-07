@@ -1137,7 +1137,9 @@
     financeiroFilters: { categoria:'', unidade:'', dataIni:'', dataFim:'', busca:'' },
     financeiroEditId: null,
     catalogoItens: [],
+    catalogoInativos: [],          // itens que saíram da tabela vigente mas continuam contratados/usados em RDOs
     obraServicosContratados: [],
+    obraServicosEstado: 'carregando', // carregando | ok | erro — lista de serviços contratados das obras
     obraServicosOpen: {},
     tabelaPrecosUnlocked: false,
     pendingRdos: [],
@@ -1799,6 +1801,7 @@
       state.rdos.sort(function(a,b){ return (b.data||'').localeCompare(a.data||'') || (new Date(b.createdAt)-new Date(a.createdAt)); });
       cacheSet('rdos', state.rdos);
       renderAll();
+      rdoAtualizarServicosAbertos();
       refreshPendingRdos();
     });
   }
@@ -1886,6 +1889,7 @@
       state.catalogoItens = (res.data||[]).map(mapCatalogoItemRow);
       state.catalogoItens.sort(function(a,b){ return (a.ordem-b.ordem) || (a.categoriaNome||'').localeCompare(b.categoriaNome||''); });
       cacheSet('catalogoItens', state.catalogoItens);
+      rdoAtualizarServicosAbertos();
       if(state.view==='financeiro-obra' && state.financeiroObraId) renderFinanceiroObra();
       if(state.view==='mapa-obra') refreshMapaFiltroServico();
     });
@@ -1895,11 +1899,38 @@
       ? supabaseClient.from('obra_servicos_contratados').select('*')
       : supabaseClient.rpc('obra_servicos_contratados_checklist');
     return query.then(function(res){
-      if(res.error){ return; }
+      if(res.error){
+        // Antes isso era ignorado em silêncio e o RDO ficava sem nenhum serviço, sem explicar por quê.
+        return cacheGet('obraServicosContratados').then(function(c){
+          if(c){ state.obraServicosContratados = c; state.obraServicosEstado = 'ok'; }
+          else { state.obraServicosEstado = 'erro'; }
+          try{ console.warn('[obra_servicos_contratados]', res.error && res.error.message); }catch(e){}
+          rdoAtualizarServicosAbertos();
+        });
+      }
       state.obraServicosContratados = (res.data||[]).map(mapObraServicoRow);
+      state.obraServicosEstado = 'ok';
+      cacheSet('obraServicosContratados', state.obraServicosContratados);
       if(state.view==='obras') renderObraList();
       if(state.view==='mapa-obra'){ refreshMapaFiltroServico(); renderMapaMarkersOnMap(); renderMapaMarcacoesList(); }
+      rdoAtualizarServicosAbertos();
     });
+  }
+  // Itens que saíram da tabela de preços (ativo=false) mas continuam no contrato de alguma obra ou em RDOs
+  // já salvos. Eles não entram na tabela vigente, porém o contrato não muda quando a tabela é revisada.
+  function loadCatalogoInativos(){
+    var query = financeiroCanAccess()
+      ? supabaseClient.from('produtos_catalogo').select('*').eq('ativo', false)
+      : supabaseClient.rpc('produtos_catalogo_inativos_checklist');
+    return Promise.resolve(query).then(function(res){
+      if(!res || res.error){
+        return cacheGet('catalogoInativos').then(function(c){ if(c){ state.catalogoInativos = c; rdoAtualizarServicosAbertos(); } });
+      }
+      state.catalogoInativos = (res.data||[]).map(mapCatalogoItemRow);
+      cacheSet('catalogoInativos', state.catalogoInativos);
+      if(state.view==='obras') renderObraList();
+      rdoAtualizarServicosAbertos();
+    }).catch(function(){});
   }
   function loadFinanceiroItens(obraId){
     return supabaseClient.from('financeiro_itens').select('*').eq('obra_id', obraId).then(function(res){
@@ -2002,7 +2033,7 @@
       .on('postgres_changes', {event:'*', schema:'public', table:'rdos'}, function(){ loadRdos(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'profiles'}, function(){ loadProfiles(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'financeiro_itens'}, function(){ if(state.financeiroObraId) loadFinanceiroItens(state.financeiroObraId); })
-      .on('postgres_changes', {event:'*', schema:'public', table:'produtos_catalogo'}, function(){ loadCatalogoProdutos(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'produtos_catalogo'}, function(){ loadCatalogoProdutos(); loadCatalogoInativos(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'obra_servicos_contratados'}, function(){ loadObraServicosContratados(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'mapa_marcacoes'}, function(){ if(state.mapaObraId) loadMapaMarcacoes(state.mapaObraId); })
       .on('postgres_changes', {event:'*', schema:'public', table:'planejamento_servicos'}, function(){ if(state.planejamentoObraId) loadPlanejamentoServicos(state.planejamentoObraId); })
@@ -2040,7 +2071,7 @@
       cacheSet('currentProfile-'+userId, res.data);
       setCurrentUser(res.data);
       seedExamplesIfEmpty();
-      loadClientes(); loadObras(); loadEquipamentos(); loadDepartamentos(); loadEquipes(); loadColaboradores(); loadRdos(); loadProfiles(); loadCatalogoProdutos(); loadObraServicosContratados();
+      loadClientes(); loadObras(); loadEquipamentos(); loadDepartamentos(); loadEquipes(); loadColaboradores(); loadRdos(); loadProfiles(); loadCatalogoProdutos(); loadCatalogoInativos(); loadObraServicosContratados();
       subscribeRealtime();
       refreshPendingRdos();
       maybeReviewPendingRdos();
@@ -5646,6 +5677,14 @@
       if(!groups[key]){ groups[key]=[]; order.push(key); }
       groups[key].push(it);
     });
+    var inativosContratados = (state.catalogoInativos||[]).filter(function(it){ return contratados[it.id]; });
+    var chaveSvc = function(it){ return String(it.itemNumero||'')+'|'+String(it.descricao||'').trim().toLowerCase(); };
+    var dupAtivo = {};
+    state.catalogoItens.forEach(function(it){ if(contratados[it.id]) dupAtivo[chaveSvc(it)] = true; });
+    if(inativosContratados.length){
+      var kInat = 'Fora da tabela vigente (já contratados nesta obra)';
+      groups[kInat] = inativosContratados; order.push(kInat);
+    }
     var totalGeral = 0;
     var html = '<h2 style="font-size:15px;">Serviços contratados pelo cliente</h2>'+
       '<p class="hint">Marque todos os serviços da tabela de preços que o cliente contratou para esta obra.'+(canQtd?' Informe também a quantidade desejada.':'')+'</p>';
@@ -5664,7 +5703,10 @@
             var extraStyle = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;' + (checked?'':'display:none;');
             return '<label class="checklist-item">'+
               '<input type="checkbox" data-obra="'+obraId+'" data-item="'+it.id+'"'+(checked?' checked':'')+'>'+
-              '<span class="checklist-label">'+(it.itemNumero?esc(it.itemNumero)+' — ':'')+esc(it.descricao)+'</span>'+
+              '<span class="checklist-label">'+(it.itemNumero?esc(it.itemNumero)+' — ':'')+esc(it.descricao)+
+                (it.ativo===false && dupAtivo[chaveSvc(it)] ? ' <span class="chip" title="O item vigente equivalente também está contratado nesta obra. Pode desmarcar este se for repetido.">repete o item vigente</span>' : '')+
+                (checked ? (function(t){ return t ? '<br><span class="hint" style="margin:0;font-size:11px;">'+esc(t)+'</span>' : ''; })(obraServicoSaldoTxt(obraId, it.id, it.unidade, s.quantidade, null)) : '')+
+              '</span>'+
               '<span class="tag-example" style="background:transparent;">'+esc(it.unidade)+'</span>'+
               (canQtd ? ('<span class="checklist-extra" style="'+extraStyle+'">'+
                 '<input type="number" step="0.001" min="0" placeholder="Qtd." data-qtdobra="'+obraId+'" data-qtditem="'+it.id+'" value="'+esc(qtd)+'" style="width:84px;">'+
@@ -6298,11 +6340,72 @@
     rdo.maoDeObra = rows;
     refreshMaoDeObraUI(rdo);
   }
+  // Quanto já foi executado de um serviço da obra em RDOs salvos (concluído, exceto rascunho/rejeitado).
+  function obraServicoExecutado(obraId, catalogoItemId, excluirRdoId){
+    var total = 0;
+    (state.rdos||[]).forEach(function(r){
+      if(r.obraId!==obraId || r.deletedAt || r.status==='rascunho' || r.status==='rejeitado') return;
+      if(excluirRdoId && r.id===excluirRdoId) return;
+      (r.equipesDetalhe||[]).forEach(function(d){
+        (d.concluidos||[]).forEach(function(c){
+          if(c.catalogoItemId===catalogoItemId && c.tipo==='Concluído') total += Number(c.quantidade)||0;
+        });
+      });
+    });
+    return total;
+  }
+  function obraServicoSaldoTxt(obraId, catalogoItemId, unidade, previsto, excluirRdoId){
+    var exec = obraServicoExecutado(obraId, catalogoItemId, excluirRdoId);
+    var un = unidade ? ' '+unidade : '';
+    if(previsto==null) return exec>0 ? ('Executado até aqui: '+fmtQtd(exec)+un) : '';
+    return 'Previsto '+fmtQtd(previsto)+un+' · Executado '+fmtQtd(exec)+un+' · Saldo '+fmtQtd(previsto-exec)+un;
+  }
   function obraServicosOptions(obraId){
-    var ids = {};
-    state.obraServicosContratados.filter(function(s){ return s.obraId===obraId; }).forEach(function(s){ ids[s.catalogoItemId]=true; });
-    return state.catalogoItens.filter(function(it){ return ids[it.id]; })
-      .map(function(it){ return { value: it.id, label: (it.itemNumero?it.itemNumero+' — ':'')+it.descricao+' ('+it.unidade+')' }; });
+    var contr = {};
+    state.obraServicosContratados.filter(function(s){ return s.obraId===obraId; }).forEach(function(s){ contr[s.catalogoItemId]=s; });
+    var chave = function(it){ return String(it.itemNumero||'')+'|'+String(it.descricao||'').trim().toLowerCase(); };
+    var ativos = state.catalogoItens.filter(function(it){ return contr[it.id]; });
+    var jaTem = {}; ativos.forEach(function(it){ jaTem[chave(it)] = true; });
+    // Contratado que saiu da tabela vigente continua valendo na obra (sem duplicar se já existe o item vigente equivalente).
+    var inativos = (state.catalogoInativos||[]).filter(function(it){ return contr[it.id] && !jaTem[chave(it)]; });
+    var excl = state.editId || null;
+    return ativos.concat(inativos).sort(function(a,b){ return (a.ordem-b.ordem) || String(a.itemNumero).localeCompare(String(b.itemNumero), undefined, {numeric:true}); })
+      .map(function(it){
+        var s = contr[it.id];
+        return {
+          value: it.id,
+          label: (it.itemNumero?it.itemNumero+' — ':'')+it.descricao+' ('+it.unidade+')'+(it.ativo===false?' — fora da tabela vigente':''),
+          info: obraServicoSaldoTxt(obraId, it.id, it.unidade, s ? s.quantidade : null, excl)
+        };
+      });
+  }
+  var rdoFormAtual = null;
+  // Se a lista de serviços/tabela chega depois de o formulário já estar aberto, redesenha as equipes
+  // (antes ficava "vazio" até a pessoa sair e voltar).
+  var rdoRefreshTimer = null;
+  function rdoAtualizarServicosAbertos(){
+    try{
+      if(state.view!=='novo' || !rdoFormAtual) return;
+      var box = document.getElementById('equipesDetalheContainer');
+      if(!box) return;
+      // não tira o cursor de quem está digitando: tenta de novo daqui a pouco
+      var ae = document.activeElement;
+      if(ae && box.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)){
+        clearTimeout(rdoRefreshTimer); rdoRefreshTimer = setTimeout(rdoAtualizarServicosAbertos, 1500); return;
+      }
+      refreshEquipesDetalheUI(rdoFormAtual);
+    }catch(e){}
+  }
+  function rdoServicosVazioHtml(){
+    var sel = document.getElementById('rdoObra');
+    var obraId = (sel && sel.value) || '';
+    if(!obraId) return '<p class="empty-hint">Selecione a obra no topo do formulário para carregar os serviços contratados dela.</p>';
+    var temContrato = state.obraServicosContratados.some(function(s){ return s.obraId===obraId; });
+    var recarregar = '<button type="button" class="btn ghost sm" data-recarregarserv="1" style="margin-left:8px;">Recarregar</button>';
+    if(state.obraServicosEstado==='carregando') return '<p class="empty-hint">Carregando os serviços contratados desta obra…</p>';
+    if(state.obraServicosEstado==='erro') return '<p class="empty-hint">Não foi possível carregar os serviços contratados (conexão ou permissão).'+recarregar+'</p>';
+    if(temContrato) return '<p class="empty-hint">Os serviços desta obra ainda não carregaram da tabela de serviços.'+recarregar+'</p>';
+    return '<p class="empty-hint">Nenhum serviço contratado vinculado a esta obra ainda — vincule em "Obras".</p>';
   }
   /* ---- equipe detalhada (frente, status, integrantes, atividades, concluídos, resumo) ---- */
   function equipeDetalheBlank(){
@@ -6316,7 +6419,7 @@
   function strListRows(arr){ return (arr||[]).map(function(s){ return {texto:s}; }); }
   function equipeConcluidosChecklistHtml(i, d, servOpts){
     if(!servOpts.length){
-      return '<p class="empty-hint">Nenhum serviço contratado vinculado a esta obra ainda — vincule em "Obras".</p>';
+      return rdoServicosVazioHtml();
     }
     var byId = {};
     (d.concluidos||[]).forEach(function(c){ if(c.catalogoItemId) byId[c.catalogoItemId] = c; });
@@ -6327,7 +6430,7 @@
       var qtdVal = checked && c.quantidade!=null ? c.quantidade : '';
       return '<label class="checklist-item">'+
         '<input type="checkbox" data-eqconclchk="'+i+'" data-item="'+esc(opt.value)+'"'+(checked?' checked':'')+'>'+
-        '<span class="checklist-label">'+esc(opt.label)+'</span>'+
+        '<span class="checklist-label">'+esc(opt.label)+(opt.info?'<br><span class="hint" style="margin:0;font-size:11px;">'+esc(opt.info)+'</span>':'')+'</span>'+
         '<span class="checklist-extra" style="'+(checked?'':'display:none')+'">'+
           '<select data-eqconcltipo="'+i+'" data-item="'+esc(opt.value)+'">'+
             CONCLUIDO_TIPO_OPTS.map(function(o){ return '<option value="'+esc(o)+'"'+(tipoVal===o?' selected':'')+'>'+esc(o)+'</option>'; }).join('')+
@@ -6339,7 +6442,11 @@
     return '<div class="checklist-wrap">'+itemsHtml+'</div>';
   }
   function equipesDetalheHtml(rdo){
-    if(!(rdo.equipesDia&&rdo.equipesDia.length)) return '<p class="empty-hint">Selecione ao menos uma equipe em campo para detalhar as atividades.</p>';
+    if(!(rdo.equipesDia&&rdo.equipesDia.length)){
+      var obraSel = (document.getElementById('rdoObra') && document.getElementById('rdoObra').value) || rdo.obraId || '';
+      var nServ = obraSel ? obraServicosOptions(obraSel).length : 0;
+      return '<p class="empty-hint">Selecione ao menos uma equipe em campo para detalhar as atividades.'+(nServ ? ' Os <b>'+nServ+' serviço(s) contratado(s)</b> desta obra aparecem aqui, dentro de cada equipe marcada.' : '')+'</p>';
+    }
     syncEquipesDetalhe(rdo);
     var obraIdNow = (document.getElementById('rdoObra') && document.getElementById('rdoObra').value) || rdo.obraId || '';
     var servOpts = obraServicosOptions(obraIdNow);
@@ -6394,6 +6501,13 @@
   function wireEquipesDetalhe(rdo){
     var container = document.getElementById('equipesDetalheContainer');
     if(!container) return;
+    container.querySelectorAll('[data-recarregarserv]').forEach(function(b){
+      b.addEventListener('click', function(){
+        state.obraServicosEstado = 'carregando';
+        refreshEquipesDetalheUI(rdo);
+        loadCatalogoProdutos(); loadCatalogoInativos(); loadObraServicosContratados();
+      });
+    });
     rdo.equipesDia.forEach(function(nome, i){
       var frenteInp = container.querySelector('[data-eqfrente="'+i+'"]');
       var statusSel = container.querySelector('[data-eqstatus="'+i+'"]');
@@ -6466,6 +6580,7 @@
   function renderRdoForm(rdoOrNull){
     var editing = !!rdoOrNull;
     var rdo = rdoOrNull ? JSON.parse(JSON.stringify(rdoOrNull)) : blankRdo();
+    rdoFormAtual = rdo;
     var isLockedEdit = editing && rdo.status !== 'rascunho';
     // Capturado uma vez ao abrir o formulário: se não-nulo, esta edição é de uma RDO ainda
     // pendente (nunca chegou a ser enviada de verdade), então salvar aqui atualiza a fila local
@@ -6868,7 +6983,9 @@
     '</div>';
   }
   function catalogoItemById(id){
-    return state.catalogoItens.find(function(it){ return it.id===id; }) || null;
+    return state.catalogoItens.find(function(it){ return it.id===id; })
+      || (state.catalogoInativos||[]).find(function(it){ return it.id===id; })
+      || null;
   }
   function computeEquipeValor(d){
     return sumMoeda((d.concluidos||[]).filter(function(c){ return c.tipo==='Concluído' && c.catalogoItemId; }), function(c){
