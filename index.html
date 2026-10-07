@@ -724,6 +724,7 @@
             <div class="field"><label>CNPJ</label><input type="text" id="clienteCnpj" placeholder="00.000.000/0000-00" inputmode="numeric" maxlength="18" required></div>
             <div class="field"><label>E-mail</label><input type="email" id="clienteEmail" required></div>
             <div class="field"><label>Número de contato</label><input type="text" id="clienteTelefone" placeholder="(00) 00000-0000" inputmode="numeric" maxlength="15" required></div>
+            <div class="field" id="clienteTabelaField" style="display:none;"><label>Qual tabela é correta para esse cliente?</label><select id="clienteTabela"><option value="">Selecione a tabela…</option></select></div>
           </div>
           <div class="form-actions">
             <span id="clienteCancelEditWrap" style="display:none;"><button type="button" class="btn ghost" id="clienteCancelEdit">Cancelar edição</button></span>
@@ -753,6 +754,7 @@
           <div class="grid4" style="margin-top:12px;">
             <div class="field"><label>Início</label><input type="date" id="obraInicio"></div>
             <div class="field"><label>Localidade</label><input type="text" id="obraLocalidade" placeholder="Cidade/UF"></div>
+            <div class="field" id="obraTabelaField" style="display:none;"><label>Qual tabela é correta para esse cliente?</label><select id="obraTabela"><option value="">Selecione a tabela…</option></select></div>
             <div class="field full"><label>Complemento</label><input type="text" id="obraContrato" placeholder="Ex: Torre 03 / Bloco C"></div>
           </div>
           <p class="hint" id="obraSemClienteHint" style="display:none;margin-top:10px;">Nenhum cliente cadastrado ainda. <a href="#" data-goto="clientes">Cadastre um cliente</a> antes de registrar a obra.</p>
@@ -1636,10 +1638,10 @@
 
   /* ---------------- data loading (Postgres + Realtime) ---------------- */
   function mapObraRow(row){
-    return { id:row.id, clienteId:row.cliente_id||null, nome:row.nome, endereco:row.endereco, responsavelTecnico:row.responsavel_tecnico, dataInicio:row.data_inicio, localidade:row.localidade||'', contrato:row.contrato||'', status:row.status, exemplo:row.exemplo, createdAt:row.created_at };
+    return { id:row.id, clienteId:row.cliente_id||null, nome:row.nome, endereco:row.endereco, responsavelTecnico:row.responsavel_tecnico, dataInicio:row.data_inicio, localidade:row.localidade||'', contrato:row.contrato||'', tabelaPreco:String(row.tabela_preco||'').toUpperCase(), status:row.status, exemplo:row.exemplo, createdAt:row.created_at };
   }
   function mapClienteRow(row){
-    return { id:row.id, nomeEmpresa:row.nome_empresa, cnpj:row.cnpj, email:row.email, telefone:row.telefone, createdAt:row.created_at, updatedAt:row.updated_at };
+    return { id:row.id, nomeEmpresa:row.nome_empresa, cnpj:row.cnpj, email:row.email, telefone:row.telefone, tabelaPreco:String(row.tabela_preco||'').toUpperCase(), createdAt:row.created_at, updatedAt:row.updated_at };
   }
   function mapEquipamentoRow(row){
     return { id:row.id, nome:row.nome, createdAt:row.created_at };
@@ -1659,6 +1661,7 @@
       id:row.id, categoriaNumero:row.categoria_numero||'', categoriaNome:row.categoria_nome,
       itemNumero:row.item_numero||'', descricao:row.descricao, unidade:row.unidade,
       custoUnitario:Number(row.custo_unitario), ativo:row.ativo!==false, ordem:Number(row.ordem)||0,
+      tabela:String(row.tabela||'').toUpperCase(),
       createdAt:row.created_at, updatedAt:row.updated_at
     };
   }
@@ -1877,6 +1880,105 @@
       if(state.view==='users'){ renderUserList(); }
     });
   }
+  // ---- Tabelas de preços por cliente --------------------------------------------------------
+  // Cada obra enxerga só a tabela de serviços do seu cliente, escolhida pelo NOME da obra.
+  // Obra sem nenhuma dessas palavras no nome continua vendo o catálogo vigente inteiro (como antes).
+  // Para acrescentar um cliente novo: cadastre os itens com a mesma 'tabela' e inclua uma linha aqui.
+  // Estrutura:  OBRA --(atribuição)--> PLANILHA (tabelas_preco.chave) --> SERVIÇOS (produtos_catalogo.tabela) --> RDO
+  // A atribuição é, nesta ordem: (1) a planilha escolhida na própria obra (obras.tabela_preco);
+  // (2) uma palavra de 'atribuicoes' da planilha encontrada no NOME DA OBRA; (3) ou no NOME DO CLIENTE.
+  // Nova obra/localidade = uma linha em tabelas_preco + itens com a mesma 'tabela' (nenhum if/else no código).
+  // O padrão abaixo só vale enquanto a tabela tabelas_preco não existe/não carregou (migration 026).
+  var TABELAS_PRECO_PADRAO = [
+    { chave:'SUZANO',  nome:'LFM Suzano',               atribuicoes:['suzano'],  ordem:1 },
+    { chave:'ZIGURAT', nome:'Zigurate Franco da Rocha', atribuicoes:['zigurat'], ordem:2 }
+  ];
+  var tabelasPrecoCfg = { db:false, itens:null };
+  function tabelaNormTxt(s){ return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
+  function tabelasPrecoLista(){ return tabelasPrecoCfg.itens || TABELAS_PRECO_PADRAO; }
+  function loadTabelasPreco(){
+    return Promise.resolve(supabaseClient.from('tabelas_preco').select('*')).then(function(res){
+      if(!res || res.error || !Array.isArray(res.data) || !res.data.length) return;
+      tabelasPrecoCfg.itens = res.data.filter(function(r){ return r.ativa!==false; }).map(function(r){
+        return { chave:String(r.chave||'').toUpperCase(), nome:r.nome, atribuicoes:(r.atribuicoes||[]).map(tabelaNormTxt).filter(Boolean), ordem:Number(r.ordem)||0 };
+      }).sort(function(a,b){ return a.ordem-b.ordem; });
+      tabelasPrecoCfg.db = true;
+      popularObraTabelaSelect(); popularClienteTabelaSelect();
+      if(state.view==='obras') renderObraList();
+      rdoAtualizarServicosAbertos();
+    }).catch(function(){});
+  }
+  function tabelaPrecoNome(chave){
+    var t = tabelasPrecoLista().filter(function(x){ return x.chave===chave; })[0];
+    return t ? t.nome : (chave||'');
+  }
+  function tabelaPorTexto(txt){
+    var nome = tabelaNormTxt(txt);
+    if(!nome) return null;
+    var l = tabelasPrecoLista();
+    for(var i=0;i<l.length;i++){
+      if(l[i].atribuicoes.some(function(p){ return nome.indexOf(p)>-1; })) return l[i].chave;
+    }
+    return null;
+  }
+  function tabelaDaObra(obraId){
+    var o = (state.obras||[]).find(function(x){ return x.id===obraId; });
+    if(!o) return null;
+    var ex = String(o.tabelaPreco||'').toUpperCase();
+    if(ex && tabelasPrecoLista().some(function(t){ return t.chave===ex; })) return ex;
+    var cli = (state.clientes||[]).find(function(x){ return x.id===o.clienteId; });
+    var exC = String(cli && cli.tabelaPreco || '').toUpperCase();
+    if(exC && tabelasPrecoLista().some(function(t){ return t.chave===exC; })) return exC;
+    // legado: cliente/obra ainda sem tabela escolhida -> deduz pelas palavras de atribuição
+    return tabelaPorTexto(o.nome) || tabelaPorTexto(clienteNomeById(o.clienteId));
+  }
+  // O item pertence à planilha da obra? (item sem planilha identificada, ou obra sem planilha, não é barrado)
+  function itemNaTabelaDaObra(it, obraId){
+    var t = tabelaDaObra(obraId);
+    if(!t || !it.tabela) return true;
+    return it.tabela===t;
+  }
+  // pergunta dos cadastros de cliente e de obra: "Qual tabela é correta para esse cliente?"
+  function tabelaPerguntaOptionsHtml(sel){
+    return '<option value="">Selecione a tabela…</option>'+
+      tabelasPrecoLista().map(function(t){ return '<option value="'+esc(t.chave)+'"'+(t.chave===sel?' selected':'')+'>'+esc(t.nome)+'</option>'; }).join('');
+  }
+  function popularClienteTabelaSelect(){
+    var el = document.getElementById('clienteTabela'), box = document.getElementById('clienteTabelaField');
+    if(!el) return;
+    el.innerHTML = tabelaPerguntaOptionsHtml(el.value);
+    el.required = !!tabelasPrecoCfg.db;
+    if(box) box.style.display = tabelasPrecoCfg.db ? '' : 'none';
+  }
+  function obraTabelaPrefill(){
+    var cs = document.getElementById('obraCliente'), ts = document.getElementById('obraTabela');
+    if(!cs || !ts) return;
+    var c = state.clientes.find(function(x){ return x.id===cs.value; });
+    ts.value = (c && c.tabelaPreco) ? c.tabelaPreco : '';
+  }
+  function obraTabelaOptionsHtml(sel){
+    return '<option value="">Seguir a tabela do cliente</option>'+
+      tabelasPrecoLista().map(function(t){ return '<option value="'+esc(t.chave)+'"'+(t.chave===sel?' selected':'')+'>'+esc(t.nome)+'</option>'; }).join('');
+  }
+  function popularObraTabelaSelect(){
+    var el = document.getElementById('obraTabela');
+    if(!el) return;
+    var atual = el.value, box = document.getElementById('obraTabelaField');
+    el.innerHTML = tabelaPerguntaOptionsHtml(atual);
+    el.required = !!tabelasPrecoCfg.db;
+    if(box) box.style.display = tabelasPrecoCfg.db ? '' : 'none';
+    if(!el.value) obraTabelaPrefill();
+  }
+  // Itens da tabela vigente que a obra pode contratar/usar. Se o banco ainda não tem a coluna 'tabela'
+  // (migration 025 não executada), devolve tudo, como antes.
+  function catalogoDaObra(obraId){
+    var itens = state.catalogoItens||[];
+    var t = tabelaDaObra(obraId);
+    if(!t) return itens;
+    if(!itens.some(function(i){ return i.tabela; })) return itens;
+    return itens.filter(function(i){ return i.tabela===t; });
+  }
+
   function loadCatalogoProdutos(){
     var query = financeiroCanAccess()
       ? supabaseClient.from('produtos_catalogo').select('*').eq('ativo', true)
@@ -2071,7 +2173,7 @@
       cacheSet('currentProfile-'+userId, res.data);
       setCurrentUser(res.data);
       seedExamplesIfEmpty();
-      loadClientes(); loadObras(); loadEquipamentos(); loadDepartamentos(); loadEquipes(); loadColaboradores(); loadRdos(); loadProfiles(); loadCatalogoProdutos(); loadCatalogoInativos(); loadObraServicosContratados();
+      loadClientes(); loadObras(); loadEquipamentos(); loadDepartamentos(); loadEquipes(); loadColaboradores(); loadRdos(); loadProfiles(); loadTabelasPreco(); loadCatalogoProdutos(); loadCatalogoInativos(); loadObraServicosContratados();
       subscribeRealtime();
       refreshPendingRdos();
       maybeReviewPendingRdos();
@@ -2355,6 +2457,25 @@
     '</div>';
   }
 
+  function tabelaPrecosCardsHtml(itens){
+    var porTab = {}, ordem = [];
+    itens.forEach(function(it){
+      var k = it.tabela || '';
+      if(!porTab[k]){ porTab[k]=[]; ordem.push(k); }
+      porTab[k].push(it);
+    });
+    if(ordem.length<=1){
+      return '<div class="card"><h2><span class="idx">$</span><span>Serviços e valores'+(ordem[0]?' — '+esc(tabelaPrecoNome(ordem[0])):'')+'</span></h2>'+tabelaPrecosTableHtml(itens)+'</div>';
+    }
+    ordem.sort(function(a,b){
+      var ia = tabelasPrecoLista().map(function(t){return t.chave;}).indexOf(a), ib = tabelasPrecoLista().map(function(t){return t.chave;}).indexOf(b);
+      return (ia<0?99:ia)-(ib<0?99:ib);
+    });
+    return ordem.map(function(k){
+      return '<div class="card" style="margin-bottom:14px;"><h2><span class="idx">$</span><span>Tabela '+esc(tabelaPrecoNome(k)||'sem identificação')+'</span></h2>'+tabelaPrecosTableHtml(porTab[k])+'</div>';
+    }).join('');
+  }
+
   function renderTabelaPrecos(){
     var root = document.getElementById('tabelaPrecosContent');
     if(!root) return;
@@ -2365,10 +2486,7 @@
         '<div><h1>Tabela de Preços</h1><p>Serviços e produtos do catálogo Venko, com valores unitários vigentes.</p></div>'+
         '<button type="button" class="btn primary" id="btnExportTabelaPrecos">⬇ Exportar PDF</button>'+
       '</div>'+
-      '<div class="card">'+
-        '<h2><span class="idx">$</span><span>Serviços e valores</span></h2>'+
-        tabelaPrecosTableHtml(itens)+
-      '</div>';
+      tabelaPrecosCardsHtml(itens);
     document.getElementById('btnExportTabelaPrecos').addEventListener('click', function(){
       exportTabelaPrecosPdf(itens);
     });
@@ -2538,7 +2656,7 @@
 
   function financeiroFormHtml(){
     var editing = state.financeiroEditId ? state.financeiroItens.find(function(x){return x.id===state.financeiroEditId;}) : null;
-    var catalogoOpts = state.catalogoItens.map(function(c){
+    var catalogoOpts = catalogoDaObra(state.financeiroObraId).map(function(c){
       return '<option value="'+esc(c.descricao)+'">'+esc(fmtMoeda(c.custoUnitario))+' / '+esc(c.unidade)+'</option>';
     }).join('');
     var previewInicial = editing ? editing.valorTotal : 0;
@@ -2670,7 +2788,7 @@
     function findCatalogoMatch(txt){
       var alvo = String(txt||'').trim().toLowerCase();
       if(!alvo) return null;
-      return state.catalogoItens.find(function(c){ return String(c.descricao||'').trim().toLowerCase()===alvo; }) || null;
+      return catalogoDaObra(state.financeiroObraId).find(function(c){ return String(c.descricao||'').trim().toLowerCase()===alvo; }) || null;
     }
     function updatePreview(){
       if(!previewEl) return;
@@ -2980,7 +3098,7 @@
   }
   function planejamentoFormHtml(){
     var editing = state.planejamentoEditId ? state.planejamentoServicos.find(function(x){return x.id===state.planejamentoEditId;}) : null;
-    var catalogoOpts = state.catalogoItens.map(function(c){
+    var catalogoOpts = catalogoDaObra(state.planejamentoObraId).map(function(c){
       return '<option value="'+esc(c.descricao)+'">'+esc(c.unidade)+'</option>';
     }).join('');
     var responsavelOpts = state.profiles.map(function(p){
@@ -3649,7 +3767,7 @@
     function findCatalogoMatch(txt){
       var alvo = String(txt||'').trim().toLowerCase();
       if(!alvo) return null;
-      return state.catalogoItens.find(function(c){ return String(c.descricao||'').trim().toLowerCase()===alvo; }) || null;
+      return catalogoDaObra(state.planejamentoObraId).find(function(c){ return String(c.descricao||'').trim().toLowerCase()===alvo; }) || null;
     }
     function aplicarCatalogo(c){
       if(!c){ catalogoItemIdInput.value = ''; return; }
@@ -4032,6 +4150,11 @@
     if(onlyDigits(cnpj).length !== 14){ toast('Informe um CNPJ válido, com 14 dígitos.','error'); return; }
     if(onlyDigits(telefone).length !== 10 && onlyDigits(telefone).length !== 11){ toast('Informe um número de contato válido, com DDD.','error'); return; }
     var payload = { nome_empresa: nomeEmpresa, cnpj: cnpj, email: email, telefone: telefone };
+    if(tabelasPrecoCfg.db){
+      var tabCli = document.getElementById('clienteTabela').value;
+      if(!tabCli){ toast('Escolha qual tabela é correta para esse cliente.','error'); return; }
+      payload.tabela_preco = tabCli;
+    }
     var editId = state.clienteEditId;
     var req = editId ?
       supabaseClient.from('clientes').update(payload).eq('id', editId) :
@@ -4054,6 +4177,7 @@
   });
 
   function renderClienteList(){
+    popularClienteTabelaSelect();
     var list = document.getElementById('clienteList');
     if(state.clientes.length===0){
       list.innerHTML = '<p class="empty-hint">Nenhum cliente cadastrado ainda.</p>';
@@ -4064,7 +4188,7 @@
       var obrasCount = state.obras.filter(function(o){ return o.clienteId===c.id; }).length;
       return '<div class="obra-card" data-id="'+c.id+'">'+
         '<div class="info"><b>'+esc(c.nomeEmpresa)+'</b>'+
-          '<div class="meta">'+esc(c.cnpj)+' · '+esc(c.email)+' · '+esc(c.telefone)+' · '+obrasCount+' obra(s)</div>'+
+          '<div class="meta">'+esc(c.cnpj)+' · '+esc(c.email)+' · '+esc(c.telefone)+' · Tabela: '+esc(c.tabelaPreco ? tabelaPrecoNome(c.tabelaPreco) : 'não definida')+' · '+obrasCount+' obra(s)</div>'+
         '</div>'+
         '<div class="obra-actions">'+
           (canGestao?'<button class="btn ghost sm" data-nova-obra="'+c.id+'">+ Nova obra</button>':'')+
@@ -4089,6 +4213,8 @@
         document.getElementById('clienteCnpj').value = formatCnpj(c.cnpj);
         document.getElementById('clienteEmail').value = c.email;
         document.getElementById('clienteTelefone').value = formatTelefone(c.telefone);
+        popularClienteTabelaSelect();
+        document.getElementById('clienteTabela').value = c.tabelaPreco || '';
         document.getElementById('clienteCancelEditWrap').style.display = '';
         document.getElementById('clienteSubmitBtn').textContent = 'Salvar alterações';
         window.scrollTo(0,0);
@@ -4126,7 +4252,9 @@
       sel.value = atual;
     }
     if(hint) hint.style.display = state.clientes.length===0 ? '' : 'none';
+    var tsx = document.getElementById('obraTabela'); if(tsx && !tsx.value) obraTabelaPrefill();
   }
+  document.getElementById('obraCliente').addEventListener('change', obraTabelaPrefill);
   document.getElementById('obraForm').addEventListener('submit', function(e){
     e.preventDefault();
     if(!obrasGestaoCanAccess()){ toast('Você não tem permissão para cadastrar/editar obras.','error'); return; }
@@ -4134,7 +4262,7 @@
     var clienteId = document.getElementById('obraCliente').value;
     if(!clienteId){ toast('Selecione o cliente responsável pela obra.','error'); return; }
     if(!nome){ toast('Informe o nome da obra.','error'); return; }
-    supabaseClient.from('obras').insert({
+    var novaObra = {
       cliente_id: clienteId,
       nome: nome,
       endereco: document.getElementById('obraEndereco').value.trim(),
@@ -4143,7 +4271,13 @@
       localidade: document.getElementById('obraLocalidade').value.trim(),
       contrato: document.getElementById('obraContrato').value.trim(),
       status: 'ativa'
-    }).then(function(res){
+    };
+    var tabSel = document.getElementById('obraTabela');
+    if(tabelasPrecoCfg.db){
+      if(!tabSel || !tabSel.value){ toast('Escolha qual tabela é correta para esse cliente.','error'); return; }
+      novaObra.tabela_preco = tabSel.value;
+    }
+    supabaseClient.from('obras').insert(novaObra).then(function(res){
       if(res.error){ toast('Erro ao salvar obra: '+res.error.message,'error'); return; }
       toast('Obra cadastrada.','ok');
       e.target.reset();
@@ -4152,6 +4286,7 @@
   });
 
   function renderObraList(){
+    popularObraTabelaSelect();
     var list = document.getElementById('obraList');
     if(state.obras.length===0){
       list.innerHTML = '<p class="empty-hint">Nenhuma obra cadastrada ainda.</p>';
@@ -4166,10 +4301,11 @@
       var open = !!state.obraServicosOpen[o.id];
       var card = '<div class="obra-card" data-id="'+o.id+'">'+
         '<div class="info"><b>'+esc(o.nome)+(o.exemplo?'<span class="tag-example">exemplo</span>':'')+'</b>'+
-          '<div class="meta">Cliente: '+esc(clienteNomeById(o.clienteId)||'—')+' · '+esc(o.endereco||'Endereço não informado')+(o.localidade?' · '+esc(o.localidade):'')+' · Resp.: '+esc(o.responsavelTecnico||'—')+' · '+rdoCount+' RDO(s)'+(canServ?' · '+servCount+' serviço(s) contratado(s)':'')+'</div>'+
+          '<div class="meta">Cliente: '+esc(clienteNomeById(o.clienteId)||'—')+' · '+esc(o.endereco||'Endereço não informado')+(o.localidade?' · '+esc(o.localidade):'')+' · Resp.: '+esc(o.responsavelTecnico||'—')+' · Planilha: '+esc(tabelaPrecoNome(tabelaDaObra(o.id))||'todas')+' · '+rdoCount+' RDO(s)'+(canServ?' · '+servCount+' serviço(s) contratado(s)':'')+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
           '<span class="chip '+(o.status==='ativa'?'approved':'draft')+'">'+(o.status==='ativa'?'Ativa':'Concluída')+'</span>'+
+          (canGestao && tabelasPrecoCfg.db ? '<select data-tabelaobra="'+o.id+'" title="Planilha de serviços desta obra" style="max-width:200px;">'+obraTabelaOptionsHtml(o.tabelaPreco)+'</select>' : '')+
           (canServ?'<button class="btn ghost sm" data-servicos="'+o.id+'">'+(open?'Ocultar serviços':'Serviços contratados')+'</button>':'')+
           (canServ?'<button class="btn ghost sm" data-servpdf="'+o.id+'">⬇ Exportar PDF</button>':'')+
           (canServ?'<button class="btn ghost sm" data-mapa="'+o.id+'">🗺 Mapeamento</button>':'')+
@@ -4197,6 +4333,16 @@
     list.querySelectorAll('.obra-servicos-panel [data-qtdobra]').forEach(function(inp){
       inp.addEventListener('change', function(){
         updateObraServicoQuantidade(inp.getAttribute('data-qtdobra'), inp.getAttribute('data-qtditem'), inp.value);
+      });
+    });
+    list.querySelectorAll('[data-tabelaobra]').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        var id = sel.getAttribute('data-tabelaobra');
+        supabaseClient.from('obras').update({ tabela_preco: sel.value || null }).eq('id', id).then(function(res){
+          if(res.error){ toast('Erro ao trocar a planilha da obra: '+res.error.message,'error'); loadObras(); return; }
+          toast('Planilha da obra atualizada.','ok');
+          loadObras();
+        });
       });
     });
     list.querySelectorAll('[data-servpdf]').forEach(function(b){
@@ -4431,7 +4577,7 @@
     return 'pv';
   }
   function mapaServicoBotoesHtml(){
-    var itens = (state.catalogoItens||[]).filter(function(p){ return p.ativo!==false; });
+    var itens = catalogoDaObra(state.mapaObraId).filter(function(p){ return p.ativo!==false; });
     if(!itens.length) return '<span class="hint" style="margin:0;">Nenhum serviço cadastrado na tabela de preços.</span>';
     var g = tabelaPrecosGroups(itens);
     var html = '';
@@ -4449,7 +4595,7 @@
   }
 
   function mapaServicoOptionsHtml(obraId, selectedId){
-    var itens = (state.catalogoItens||[]).filter(function(p){ return p.ativo!==false; });
+    var itens = catalogoDaObra(obraId).filter(function(p){ return p.ativo!==false; });
     var g = tabelaPrecosGroups(itens);
     var html = '';
     g.order.forEach(function(cat){
@@ -4475,7 +4621,7 @@
   function mapaFindCatalogoMatch(txt){
     var alvo = String(txt||'').trim().toLowerCase();
     if(!alvo) return null;
-    return (state.catalogoItens||[]).find(function(c){ return String(c.descricao||'').trim().toLowerCase()===alvo; }) || null;
+    return catalogoDaObra(state.mapaObraId).find(function(c){ return String(c.descricao||'').trim().toLowerCase()===alvo; }) || null;
   }
   function mapaParseImportacaoFila(texto){
     var erros = [];
@@ -5665,29 +5811,33 @@
   }
 
   function renderObraServicosChecklist(obraId){
-    if(state.catalogoItens.length===0){
-      return '<p class="hint">Nenhum serviço cadastrado na tabela de preços ainda.</p>';
+    var itensTabela = catalogoDaObra(obraId);
+    var tabObra = tabelaDaObra(obraId);
+    if(itensTabela.length===0){
+      return '<p class="hint">Nenhum serviço cadastrado na tabela de preços'+(tabObra?' ('+esc(tabelaPrecoNome(tabObra))+')':'')+' ainda.</p>';
     }
     var canQtd = financeiroCanAccess();
     var contratados = {};
     state.obraServicosContratados.filter(function(s){ return s.obraId===obraId; }).forEach(function(s){ contratados[s.catalogoItemId]=s; });
     var groups = {}, order = [];
-    state.catalogoItens.forEach(function(it){
+    itensTabela.forEach(function(it){
       var key = it.categoriaNome || 'Sem categoria';
       if(!groups[key]){ groups[key]=[]; order.push(key); }
       groups[key].push(it);
     });
-    var inativosContratados = (state.catalogoInativos||[]).filter(function(it){ return contratados[it.id]; });
+    // já contratados nesta obra, mas fora da tabela vigente dela (item que saiu da tabela ou de outra tabela)
+    var foraDaTabela = (state.catalogoItens||[]).filter(function(it){ return contratados[it.id] && itensTabela.indexOf(it)<0; });
+    var inativosContratados = (state.catalogoInativos||[]).filter(function(it){ return contratados[it.id]; }).concat(foraDaTabela);
     var chaveSvc = function(it){ return String(it.itemNumero||'')+'|'+String(it.descricao||'').trim().toLowerCase(); };
     var dupAtivo = {};
-    state.catalogoItens.forEach(function(it){ if(contratados[it.id]) dupAtivo[chaveSvc(it)] = true; });
+    itensTabela.forEach(function(it){ if(contratados[it.id]) dupAtivo[chaveSvc(it)] = true; });
     if(inativosContratados.length){
       var kInat = 'Fora da tabela vigente (já contratados nesta obra)';
       groups[kInat] = inativosContratados; order.push(kInat);
     }
     var totalGeral = 0;
     var html = '<h2 style="font-size:15px;">Serviços contratados pelo cliente</h2>'+
-      '<p class="hint">Marque todos os serviços da tabela de preços que o cliente contratou para esta obra.'+(canQtd?' Informe também a quantidade desejada.':'')+'</p>';
+      '<p class="hint">Marque todos os serviços da tabela de preços'+(tabObra?' <b>'+esc(tabelaPrecoNome(tabObra))+'</b>':'')+' que o cliente contratou para esta obra.'+(canQtd?' Informe também a quantidade desejada.':'')+'</p>';
     html += order.map(function(cat){
       var items = groups[cat];
       return '<div style="margin-bottom:14px;">'+
@@ -6364,10 +6514,10 @@
     var contr = {};
     state.obraServicosContratados.filter(function(s){ return s.obraId===obraId; }).forEach(function(s){ contr[s.catalogoItemId]=s; });
     var chave = function(it){ return String(it.itemNumero||'')+'|'+String(it.descricao||'').trim().toLowerCase(); };
-    var ativos = state.catalogoItens.filter(function(it){ return contr[it.id]; });
+    var ativos = state.catalogoItens.filter(function(it){ return contr[it.id] && itemNaTabelaDaObra(it, obraId); });
     var jaTem = {}; ativos.forEach(function(it){ jaTem[chave(it)] = true; });
     // Contratado que saiu da tabela vigente continua valendo na obra (sem duplicar se já existe o item vigente equivalente).
-    var inativos = (state.catalogoInativos||[]).filter(function(it){ return contr[it.id] && !jaTem[chave(it)]; });
+    var inativos = (state.catalogoInativos||[]).filter(function(it){ return contr[it.id] && !jaTem[chave(it)] && itemNaTabelaDaObra(it, obraId); });
     var excl = state.editId || null;
     return ativos.concat(inativos).sort(function(a,b){ return (a.ordem-b.ordem) || String(a.itemNumero).localeCompare(String(b.itemNumero), undefined, {numeric:true}); })
       .map(function(it){
@@ -6386,6 +6536,7 @@
   function rdoAtualizarServicosAbertos(){
     try{
       if(state.view!=='novo' || !rdoFormAtual) return;
+      atualizarRdoPlanilhaInfo();
       var box = document.getElementById('equipesDetalheContainer');
       if(!box) return;
       // não tira o cursor de quem está digitando: tenta de novo daqui a pouco
@@ -6396,6 +6547,24 @@
       refreshEquipesDetalheUI(rdoFormAtual);
     }catch(e){}
   }
+  // Faixa do RDO: Obra -> atribuição -> planilha -> quantos serviços contratados (a equipe não participa disso).
+  function rdoPlanilhaInfoHtml(obraId){
+    if(!obraId) return '';
+    var t = tabelaDaObra(obraId);
+    var n = obraServicosOptions(obraId).length;
+    var nome = t ? tabelaPrecoNome(t) : null;
+    var txt = '<b>Planilha de serviços desta obra:</b> '+(nome ? esc(nome) : 'todas as planilhas (a obra não tem atribuição definida)')+' · ';
+    if(state.obraServicosEstado==='carregando') txt += 'carregando os serviços contratados…';
+    else if(n) txt += '<b>'+n+'</b> serviço(s) contratado(s) disponível(is) abaixo, dentro de cada equipe marcada.';
+    else txt += 'nenhum serviço contratado ainda — marque-os em Obras ▸ Serviços contratados.';
+    return '<div class="hint" style="margin:2px 0 0;padding:8px 10px;border:1px solid '+RDO_BORDER+';border-radius:6px;background:#fbfbfa;">'+txt+'<br><span style="font-size:11px;">A equipe só identifica quem executou; ela não muda a origem dos serviços.</span></div>';
+  }
+  function atualizarRdoPlanilhaInfo(){
+    var el = document.getElementById('rdoPlanilhaInfo');
+    if(!el) return;
+    var sel = document.getElementById('rdoObra');
+    el.innerHTML = rdoPlanilhaInfoHtml(sel ? sel.value : '');
+  }
   function rdoServicosVazioHtml(){
     var sel = document.getElementById('rdoObra');
     var obraId = (sel && sel.value) || '';
@@ -6405,7 +6574,7 @@
     if(state.obraServicosEstado==='carregando') return '<p class="empty-hint">Carregando os serviços contratados desta obra…</p>';
     if(state.obraServicosEstado==='erro') return '<p class="empty-hint">Não foi possível carregar os serviços contratados (conexão ou permissão).'+recarregar+'</p>';
     if(temContrato) return '<p class="empty-hint">Os serviços desta obra ainda não carregaram da tabela de serviços.'+recarregar+'</p>';
-    return '<p class="empty-hint">Nenhum serviço contratado vinculado a esta obra ainda — vincule em "Obras".</p>';
+    return '<p class="empty-hint">Nenhum serviço contratado vinculado a esta obra ainda'+(tabelaDaObra(obraId)?' (planilha '+esc(tabelaPrecoNome(tabelaDaObra(obraId)))+')':'')+' — marque-os em "Obras" ▸ Serviços contratados.</p>';
   }
   /* ---- equipe detalhada (frente, status, integrantes, atividades, concluídos, resumo) ---- */
   function equipeDetalheBlank(){
@@ -6596,6 +6765,7 @@
         '<h2><span class="idx">1</span>Identificação</h2>'+
         '<div class="grid4">'+
           '<div class="field full"><label>Obra</label><select id="rdoObra" required></select></div>'+
+          '<div class="field full" id="rdoPlanilhaInfo"></div>'+
           '<div class="field"><label>Data</label><input type="date" id="rdoData" value="'+esc(rdo.data)+'" required></div>'+
         '</div>'+
       '</div>'+
@@ -6683,7 +6853,8 @@
 
     populateObraSelect();
     document.getElementById('rdoObra').value = rdo.obraId||'';
-    document.getElementById('rdoObra').addEventListener('change', function(){ refreshEquipesDetalheUI(rdo); });
+    atualizarRdoPlanilhaInfo();
+    document.getElementById('rdoObra').addEventListener('change', function(){ atualizarRdoPlanilhaInfo(); refreshEquipesDetalheUI(rdo); });
 
     document.getElementById('rdoClimaManhaTempo').addEventListener('input', function(){ rdo.climaManha = rdo.climaManha||{}; rdo.climaManha.tempo = this.value; });
     document.getElementById('rdoClimaManhaCond').addEventListener('change', function(){ rdo.climaManha = rdo.climaManha||{}; rdo.climaManha.condicao = this.value; });
