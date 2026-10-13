@@ -469,6 +469,17 @@
   .chip-contratado{background:#DDF3E4;color:#1E6B3A;}
   .chip-aparte{background:#FFE3CC;color:#9A3412;}
   .map-legend-aparte{margin:0 0 10px;margin-left:0;}
+  .map-circle.geo-nc{border:2px dashed #14130F;}
+  .map-geo-badge{position:absolute;right:-8px;top:-8px;min-width:15px;height:15px;border-radius:8px;background:#14130F;color:#fff;font:800 10px/15px Inter,sans-serif;text-align:center;padding:0 3px;box-shadow:0 0 0 1.5px #fff;}
+  .map-geo-badge.ruim{background:#C6433F;}
+  .geo-chip{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;line-height:18px;white-space:nowrap;}
+  .geo-origem{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;}
+  .geo-origem .geo-linha{display:grid;grid-template-columns:128px minmax(0,1fr);gap:8px;margin:3px 0;}
+  .geo-origem .geo-linha > span{overflow-wrap:anywhere;}
+  .geo-origem .geo-k{color:var(--muted);}
+  .geo-origem table{border-collapse:collapse;width:100%;font-size:11.5px;margin-top:6px;font-variant-numeric:tabular-nums;}
+  .geo-origem th,.geo-origem td{border-bottom:1px solid var(--line);padding:3px 5px;text-align:left;white-space:nowrap;}
+  .geo-origem .geo-tab-wrap{overflow-x:auto;}
   .map-circle.is-grupo{box-shadow:0 2px 5px rgba(20,19,15,.45), inset -2px -3px 4px rgba(0,0,0,.25), inset 2px 2px 3px rgba(255,255,255,.45), 0 0 0 3px rgba(255,255,255,.65);}
   .modal h3{font-size:18px;margin-bottom:8px;}
   .modal p{color:var(--ink-soft);font-size:13.5px;margin:0 0 16px;}
@@ -1164,6 +1175,7 @@
     mapaFiltroProjeto: 'all',
     mapaFiltroStatus: 'all',
     mapaFiltroEscopo: 'all', // 'all' | 'contratado' | 'aparte'
+    mapaFiltroGeo: 'all', // 'all' | 'confirmada' | 'avalidar' | 'problema'
     mapaFiltroRegiao: '',
     mapaFiltroNumeroLocal: '',
     projetos: []
@@ -1692,6 +1704,8 @@
       confirmado:row.confirmado!==false, grupoId:row.grupo_id||null,
       localKey:row.local_key||null,
       escopo:row.escopo||null,
+      geoStatus:row.geo_status||null, geoMetodo:row.geo_metodo||null, geoCrs:row.geo_crs||null,
+      geoCoordOriginal:row.geo_coord_original||null, geoDetalhe:row.geo_detalhe||'', geoEnderecoPonto:row.geo_endereco_ponto||'',
       createdAt:row.created_at, updatedAt:row.updated_at
     };
   }
@@ -2073,7 +2087,8 @@
       analiseConcluidaEm:row.analise_concluida_em||null,
       etapaAtual:row.etapa_atual||null,
       locaisPendentesLocalizacao:row.locais_pendentes_localizacao,
-      locaisParaRevisar:row.locais_para_revisar
+      locaisParaRevisar:row.locais_para_revisar,
+      geoResumo:row.geo_resumo||null
     };
   }
   function loadProjetosObra(obraId){
@@ -3178,7 +3193,8 @@
     var avisos = [];
     if(!s.endereco) avisos.push('⚠️ Endereço incompleto');
     if(s.valorUnitario==null) avisos.push('⚠️ Valor não informado');
-    if(s.confirmado && s.latitude==null && s.longitude==null) avisos.push('⚠️ Coordenada não localizada');
+    if(s.geoStatus && s.geoStatus!=='validada' && s.geoStatus!=='manual') avisos.push('⚠️ Localização: '+((GEO_STATUS_INFO[s.geoStatus]||{}).label||s.geoStatus));
+    else if(!s.geoStatus && s.confirmado && s.latitude==null && s.longitude==null) avisos.push('⚠️ Coordenada não localizada');
     if(!avisos.length) return '';
     return '<div style="color:#C6433F;font-size:11px;margin-top:2px;">'+avisos.map(esc).join(' · ')+'</div>';
   }
@@ -3338,7 +3354,7 @@
       var p = (state.projetos||[]).find(function(x){ return x.id===id; });
       return p ? (p.codigo?p.codigo+' — '+p.nome:p.nome) : '';
     }
-    var servicosHeader = ['ID','Projeto','Endereço completo','Logradouro','Número','Bairro','Cidade','Estado','Serviço','Descrição','Quantidade','Unidade','Comprimento','Largura','Profundidade','Diâmetro','Valor unitário','Valor total','Latitude','Longitude','Status','Observações'];
+    var servicosHeader = ['ID','Projeto','Endereço completo','Logradouro','Número','Bairro','Cidade','Estado','Serviço','Descrição','Quantidade','Unidade','Comprimento','Largura','Profundidade','Diâmetro','Valor unitário','Valor total','Latitude','Longitude','Status','Observações','Status da localização','Método da localização','Sistema de referência','Coordenada original (projeto)'];
     var servicosAoa = [servicosHeader];
     var valorTotalProjeto = 0;
     var temAlgumValor = false;
@@ -3351,7 +3367,11 @@
         s.comprimento!=null?s.comprimento:'', s.largura!=null?s.largura:'', (s.profundidadeTexto||(s.profundidade!=null?s.profundidade:'')), s.diametro!=null?s.diametro:'',
         s.valorUnitario!=null?s.valorUnitario:'NÃO INFORMADO', s.valorTotal!=null?s.valorTotal:'NÃO INFORMADO',
         s.latitude!=null?s.latitude:'PENDENTE DE VALIDAÇÃO', s.longitude!=null?s.longitude:'PENDENTE DE VALIDAÇÃO',
-        s.status, s.observacoes||''
+        s.status, s.observacoes||'',
+        s.geoStatus ? ((GEO_STATUS_INFO[s.geoStatus]||{}).label||s.geoStatus) : 'NÃO REGISTRADO',
+        s.geoMetodo ? (GEO_METODO_LABEL[s.geoMetodo]||s.geoMetodo) : '',
+        s.geoCrs||'',
+        (Array.isArray(s.geoCoordOriginal)?s.geoCoordOriginal:[]).map(function(o){ return (o.ponto||o.ref||'')+(o.estaca?' est. '+o.estaca:'')+(o.E!=null?' E='+o.E+' N='+o.N:'')+(o.pagina!=null?' (pág. '+o.pagina+')':''); }).join(' | ')
       ]);
     });
     servicosAoa.push([]);
@@ -3396,7 +3416,7 @@
     return fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(query))
       .then(function(r){ return r.ok ? r.json() : []; })
       .then(function(list){
-        if(list && list[0]) return { lat:parseFloat(list[0].lat), lng:parseFloat(list[0].lon) };
+        if(list && list[0]) return { lat:parseFloat(list[0].lat), lng:parseFloat(list[0].lon), fonte:'nominatim', consulta:query };
         return null;
       })
       .catch(function(){ return null; });
@@ -3407,16 +3427,26 @@
     var catalogoMatch = mapaFindCatalogoMatch(servico.servicoNome);
     var tipo = catalogoMatch ? mapaServicoTipoGeom(catalogoMatch) : 'pv';
     if(coords){
+      // Origem da posição: coordenada que o serviço já tinha (mantém o status
+      // gravado pela análise) ou geocodificação do endereço (APROXIMADA).
+      var geo = coords.fonte==='nominatim' ?
+        { geo_status:'aproximada_endereco', geo_metodo:'geocodificacao_endereco', geo_crs:'WGS84 (OpenStreetMap/Nominatim)', geo_coord_original:null,
+          geo_detalhe:'Posição APROXIMADA pelo endereço "'+(coords.consulta||'')+'" (OpenStreetMap) — não é a coordenada do projeto. Confira em campo.' } :
+        { geo_status: servico.geoStatus || 'pendente', geo_metodo: servico.geoMetodo || null, geo_crs: servico.geoCrs || null, geo_coord_original: servico.geoCoordOriginal || null,
+          geo_detalhe: servico.geoDetalhe || 'Coordenada já gravada no serviço; origem não registrada.' };
       var payload = {
         obra_id: obraId, tipo: tipo, rua: servico.endereco||null, nome_local: null,
         numero_servico: servico.numeroLocal||null, status: 'parado',
         observacao: servico.servicoNome+' ('+fmtQtd(servico.quantidadePrevista)+' '+servico.unidade+')',
-        geom: [coords], catalogo_item_id: servico.catalogoItemId||null, foto: null,
-        planejamento_servico_id: servico.id, created_by: uid, created_by_nome: uidNome
+        geom: [{ lat:coords.lat, lng:coords.lng }], catalogo_item_id: servico.catalogoItemId||null, foto: null,
+        planejamento_servico_id: servico.id, created_by: uid, created_by_nome: uidNome,
+        geo_status: geo.geo_status, geo_metodo: geo.geo_metodo, geo_crs: geo.geo_crs, geo_coord_original: geo.geo_coord_original, geo_detalhe: geo.geo_detalhe
       };
-      return supabaseClient.from('mapa_marcacoes').insert(payload).select().then(function(res){
+      return geoInsert('mapa_marcacoes', payload).then(function(res){
         if(res.error) return { ok:false, error:res.error.message };
-        return supabaseClient.from('planejamento_servicos').update({ latitude: coords.lat, longitude: coords.lng }).eq('id', servico.id).then(function(){ return { ok:true, marcada:true }; });
+        var upPl = { latitude: coords.lat, longitude: coords.lng };
+        if(coords.fonte==='nominatim'){ upPl.geo_status = geo.geo_status; upPl.geo_metodo = geo.geo_metodo; upPl.geo_crs = geo.geo_crs; upPl.geo_detalhe = geo.geo_detalhe; }
+        return geoUpdate('planejamento_servicos', upPl, function(q){ return q.eq('id', servico.id); }).then(function(){ return { ok:true, marcada:true }; });
       });
     }
     var payloadFila = {
@@ -3538,6 +3568,11 @@
       }
       if(qtdPendentes>0) partes.push('Locais pendentes de localização: '+qtdPendentes);
       if(p.valorTotalProjeto!=null) partes.push('valor total '+fmtMoeda(p.valorTotalProjeto));
+      var gr = p.geoResumo;
+      if(gr && gr.pontos_lidos!=null){
+        if(!gr.crs && gr.leituras_brutas>0) partes.push('Coordenadas: sistema de referência NÃO identificado — PVs pendentes de validação');
+        else partes.push('Coordenadas do projeto: '+gr.pontos_validados+' conferida(s), '+((gr.pontos_pendentes||[]).length)+' a validar, '+((gr.pontos_conflito||[]).length)+' em conflito, '+((gr.pontos_sem_coordenada||[]).length)+' sem coordenada'+(gr.crs?' ('+gr.crs+(gr.crs_origem&&/presumido/.test(gr.crs_origem)?', datum presumido':'')+')':''));
+      }
       var avisoRevisar = (p.locaisParaRevisar>0) ?
         ('<button type="button" class="btn ghost sm" data-revisarlocais="'+p.id+'" style="color:#a33;border-color:#e3b3b3;">⚠ '+p.locaisParaRevisar+' local(is) precisam de revisão</button>') : '';
       return '<div class="hint" style="margin:6px 0 0;width:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
@@ -4394,6 +4429,129 @@
   var mapaCurrentRenderedCanGestao = null;
   var mapaViewFitted = false;
 
+  // ---------------------------------------------------------------
+  // Rastreabilidade geográfica (migration 045 / analisar-projeto v14).
+  // geo_status diz DE ONDE veio a posição e se ela foi conferida:
+  //   validada            coordenada E/N do projeto conferida com os PVs
+  //                       vizinhos (distância UTM × diferença de estacas)
+  //   manual              posicionada por uma pessoa no mapa
+  //   pendente            coordenada do projeto ainda não conferida
+  //   aproximada_endereco posição pelo NOME da rua (geocodificador) — não
+  //                       é a coordenada do projeto
+  //   conflito / invalida / falha_extracao  sem posição confiável
+  // Registro antigo (sem a coluna ou anterior à 045) fica com geoStatus
+  // nulo e é desenhado como antes, com o aviso "origem não registrada".
+  // ---------------------------------------------------------------
+  var GEO_STATUS_INFO = {
+    validada:{ label:'Validada', cor:'#2E8F4E', fundo:'#E3F3E8', badge:'' },
+    manual:{ label:'Posicionada manualmente', cor:'#2E6F8F', fundo:'#E2EEF4', badge:'' },
+    pendente:{ label:'Pendente de validação', cor:'#8A5A00', fundo:'#FFF1CC', badge:'?' },
+    aproximada_endereco:{ label:'Aproximada por endereço', cor:'#8A5A00', fundo:'#FFF1CC', badge:'≈' },
+    conflito:{ label:'Conflito de coordenadas', cor:'#A3302C', fundo:'#FBE3E2', badge:'!' },
+    invalida:{ label:'Coordenada inválida', cor:'#A3302C', fundo:'#FBE3E2', badge:'!' },
+    falha_extracao:{ label:'Falha na extração', cor:'#A3302C', fundo:'#FBE3E2', badge:'!' }
+  };
+  var GEO_METODO_LABEL = {
+    coordenada_projeto_utm:'Coordenada E/N impressa no projeto (UTM)',
+    coordenada_projeto_geografica:'Latitude/longitude impressa no projeto',
+    geocodificacao_endereco:'Geocodificação pelo endereço (aproximada)',
+    manual:'Clique no mapa (manual)',
+    tracado_rua:'Distribuída ao longo da rua traçada (aproximada)'
+  };
+  var GEO_LEITURA_LABEL = { ia_recorte:'leitura do recorte da folha', ia_pagina:'leitura da página', ia_releitura:'releitura dirigida', texto_rotulo:'transcrição do rótulo', texto_pdf:'texto do PDF' };
+  function geoInfoStatus(st){ return GEO_STATUS_INFO[st] || null; }
+  function geoNaoConfirmada(m){ return !!m && ['pendente','aproximada_endereco','conflito','invalida','falha_extracao'].indexOf(m.geoStatus)>=0; }
+  function geoProblema(m){ return !!m && ['conflito','invalida','falha_extracao'].indexOf(m.geoStatus)>=0; }
+  function geoChipHtml(st){
+    var i = geoInfoStatus(st);
+    if(!i) return '';
+    return '<span class="geo-chip" style="background:'+i.fundo+';color:'+i.cor+';">'+(i.badge?esc(i.badge)+' ':'')+esc(i.label)+'</span>';
+  }
+  function geoFmtNum(v, casas){ return (v==null || !isFinite(Number(v))) ? '—' : Number(v).toFixed(casas); }
+  // Bloco "Origem da localização" do modal da marcação: mostra a coordenada
+  // COMO ESTÁ NO PDF (ponto, estaca, E/N, página), o sistema de referência,
+  // o método e a lat/long efetivamente usada no mapa.
+  function geoOrigemHtml(m){
+    if(!m || !m.id) return '';
+    var p0 = (m.geom && m.geom[0]) ? m.geom[0] : null;
+    var usada = p0 ? (geoFmtNum(p0.lat,7)+', '+geoFmtNum(p0.lng,7)) : '—';
+    if(!m.geoStatus){
+      return '<div class="geo-origem"><div style="font-weight:700;margin-bottom:4px;">Origem da localização</div>'+
+        '<div class="hint" style="margin:0;">Origem da posição não registrada (marcação anterior à rastreabilidade). Reprocesse o projeto ou confira em campo.</div>'+
+        '<div class="geo-linha"><span class="geo-k">Lat/long no mapa</span><span>'+usada+'</span></div></div>';
+    }
+    var orig = Array.isArray(m.geoCoordOriginal) ? m.geoCoordOriginal : (m.geoCoordOriginal ? [m.geoCoordOriginal] : []);
+    var tabela = orig.length ? ('<div class="geo-tab-wrap"><table><thead><tr><th>Ponto</th><th>Estaca</th><th>E (leste)</th><th>N (norte)</th><th>Pág.</th><th>Leitura</th><th>Situação</th></tr></thead><tbody>'+
+      orig.map(function(o){
+        var linhas = '<tr><td>'+esc(o.ponto||o.ref||'—')+'</td><td>'+esc(o.estaca||'—')+'</td><td>'+(o.E!=null?geoFmtNum(o.E,4):(o.lat_lida!=null?'lat '+geoFmtNum(o.lat_lida,7):'—'))+'</td><td>'+(o.N!=null?geoFmtNum(o.N,4):(o.lng_lida!=null?'long '+geoFmtNum(o.lng_lida,7):'—'))+'</td><td>'+(o.pagina!=null?esc(String(o.pagina)):'—')+'</td><td>'+esc(GEO_LEITURA_LABEL[o.leitura]||o.leitura||'—')+'</td><td>'+esc((geoInfoStatus(o.status)||{}).label||o.status||'—')+'</td></tr>';
+        (o.descartadas||[]).forEach(function(d){
+          linhas += '<tr style="color:var(--muted);text-decoration:line-through;"><td>'+esc(o.ponto||o.ref||'')+' (descartada)</td><td>'+esc(d.estaca||'—')+'</td><td>'+geoFmtNum(d.E,4)+'</td><td>'+geoFmtNum(d.N,4)+'</td><td></td><td>'+esc(GEO_LEITURA_LABEL[d.leitura]||d.leitura||'')+'</td><td>não confere</td></tr>';
+        });
+        return linhas;
+      }).join('')+'</tbody></table></div>') : '';
+    return '<div class="geo-origem">'+
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;"><b>Origem da localização</b>'+geoChipHtml(m.geoStatus)+'</div>'+
+      '<div class="geo-linha"><span class="geo-k">Método</span><span>'+esc(GEO_METODO_LABEL[m.geoMetodo]||m.geoMetodo||'—')+'</span></div>'+
+      '<div class="geo-linha"><span class="geo-k">Sistema de referência</span><span>'+esc(m.geoCrs||'—')+'</span></div>'+
+      (m.paginaProjeto!=null ? '<div class="geo-linha"><span class="geo-k">Página do projeto</span><span>'+esc(String(m.paginaProjeto))+'</span></div>' : '')+
+      '<div class="geo-linha"><span class="geo-k">Lat/long no mapa</span><span style="font-variant-numeric:tabular-nums;">'+usada+'</span></div>'+
+      (m.geoEnderecoPonto ? '<div class="geo-linha"><span class="geo-k">Endereço no ponto</span><span>'+esc(m.geoEnderecoPonto)+'</span></div>' : '')+
+      tabela+
+      (m.geoDetalhe ? '<div class="hint" style="margin:6px 0 0;white-space:pre-wrap;">'+esc(m.geoDetalhe)+'</div>' : '')+
+      ((obrasGestaoCanAccess() && (m.geoStatus==='pendente' || m.geoStatus==='aproximada_endereco') && p0) ? '<button type="button" class="btn ghost sm" data-act="geoconfirmar" style="margin-top:8px;">Conferi em campo — confirmar esta posição</button>' : '')+
+    '</div>';
+  }
+  // Gravação com as colunas geo_*: se o banco ainda não tem a migration 045
+  // (coluna inexistente), grava de novo sem esses campos — o mapa continua
+  // funcionando e a origem só não fica registrada.
+  var geoColsDisponiveis = true;
+  function geoErroColuna(err){ var msg = err && (err.message||''); return !!msg && /geo_|pagina_projeto/.test(msg) && /column|coluna|schema cache/i.test(msg); }
+  function geoSemCampos(o, tabela){
+    var c = {};
+    Object.keys(o||{}).forEach(function(k){ if(k.indexOf('geo_')===0) return; if(tabela==='mapa_marcacoes' && k==='pagina_projeto') return; c[k] = o[k]; });
+    return c;
+  }
+  function geoInsert(tabela, valores){
+    var lista = Array.isArray(valores) ? valores : [valores];
+    var envia = function(arr){ return supabaseClient.from(tabela).insert(Array.isArray(valores) ? arr : arr[0]).select(); };
+    if(!geoColsDisponiveis) return envia(lista.map(function(o){ return geoSemCampos(o, tabela); }));
+    return envia(lista).then(function(res){
+      if(res.error && geoErroColuna(res.error)){
+        console.warn('[geo] colunas de rastreabilidade ausentes em '+tabela+' (rode a migration 045). Gravando sem elas.');
+        geoColsDisponiveis = false;
+        return envia(lista.map(function(o){ return geoSemCampos(o, tabela); }));
+      }
+      return res;
+    });
+  }
+  function geoUpdate(tabela, valores, filtrar){
+    var envia = function(v){ return filtrar(supabaseClient.from(tabela).update(v)); };
+    if(!geoColsDisponiveis) return envia(geoSemCampos(valores, tabela));
+    return envia(valores).then(function(res){
+      if(res.error && geoErroColuna(res.error)){ geoColsDisponiveis = false; return envia(geoSemCampos(valores, tabela)); }
+      return res;
+    });
+  }
+  function geoAgoraTxt(){ var u = state.currentUser ? state.currentUser.nome : ''; return (u?(' por '+u):'')+' em '+new Date().toLocaleString('pt-BR'); }
+  function geoCamposManual(detalheExtra, coordOriginal){
+    return { geo_status:'manual', geo_metodo:'manual', geo_crs:'WGS84 (clique no mapa)',
+      geo_coord_original: coordOriginal || null,
+      geo_detalhe: ('Posicionada manualmente no mapa'+geoAgoraTxt()+'.'+(detalheExtra?' '+detalheExtra:'')).slice(0,2000) };
+  }
+  function confirmarPosicaoEmCampo(m){
+    confirmModal({ title:'Confirmar posição', msg:'Você conferiu em campo que este ponto está no lugar certo? A localização passa a "Validada" e fica registrado quem confirmou.', okLabel:'Confirmar posição' }).then(function(ok){
+      if(!ok) return;
+      var det = ((m.geoDetalhe ? m.geoDetalhe+' | ' : '')+'Posição conferida em campo'+geoAgoraTxt()+'.').slice(0,2000);
+      geoUpdate('mapa_marcacoes', { geo_status:'validada', geo_detalhe:det, updated_at:new Date().toISOString() }, function(q){ return q.eq('id', m.id); }).then(function(res){
+        if(res.error){ toast('Erro ao confirmar: '+res.error.message,'error'); return; }
+        if(!geoColsDisponiveis){ toast('O banco ainda não tem a rastreabilidade (migration 045) — confirmação não registrada.','error'); return; }
+        if(m.planejamentoServicoId) geoUpdate('planejamento_servicos', { geo_status:'validada', geo_validado_em:new Date().toISOString(), geo_detalhe:det }, function(q){ return q.eq('id', m.planejamentoServicoId); }).then(function(){});
+        toast('Posição confirmada.','ok');
+        loadMapaMarcacoes(state.mapaObraId);
+      });
+    });
+  }
+
   function mapMarcacaoRow(row){
     return {
       id: row.id,
@@ -4414,6 +4572,13 @@
       foto: row.foto || '',
       createdBy: row.created_by,
       createdByNome: row.created_by_nome || '',
+      geoStatus: row.geo_status || null,
+      geoMetodo: row.geo_metodo || null,
+      geoCrs: row.geo_crs || null,
+      geoCoordOriginal: row.geo_coord_original || null,
+      geoDetalhe: row.geo_detalhe || '',
+      geoEnderecoPonto: row.geo_endereco_ponto || '',
+      paginaProjeto: row.pagina_projeto==null ? null : row.pagina_projeto,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
@@ -4456,6 +4621,7 @@
     state.mapaFiltroProjeto = filtroProjetoId || 'all';
     state.mapaFiltroStatus = 'all';
     state.mapaFiltroEscopo = 'all';
+    state.mapaFiltroGeo = 'all';
     state.mapaFiltroRegiao = '';
     state.mapaFiltroNumeroLocal = '';
     state.mapaFilaIA = [];
@@ -4506,6 +4672,7 @@
       grupoId:row.grupo_id||null, createdBy:row.created_by, posicionadoMarcacaoId:row.posicionado_marcacao_id||null,
       planejamentoServicoId:row.planejamento_servico_id||null,
       motivoPendencia:row.motivo_pendencia||'sem_geocodificacao',
+      geoCoordOriginal:row.geo_coord_original||null, geoDetalhe:row.geo_detalhe||'',
       createdAt:row.created_at, updatedAt:row.updated_at
     };
   }
@@ -4837,10 +5004,13 @@
             numero_servico: d.f.numeroLocal||null, status: 'parado',
             observacao: 'Posição aproximada: distribuída ao longo da rua traçada, na ordem dos PVs'+(pl.trecho ? ' ('+pl.trecho+')' : '')+'. Confirme em campo.',
             geom: d.geom, catalogo_item_id: d.f.catalogoItemId || null, foto: null,
-            created_by: uid, created_by_nome: uidNome
+            created_by: uid, created_by_nome: uidNome,
+            geo_status:'aproximada_endereco', geo_metodo:'tracado_rua', geo_crs:'WGS84 (clique no mapa)',
+            geo_coord_original: d.f.geoCoordOriginal || null,
+            geo_detalhe: ('Posição APROXIMADA: distribuída ao longo de "'+ativa.endereco+'" traçada manualmente'+geoAgoraTxt()+', na ordem dos PVs — não é a coordenada do projeto. '+(d.f.geoDetalhe||'')).slice(0,2000)
           }, pl);
         });
-        supabaseClient.from('mapa_marcacoes').insert(rows).select().then(function(res){
+        geoInsert('mapa_marcacoes', rows).then(function(res){
           if(res.error){ toast('Erro ao posicionar a rua: '+res.error.message,'error'); return; }
           var criadas = res.data||[];
           Promise.all(criadas.map(function(m){
@@ -4848,7 +5018,7 @@
             if(!d) return Promise.resolve();
             return supabaseClient.from('mapa_fila_ia').update({ status:'posicionado', posicionado_marcacao_id: m.id }).eq('id', d.f.id).then(function(){
               var p0 = d.geom && d.geom[0];
-              return p0 ? supabaseClient.from('planejamento_servicos').update({ latitude:p0.lat, longitude:p0.lng }).eq('id', d.f.planejamentoServicoId) : null;
+              return p0 ? geoUpdate('planejamento_servicos', { latitude:p0.lat, longitude:p0.lng, geo_status:'aproximada_endereco', geo_metodo:'tracado_rua', geo_detalhe:'Posição aproximada (rua traçada no mapa)'+geoAgoraTxt()+'.' }, function(q){ return q.eq('id', d.f.planejamentoServicoId); }) : null;
             });
           })).then(function(){
             toast(criadas.length+' serviço(s) posicionado(s) ao longo de '+ativa.endereco+' (posição aproximada).','ok');
@@ -4864,7 +5034,7 @@
     var item = (state.mapaFilaIA||[]).find(function(f){ return f.id===id; });
     if(!item) return;
     if(item.geom && item.geom.length){
-      abrirModalMarcacao({ tipo:item.tipoSugerido, geom:item.geom, catalogoItemId:item.catalogoItemId, rua:item.endereco, numeroServico:item.numeroLocal, observacao:item.observacoes, filaId:item.id });
+      abrirModalMarcacao({ tipo:item.tipoSugerido, geom:item.geom, catalogoItemId:item.catalogoItemId, rua:item.endereco, numeroServico:item.numeroLocal, observacao:item.observacoes, filaId:item.id, geoDaFila:true });
       return;
     }
     state.mapaMode = item.tipoSugerido==='ramal' ? 'ramal' : 'pv';
@@ -4907,9 +5077,11 @@
           obra_id: obraId, tipo: item.tipoSugerido, rua: item.endereco||null, nome_local: null,
           numero_servico: item.numeroLocal||null, status: 'parado', observacao: item.observacoes||null,
           geom: item.geom, catalogo_item_id: item.catalogoItemId||null, foto: null,
-          created_by: uid, created_by_nome: uidNome
+          created_by: uid, created_by_nome: uidNome,
+          geo_status:'pendente', geo_metodo:null, geo_crs:null, geo_coord_original:item.geoCoordOriginal||null,
+          geo_detalhe:('Coordenada vinda da fila de posicionamento (análise anterior), não conferida. '+(item.geoDetalhe||'')).slice(0,2000)
         };
-        return supabaseClient.from('mapa_marcacoes').insert(payload).select().then(function(res){
+        return geoInsert('mapa_marcacoes', payload).then(function(res){
           if(res.error || !res.data || !res.data[0]){ falhaCount++; if(res.error) console.error('Erro ao converter item da fila:', res.error.message); return; }
           var novaId = res.data[0].id;
           return supabaseClient.from('mapa_fila_ia').update({ status:'posicionado', posicionado_marcacao_id: novaId }).eq('id', item.id).then(function(){ okCount++; });
@@ -4922,10 +5094,28 @@
       });
     });
   }
+  var MAPA_FILA_MOTIVO_LABEL = {
+    ambiguo:'dado ambíguo', endereco_incompleto:'endereço incompleto',
+    conflito:'coordenadas do projeto em conflito', sem_coordenada:'sem coordenada legível no projeto',
+    crs_desconhecido:'sistema de referência não identificado', coord_invalida:'coordenada inválida'
+  };
   function mapaFilaMotivoBadgeHtml(f){
-    if(f.motivoPendencia==='ambiguo') return '<span class="tag-example" style="background:#FFE0E0;color:#a33;">⚠ dado ambíguo</span>';
-    if(f.motivoPendencia==='endereco_incompleto') return '<span class="tag-example" style="background:#FFE0E0;color:#a33;">⚠ endereço incompleto</span>';
-    return '';
+    var t = MAPA_FILA_MOTIVO_LABEL[f.motivoPendencia];
+    return t ? '<span class="tag-example" style="background:#FFE0E0;color:#a33;">⚠ '+esc(t)+'</span>' : '';
+  }
+  // Coordenadas lidas do PDF para o item da fila (inclusive as que não
+  // conferem), para a pessoa decidir onde posicionar.
+  function mapaFilaLeiturasHtml(f){
+    var orig = Array.isArray(f.geoCoordOriginal) ? f.geoCoordOriginal : [];
+    if(!orig.length) return '';
+    return '<details style="margin-top:3px;font-size:11.5px;"><summary style="cursor:pointer;color:var(--steel);">Ver coordenadas lidas do projeto ('+orig.length+')</summary>'+
+      '<div style="display:flex;flex-direction:column;gap:2px;margin-top:3px;font-variant-numeric:tabular-nums;">'+
+      orig.map(function(o){
+        var base = esc(o.ponto||o.ref||'')+(o.estaca?' · est. '+esc(o.estaca):'')+(o.E!=null?' · E '+geoFmtNum(o.E,4)+' N '+geoFmtNum(o.N,4):'')+(o.pagina!=null?' · pág. '+esc(String(o.pagina)):'')+' · '+esc((GEO_STATUS_INFO[o.status]||{}).label||o.status||'');
+        var desc = (o.descartadas||[]).map(function(d){ return '<span style="color:var(--muted);">outra leitura: E '+geoFmtNum(d.E,4)+' N '+geoFmtNum(d.N,4)+'</span>'; }).join(' ');
+        return '<span>'+base+(desc?' — '+desc:'')+'</span>';
+      }).join('')+
+      '</div></details>';
   }
   function renderMapaFilaIA(){
     var root = document.getElementById('mapaFilaIACard');
@@ -4935,7 +5125,7 @@
     // "Revisar locais" (requisito 16): tela de EXCEÇÃO que mostra só os
     // registros com dado ambíguo/incompleto, reaproveitando esta mesma
     // fila/UI em vez de criar uma tela nova do zero.
-    var fila = modoRevisar ? filaTodas.filter(function(f){ return f.motivoPendencia==='ambiguo' || f.motivoPendencia==='endereco_incompleto'; }) : filaTodas;
+    var fila = modoRevisar ? filaTodas.filter(function(f){ return f.motivoPendencia && f.motivoPendencia!=='sem_geocodificacao'; }) : filaTodas;
     var modoAtivoHtml = '';
     if(state.mapaRuaAtiva){
       modoAtivoHtml = '<div class="hint" style="background:var(--surface-2,#f5f5f0);padding:8px 10px;border-radius:8px;margin-bottom:10px;">Traçando <b>'+esc(state.mapaRuaAtiva.endereco)+'</b>: clique no mapa ao longo da rua, do começo ao fim, e depois em "Concluir rua". <button type="button" class="btn ghost sm" id="btnCancelarFilaPosicionar" style="margin-left:6px;">Cancelar</button></div>';
@@ -4949,7 +5139,7 @@
     var listaHtml = !fila.length ? '' : (ruasHtml+'<div class="table-wrap" style="margin-top:10px;"><table class="fin-list"><thead><tr><th>Serviço</th><th>Endereço/Local</th><th>Tipo</th><th></th></tr></thead><tbody>'+
       fila.map(function(f){
         return '<tr data-id="'+f.id+'">'+
-          '<td>'+esc(f.servicoTexto)+' '+mapaFilaMotivoBadgeHtml(f)+(f.observacoes?'<div style="color:var(--steel);font-size:11.5px;">'+esc(f.observacoes)+'</div>':'')+'</td>'+
+          '<td>'+esc(f.servicoTexto)+' '+mapaFilaMotivoBadgeHtml(f)+(f.observacoes?'<div style="color:var(--steel);font-size:11.5px;">'+esc(f.observacoes)+'</div>':'')+mapaFilaLeiturasHtml(f)+'</td>'+
           '<td>'+esc(f.endereco||'—')+(f.numeroLocal?', nº '+esc(f.numeroLocal):'')+'</td>'+
           '<td>'+(f.tipoSugerido==='ramal'?'Ramal':'PV')+(f.geom&&f.geom.length?' · coordenada do projeto':'')+'</td>'+
           '<td style="text-align:right;">'+
@@ -4962,7 +5152,7 @@
     root.innerHTML =
       (modoRevisar ?
         ('<h2 style="font-size:15px;color:#a33;">⚠ Revisar locais ('+fila.length+')</h2>'+
-         '<p class="hint" style="margin:4px 0 10px;">Locais com dado ambíguo ou incompleto na extração automática — confirme/corrija endereço e serviço antes de posicionar no mapa.</p>'+
+         '<p class="hint" style="margin:4px 0 10px;">Locais com dado ambíguo/incompleto ou com coordenada do projeto em conflito, ilegível ou sem sistema de referência — nada disso foi colocado no mapa. Confira no PDF e posicione manualmente.</p>'+
          '<button type="button" class="btn ghost sm" id="btnVoltarFilaCompleta">← Ver fila completa</button>')
         :
         ('<h2 style="font-size:15px;">Locais extraídos por IA</h2>'+
@@ -5049,6 +5239,8 @@
           '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-amarelo);"></span>Em andamento</span>'+
           '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-vermelho);"></span>Pendente</span>'+
           '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-verde);"></span>Concluído</span>'+
+          '<span class="map-legend-item" title="Coordenada do projeto ainda não conferida"><span class="map-legend-dot" style="background:#fff;border:2px dashed #14130F;"></span>? a validar</span>'+
+          '<span class="map-legend-item" title="Posição pelo nome da rua, não é a coordenada do projeto"><span class="map-legend-dot" style="background:#fff;border:2px dashed #14130F;"></span>≈ aproximada</span>'+
         '</div>';
       content.innerHTML =
         '<h1 style="margin-bottom:2px;">'+esc(obra.nome)+'</h1>'+
@@ -5080,6 +5272,12 @@
             '<option value="contratado">Contratados</option>'+
             '<option value="aparte">À parte</option>'+
           '</select>'+
+          '<label style="font-size:13px;color:var(--muted);">Localização:</label><select id="mapaFiltroGeo" style="max-width:170px;">'+
+            '<option value="all">Todas</option>'+
+            '<option value="confirmada">Confirmadas</option>'+
+            '<option value="avalidar">A validar (? / ≈)</option>'+
+            '<option value="problema">Com problema (!)</option>'+
+          '</select>'+
           '<label style="font-size:13px;color:var(--muted);">Região/endereço:</label><input type="text" id="mapaFiltroRegiao" placeholder="Ex: Rua das Flores" style="max-width:160px;">'+
           '<label style="font-size:13px;color:var(--muted);">Nº do local:</label><input type="text" id="mapaFiltroNumeroLocal" placeholder="Ex: 100" style="max-width:90px;">'+
         '</div>'+
@@ -5109,6 +5307,15 @@
         selStatus.value = state.mapaFiltroStatus || 'all';
         selStatus.addEventListener('change', function(){
           state.mapaFiltroStatus = selStatus.value;
+          renderMapaMarkersOnMap();
+          renderMapaMarcacoesList();
+        });
+      }
+      var selGeo = document.getElementById('mapaFiltroGeo');
+      if(selGeo){
+        selGeo.value = state.mapaFiltroGeo || 'all';
+        selGeo.addEventListener('change', function(){
+          state.mapaFiltroGeo = selGeo.value;
           renderMapaMarkersOnMap();
           renderMapaMarcacoesList();
         });
@@ -5414,7 +5621,8 @@
   function mapaPinLabelHtml(m){
     var principal = esc(m.rua || m.nomeLocal || '(sem endereço)');
     var numero = m.numeroServico ? ('<span class="num">Nº '+esc(m.numeroServico)+'</span>') : '';
-    return '<b>'+principal+'</b>'+(numero?(' '+numero):'');
+    var gi = geoNaoConfirmada(m) ? GEO_STATUS_INFO[m.geoStatus] : null;
+    return '<b>'+(gi&&gi.badge?esc(gi.badge)+' ':'')+principal+'</b>'+(numero?(' '+numero):'')+(gi?' <span class="num">('+esc(gi.label)+')</span>':'');
   }
 
   // Filtros do Mapeamento (projeto / status / tipo de serviço / região /
@@ -5425,6 +5633,10 @@
     if(state.mapaFiltroProjeto && state.mapaFiltroProjeto!=='all' && m.projetoId!==state.mapaFiltroProjeto) return false;
     if(state.mapaFiltroEscopo && state.mapaFiltroEscopo!=='all' && mapaEscopoMarcacao(m)!==state.mapaFiltroEscopo) return false;
     if(state.mapaFiltroStatus && state.mapaFiltroStatus!=='all' && (m.status||'processando')!==state.mapaFiltroStatus) return false;
+    if(state.mapaFiltroGeo && state.mapaFiltroGeo!=='all'){
+      var gf = geoProblema(m) ? 'problema' : (geoNaoConfirmada(m) ? 'avalidar' : 'confirmada');
+      if(gf!==state.mapaFiltroGeo) return false;
+    }
     if(state.mapaFiltroRegiao){
       var alvo = normalizarTextoBusca(state.mapaFiltroRegiao);
       var campo = normalizarTextoBusca((m.rua||'')+' '+(m.nomeLocal||''));
@@ -5513,7 +5725,8 @@
     var svc = mapaServicoDaMarcacao(m);
     var nome = svc ? svc.servicoNome : (m.observacao||'');
     var trecho = svc && svc.trecho ? (' ['+svc.trecho+']') : '';
-    return '<b>À parte · '+esc(topico.nome)+'</b><br>'+esc(nome+trecho)+'<br><span style="opacity:.8;">'+esc(m.rua||m.nomeLocal||'(sem endereço)')+' · '+esc(statusMapLabel(m.status))+'</span>';
+    var gi = geoNaoConfirmada(m) ? GEO_STATUS_INFO[m.geoStatus] : null;
+    return '<b>À parte · '+esc(topico.nome)+'</b><br>'+esc(nome+trecho)+'<br><span style="opacity:.8;">'+esc(m.rua||m.nomeLocal||'(sem endereço)')+' · '+esc(statusMapLabel(m.status))+'</span>'+(gi?'<br><span>'+esc(gi.badge+' '+gi.label)+'</span>':'');
   }
   function renderMapaLegendaAparte(usados){
     var el = document.getElementById('mapaLegendaAparte');
@@ -5533,12 +5746,18 @@
   // grupo, mantendo o comportamento de hoje. Um "ramal" de verdade (2+
   // pontos, desenhado manualmente como trecho) nunca entra aqui — continua
   // desenhado como polilinha, à parte.
+  // Um círculo por PONTO no mapa (coordenada arredondada a 0,1 m), e não
+  // mais por endereço: serviços da mesma rua em PVs diferentes ficam cada
+  // um no seu lugar. Só serviços exatamente no mesmo ponto dividem o
+  // círculo (agrupamento visual — cada marcação continua separada no banco).
   function mapaAgruparMarcacoesPorLocal(lista){
     var grupos = [];
     var porChave = {};
     lista.forEach(function(m){
       if(!(m.geom && m.geom.length===1)) return;
-      var chave = m.localKey || ('__sem_chave__'+m.id);
+      var p = m.geom[0];
+      if(!p || typeof p.lat!=='number' || typeof p.lng!=='number' || !isFinite(p.lat) || !isFinite(p.lng)) return;
+      var chave = Number(p.lat).toFixed(6)+','+Number(p.lng).toFixed(6);
       if(!porChave[chave]){
         var g = { key:chave, items:[], lat:m.geom[0].lat, lng:m.geom[0].lng, rua:m.rua, nomeLocal:m.nomeLocal, numeroServico:m.numeroServico };
         porChave[chave] = g;
@@ -5550,6 +5769,9 @@
     grupos.forEach(function(g, i){
       g.numero = String(i+1).padStart(3,'0');
       g.status = statusAgregadoPiorVence(g.items.map(function(x){ return x.status||'processando'; }));
+      var ruim = g.items.find(geoProblema), ncItem = g.items.find(geoNaoConfirmada);
+      g.geoBadge = ruim ? '!' : (ncItem ? ((GEO_STATUS_INFO[ncItem.geoStatus]||{}).badge||'?') : '');
+      g.geoRuim = !!ruim;
     });
     return grupos;
   }
@@ -5571,14 +5793,16 @@
       var color = statusMapColor(g.status);
       var light = shadeColor(color, 35);
       var circleHtml = '<div class="map-circle-wrap">'+
-        '<div class="map-circle'+(g.items.length>1?' is-grupo':'')+'" style="background:radial-gradient(circle at 35% 28%, '+light+', '+color+' 60%, '+shadeColor(color,-25)+' 100%);">'+g.numero+'</div>'+
+        '<div class="map-circle'+(g.items.length>1?' is-grupo':'')+(g.geoBadge?' geo-nc':'')+'" style="background:radial-gradient(circle at 35% 28%, '+light+', '+color+' 60%, '+shadeColor(color,-25)+' 100%);">'+g.numero+'</div>'+
+        (g.geoBadge ? '<span class="map-geo-badge'+(g.geoRuim?' ruim':'')+'">'+esc(g.geoBadge)+'</span>' : '')+
       '</div>';
       var icon = L.divIcon({ className:'', html:circleHtml, iconSize:[26,26], iconAnchor:[13,13] });
       var marker = L.marker([g.lat, g.lng], { icon: icon }).addTo(mapaLayerGroup);
       var principal = esc(g.nomeLocal || g.rua || '(sem endereço)');
       var numeroTxt = g.numeroServico ? (' <span class="num">Nº '+esc(g.numeroServico)+'</span>') : '';
       var qtdTxt = g.items.length>1 ? (' <span class="num">('+g.items.length+' serviços)</span>') : '';
-      marker.bindTooltip('<b>○ '+g.numero+' — '+principal+'</b>'+numeroTxt+qtdTxt, { permanent:true, direction:'top', offset:[0,-16], className:'map-pin-label', interactive:false });
+      var geoTxt = g.geoBadge ? (' <span class="num">'+esc(g.geoBadge)+' '+esc(g.geoRuim ? 'sem posição confiável' : ((GEO_STATUS_INFO[(g.items.find(geoNaoConfirmada)||{}).geoStatus]||{}).label||''))+'</span>') : '';
+      marker.bindTooltip('<b>○ '+g.numero+' — '+principal+'</b>'+numeroTxt+qtdTxt+geoTxt, { permanent:true, direction:'top', offset:[0,-16], className:'map-pin-label', interactive:false });
       marker.on('click', function(){ abrirModalMarcacao(g.items[0]); });
       var itemComFoto = g.items.find(function(x){ return x.foto && x.status!=='processando'; });
       if(itemComFoto){
@@ -5596,7 +5820,7 @@
       var tubeDark = shadeColor(color, -35);
       var tubeLight = shadeColor(color, 45);
       L.polyline(latlngs, { color: tubeDark, weight:9, opacity:0.92, lineCap:'round', lineJoin:'round', interactive:false }).addTo(mapaLayerGroup);
-      var line = L.polyline(latlngs, { color: tubeLight, weight:3, opacity:0.95, lineCap:'round', lineJoin:'round' }).addTo(mapaLayerGroup);
+      var line = L.polyline(latlngs, { color: tubeLight, weight:3, opacity:0.95, lineCap:'round', lineJoin:'round', dashArray: geoNaoConfirmada(m) ? '5 6' : null }).addTo(mapaLayerGroup);
       line.bindTooltip(mapaPinLabelHtml(m), { permanent:true, direction:'center', className:'map-pin-label', interactive:false });
       line.on('click', function(){ abrirModalMarcacao(m); });
       if(m.foto && m.status!=='processando'){
@@ -5674,7 +5898,7 @@
       return '<div class="marcacao-row" data-id="'+m.id+'">'+
         (m.nomeLocal ? '<span class="rua" style="font-weight:700;">'+esc(m.nomeLocal)+'</span>' : '')+
         '<span class="rua"'+(m.nomeLocal?' style="color:var(--muted);font-weight:400;"':'')+'>'+esc(m.rua||'(sem rua informada)')+'</span>'+
-        '<span class="tag-example" style="background:transparent;">'+(m.tipo==='pv'?'PV':'Ramal')+'</span>'+escopoChipHtml(mapaEscopoMarcacao(m))+
+        '<span class="tag-example" style="background:transparent;">'+(m.tipo==='pv'?'PV':'Ramal')+'</span>'+escopoChipHtml(mapaEscopoMarcacao(m))+(m.geoStatus?geoChipHtml(m.geoStatus):'')+
         (m.numeroServico?'<span class="tag-example" style="background:transparent;">Nº '+esc(m.numeroServico)+'</span>':'')+
         '<select class="status-select" data-statusid="'+m.id+'">'+
           '<option value="processando"'+(m.status==='processando'?' selected':'')+'>Em andamento</option>'+
@@ -5820,7 +6044,16 @@
     // só para marcações antigas que ainda não têm local_key preenchida.
     var servicosRelacionados = [];
     var svcAtual = m.planejamentoServicoId ? (state.planejamentoServicos||[]).find(function(x){ return x.id===m.planejamentoServicoId; }) : null;
-    if(m.localKey){
+    var p0Modal = (isEdit && m.geom && m.geom.length===1) ? m.geom[0] : null;
+    if(p0Modal){
+      // Serviços NESTE PONTO (mesma coordenada) — não a rua inteira.
+      var chaveP = Number(p0Modal.lat).toFixed(6)+','+Number(p0Modal.lng).toFixed(6);
+      var idsNoPonto = {};
+      (state.mapaMarcacoes||[]).forEach(function(x){
+        if(x.id!==m.id && x.planejamentoServicoId && x.geom && x.geom.length===1 && (Number(x.geom[0].lat).toFixed(6)+','+Number(x.geom[0].lng).toFixed(6))===chaveP) idsNoPonto[x.planejamentoServicoId] = true;
+      });
+      servicosRelacionados = (state.planejamentoServicos||[]).filter(function(x){ return idsNoPonto[x.id] && (!svcAtual || x.id!==svcAtual.id); });
+    } else if(m.localKey){
       servicosRelacionados = (state.planejamentoServicos||[]).filter(function(x){
         return x.obraId===obraIdAtual && x.localKey===m.localKey && (!svcAtual || x.id!==svcAtual.id);
       });
@@ -5831,7 +6064,7 @@
       });
     }
     var servicosRelacionadosHtml = servicosRelacionados.length ?
-      ('<div class="field" style="margin-bottom:14px;"><label>Serviços previstos neste local ('+servicosRelacionados.length+')</label>'+
+      ('<div class="field" style="margin-bottom:14px;"><label>Outros serviços '+(p0Modal?'neste ponto':'previstos neste local')+' ('+servicosRelacionados.length+')</label>'+
         '<div class="hint" style="margin:4px 0 0;display:flex;flex-direction:column;gap:4px;">'+
           servicosRelacionados.map(function(x){
             return '<span>'+planejamentoEscopoChipHtml(x)+(x.codigo?esc(x.codigo)+' — ':'')+esc(x.servicoNome)+' · '+fmtQtd(x.quantidadePrevista)+' '+esc(x.unidade||'')+(x.profundidade!=null?' · prof. '+fmtQtd(x.profundidade)+'m':'')+' · '+esc(x.status)+'</span>';
@@ -5867,6 +6100,7 @@
         projetoOrigemHtml+
         escopoMarcacaoHtml+
         camposIdentificacao+
+        geoOrigemHtml(m)+
         '<div class="field" style="margin-bottom:10px;"><label>Status</label>'+
           '<select id="marcStatus">'+
             '<option value="processando"'+((m.status||'processando')==='processando'?' selected':'')+'>Em andamento</option>'+
@@ -5906,6 +6140,7 @@
       if(act==='cancel'){ wrap.remove(); return; }
       if(act==='verprojeto'){ if(!projetoOrigem) return; wrap.remove(); abrirPlanejamentoObraPorId(obraIdAtual); return; }
       if(act==='del'){ if(!canGestao) return; wrap.remove(); excluirMarcacao(m.id); return; }
+      if(act==='geoconfirmar'){ if(!canGestao) return; wrap.remove(); confirmarPosicaoEmCampo(m); return; }
       if(act==='fotoremove'){
         marcFotoAtual = '';
         var pv = document.getElementById('marcFotoPreviewWrap');
@@ -5923,7 +6158,7 @@
         var foto = marcFotoAtual || null;
         wrap.remove();
         if(isEdit){ atualizarMarcacao(m.id, { rua:rua, nomeLocal:nomeLocal, numeroServico:numeroServico, catalogoItemId:catalogoItemId, status:status, observacao:obs, foto:foto }); }
-        else { criarMarcacao({ tipo:m.tipo, geom:m.geom, rua:rua, nomeLocal:nomeLocal, numeroServico:numeroServico, catalogoItemId:catalogoItemId, status:status, observacao:obs, foto:foto, filaId:m.filaId }); }
+        else { criarMarcacao({ tipo:m.tipo, geom:m.geom, rua:rua, nomeLocal:nomeLocal, numeroServico:numeroServico, catalogoItemId:catalogoItemId, status:status, observacao:obs, foto:foto, filaId:m.filaId, geoDaFila:!!m.geoDaFila }); }
       }
     });
     setTimeout(function(){ var el=document.getElementById(canGestao?'marcRua':'marcStatus'); if(el) el.focus(); }, 0);
@@ -5940,6 +6175,8 @@
     payload.local_key = plano.local_key || null;
     if('escopo' in plano) payload.escopo = plano.escopo || null;
     if(!payload.catalogo_item_id && plano.catalogo_item_id) payload.catalogo_item_id = plano.catalogo_item_id;
+    if(plano.pagina_projeto!=null && payload.pagina_projeto==null) payload.pagina_projeto = plano.pagina_projeto;
+    if(!payload.geo_coord_original && plano.geo_coord_original) payload.geo_coord_original = plano.geo_coord_original;
     return payload;
   }
   function buscarPlanosPorIds(ids){
@@ -5965,11 +6202,18 @@
       created_by_nome: state.currentUser ? state.currentUser.nome : null
     };
     var filaItem = vals.filaId ? (state.mapaFilaIA||[]).find(function(f){ return f.id===vals.filaId; }) : null;
+    // Origem: clique da pessoa no mapa = "manual". Coordenada que já veio
+    // pronta na fila (análise antiga) e só foi confirmada no modal = "pendente".
+    var geoNovo = vals.geoDaFila ?
+      { geo_status:'pendente', geo_metodo:null, geo_crs:null, geo_coord_original:(filaItem&&filaItem.geoCoordOriginal)||null,
+        geo_detalhe:('Coordenada vinda da fila de posicionamento (análise anterior), não conferida. '+((filaItem&&filaItem.geoDetalhe)||'')).slice(0,2000) } :
+      geoCamposManual(filaItem && filaItem.geoDetalhe ? 'Motivo da pendência original: '+filaItem.geoDetalhe : '', filaItem && filaItem.geoCoordOriginal);
+    Object.keys(geoNovo).forEach(function(k){ payload[k] = geoNovo[k]; });
     var preparo = (filaItem && filaItem.planejamentoServicoId) ? buscarPlanosPorIds([filaItem.planejamentoServicoId]) : Promise.resolve([]);
     preparo.then(function(planos){
       var plano = planos[0] || null;
       aplicarVinculoPlano(payload, plano);
-      return supabaseClient.from('mapa_marcacoes').insert(payload).select().then(function(res){
+      return geoInsert('mapa_marcacoes', payload).then(function(res){
         if(res.error){ toast('Erro ao salvar marcação: '+res.error.message,'error'); return; }
         toast('Marcação salva.','ok');
         if(vals.filaId){
@@ -5977,10 +6221,10 @@
           supabaseClient.from('mapa_fila_ia').update({ status:'posicionado', posicionado_marcacao_id: novaMarcacaoId||null }).eq('id', vals.filaId).then(function(){ loadMapaFilaIA(state.mapaObraId); });
         }
         if(plano && vals.geom && vals.geom[0]){
-          supabaseClient.from('planejamento_servicos').update({ latitude: vals.geom[0].lat, longitude: vals.geom[0].lng }).eq('id', plano.id).then(function(){});
+          geoUpdate('planejamento_servicos', { latitude: vals.geom[0].lat, longitude: vals.geom[0].lng, geo_status: geoNovo.geo_status, geo_metodo: geoNovo.geo_metodo, geo_crs: geoNovo.geo_crs, geo_detalhe: geoNovo.geo_detalhe }, function(q){ return q.eq('id', plano.id); }).then(function(){});
         }
         loadMapaMarcacoes(state.mapaObraId);
-        if(filaItem && plano) oferecerReplicarNoLocal(filaItem, vals);
+        if(filaItem && plano){ vals.geoOrigem = geoNovo; oferecerReplicarNoLocal(filaItem, vals); }
       });
     });
   }
@@ -6014,10 +6258,15 @@
             obra_id: state.mapaObraId, tipo: tipoDesenhado, rua: f.endereco||null, nome_local: null,
             numero_servico: f.numeroLocal||null, status: vals.status || 'processando',
             observacao: f.observacoes || null, geom: vals.geom, catalogo_item_id: f.catalogoItemId || null,
-            foto: null, created_by: uid, created_by_nome: uidNome
+            foto: null, created_by: uid, created_by_nome: uidNome,
+            geo_status: (vals.geoOrigem && vals.geoOrigem.geo_status) || 'manual',
+            geo_metodo: (vals.geoOrigem && vals.geoOrigem.geo_metodo) || 'manual',
+            geo_crs: (vals.geoOrigem && vals.geoOrigem.geo_crs) || null,
+            geo_coord_original: f.geoCoordOriginal || null,
+            geo_detalhe: ('Mesma posição aplicada manualmente a partir de "'+(origem.servicoTexto||'outro serviço')+'" do mesmo endereço'+geoAgoraTxt()+'.').slice(0,2000)
           }, planoPorId[f.planejamentoServicoId]);
         });
-        supabaseClient.from('mapa_marcacoes').insert(rows).select().then(function(res){
+        geoInsert('mapa_marcacoes', rows).then(function(res){
           if(res.error){ toast('Erro ao posicionar os outros serviços: '+res.error.message,'error'); return; }
           var criadas = res.data||[];
           Promise.all(criadas.map(function(m){
@@ -6025,7 +6274,7 @@
             return f ? supabaseClient.from('mapa_fila_ia').update({ status:'posicionado', posicionado_marcacao_id: m.id }).eq('id', f.id) : Promise.resolve();
           })).then(function(){
             if(vals.geom && vals.geom[0]){
-              supabaseClient.from('planejamento_servicos').update({ latitude: vals.geom[0].lat, longitude: vals.geom[0].lng }).in('id', itens.map(function(f){ return f.planejamentoServicoId; })).then(function(){});
+              geoUpdate('planejamento_servicos', { latitude: vals.geom[0].lat, longitude: vals.geom[0].lng, geo_status: (vals.geoOrigem && vals.geoOrigem.geo_status) || 'manual', geo_metodo: (vals.geoOrigem && vals.geoOrigem.geo_metodo) || 'manual' }, function(q){ return q.in('id', itens.map(function(f){ return f.planejamentoServicoId; })); }).then(function(){});
             }
             toast(criadas.length+' serviço(s) posicionado(s) no mesmo local.','ok');
             loadMapaFilaIA(state.mapaObraId);
