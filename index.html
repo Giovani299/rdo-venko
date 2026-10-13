@@ -1562,7 +1562,7 @@
     var btn = e.target.closest('.tab-btn'); if(!btn) return;
     var view = btn.getAttribute('data-view');
     if(view==='users' && !(state.currentUser && state.currentUser.is_admin)) return;
-    if((view==='financeiro'||view==='financeiro-obra') && !financeiroCanAccess()) return;
+    if(view==='financeiro'||view==='financeiro-obra'||view==='tabelaprecos') return;   // módulos retirados do menu
     if(view==='obras' && !(state.currentUser && (state.currentUser.is_admin || state.currentUser.acesso_obras !== false))) return;
     if((view==='mapa'||view==='mapa-obra') && !obrasCanAccess()) return;
     if(view==='clientes' && !obrasGestaoCanAccess()) return;
@@ -1882,8 +1882,9 @@
           state.currentUser = fresh;
           updateUserBox();
           document.getElementById('tabUsers').style.display = fresh.is_admin ? '' : 'none';
-          document.getElementById('tabFinanceiro').style.display = (fresh.is_admin || fresh.acesso_financeiro) ? '' : 'none';
-          document.getElementById('tabTabelaPrecos').style.display = (fresh.is_admin || fresh.acesso_financeiro) ? '' : 'none';
+          // Abas Financeiro e Tabela de Preços retiradas do menu (não usadas pela Venko).
+          document.getElementById('tabFinanceiro').style.display = 'none';
+          document.getElementById('tabTabelaPrecos').style.display = 'none';
           document.getElementById('tabObras').style.display = (fresh.is_admin || fresh.acesso_obras !== false) ? '' : 'none';
           document.getElementById('tabMapa').style.display = (fresh.is_admin || fresh.acesso_obras !== false) ? '' : 'none';
           document.getElementById('tabPlanejamento').style.display = (fresh.is_admin || fresh.acesso_planejamento) ? '' : 'none';
@@ -2203,8 +2204,9 @@
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = '';
     document.getElementById('tabUsers').style.display = profile.is_admin ? '' : 'none';
-    document.getElementById('tabFinanceiro').style.display = (profile.is_admin || profile.acesso_financeiro) ? '' : 'none';
-    document.getElementById('tabTabelaPrecos').style.display = (profile.is_admin || profile.acesso_financeiro) ? '' : 'none';
+    // Abas Financeiro e Tabela de Preços retiradas do menu (não usadas pela Venko).
+    document.getElementById('tabFinanceiro').style.display = 'none';
+    document.getElementById('tabTabelaPrecos').style.display = 'none';
     document.getElementById('tabObras').style.display = (profile.is_admin || profile.acesso_obras !== false) ? '' : 'none';
     document.getElementById('tabMapa').style.display = (profile.is_admin || profile.acesso_obras !== false) ? '' : 'none';
     document.getElementById('tabPlanejamento').style.display = (profile.is_admin || profile.acesso_planejamento) ? '' : 'none';
