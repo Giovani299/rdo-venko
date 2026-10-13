@@ -4705,6 +4705,161 @@
       loadMapaFilaIA(state.mapaObraId);
     });
   }
+  /* ---------------- Posicionar a rua toda (Mapeamento) ----------------
+     Quando o geocodificador não acha a rua, em vez de marcar item por item o usuário traça a rua UMA vez
+     e o sistema distribui os poços (PV) e trechos ao longo do traço, na ordem dos PVs. A posição é
+     APROXIMADA (fica escrito na observação de cada marcação) — o traço da rua vem do usuário. */
+  function mapaFilaRuasPendentes(fila){
+    var grupos = {};
+    (fila||[]).forEach(function(f){
+      if(f.status!=='pendente' || (f.geom && f.geom.length) || !f.planejamentoServicoId || !f.endereco) return;
+      var k = normalizarEnderecoServico(f.endereco, '');
+      (grupos[k] = grupos[k] || { key:k, endereco:f.endereco, itens:[] }).itens.push(f);
+    });
+    return Object.keys(grupos).map(function(k){ return grupos[k]; }).filter(function(g){ return g.itens.length>=2; });
+  }
+  function mapaFilaRuasHtml(fila){
+    var gs = mapaFilaRuasPendentes(fila);
+    if(!gs.length) return '';
+    return '<div style="margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;">'+
+      '<b>Posicionar a rua toda</b>'+
+      '<p class="hint" style="margin:4px 0 8px;">Trace a rua no mapa uma vez só: o sistema distribui os poços e trechos ao longo dela, na ordem dos PVs. A posição fica marcada como aproximada.</p>'+
+      gs.map(function(g){
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0;flex-wrap:wrap;">'+
+          '<span>'+esc(g.endereco)+' · '+g.itens.length+' itens</span>'+
+          '<button type="button" class="btn primary sm" data-rua-tracar="'+esc(g.key)+'">Traçar rua</button></div>';
+      }).join('')+'</div>';
+  }
+  function iniciarTracadoRua(key){
+    var g = mapaFilaRuasPendentes(state.mapaFilaIA).find(function(x){ return x.key===key; });
+    if(!g) return;
+    state.mapaMode = 'ramal'; state.mapaFilaAtivaId = null; state.mapaDesenhoCatalogoItemId = null;
+    state.mapaRuaAtiva = { key:key, endereco:g.endereco };
+    state.mapaRamalPoints = [];
+    if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
+    updateMapaModeUI();
+    renderMapaFilaIA();
+    toast('Clique no mapa ao longo de '+g.endereco+', do começo ao fim da rua, e depois em "Concluir rua".', 'ok');
+  }
+  // "PV-1 AO PV-2" -> ['PV-1','PV-2']; texto sem referência de ponto -> []
+  function ruaNosDoTrecho(txt){
+    var t = String(txt||'').toUpperCase().replace(/\s+/g,' ').trim();
+    if(!t) return [];
+    var partes = t.split(/\s+AO\s+/).map(function(s){ return s.trim(); }).filter(Boolean);
+    if(!partes.length || !partes.every(function(p){ return /^(PV|PI|TL|CP)\b/.test(p); })) return [];
+    return partes;
+  }
+  function ruaNumeroDoNo(no){
+    var m = /^(?:PV|PI|TL|CP)\s*[-–._]?\s*0*(\d+)[A-Z]?$/.exec(no);
+    return m ? parseInt(m[1], 10) : null;
+  }
+  function ruaDist(a, b){
+    var dLat = (a.lat-b.lat)*111320, dLng = (a.lng-b.lng)*111320*Math.cos(((a.lat+b.lat)/2)*Math.PI/180);
+    return Math.sqrt(dLat*dLat + dLng*dLng);
+  }
+  // entradas: [{ f:itemDaFila, trecho:'PV-1 AO PV-2' }]; linha: [{lat,lng}...] traçada pelo usuário.
+  // Devolve [{ f, tipo, geom, aprox }]
+  function distribuirItensNaRua(entradas, linha){
+    var cum = [0];
+    for(var i=1;i<linha.length;i++) cum.push(cum[i-1] + ruaDist(linha[i-1], linha[i]));
+    var total = cum[cum.length-1] || 1;
+    function pontoEm(fr){
+      var d = Math.max(0, Math.min(1, fr)) * total;
+      for(var j=1;j<linha.length;j++){
+        if(d <= cum[j] || j===linha.length-1){
+          var seg = (cum[j]-cum[j-1]) || 1, t = Math.max(0, Math.min(1, (d-cum[j-1])/seg));
+          return { lat: linha[j-1].lat + (linha[j].lat-linha[j-1].lat)*t, lng: linha[j-1].lng + (linha[j].lng-linha[j-1].lng)*t };
+        }
+      }
+      return { lat: linha[0].lat, lng: linha[0].lng };
+    }
+    function subLinha(f1, f2){
+      var a = Math.min(f1,f2), b = Math.max(f1,f2), da = a*total, db = b*total;
+      var out = [pontoEm(a)];
+      for(var j=1;j<linha.length-1;j++){ if(cum[j]>da && cum[j]<db) out.push({ lat:linha[j].lat, lng:linha[j].lng }); }
+      out.push(pontoEm(b));
+      return out;
+    }
+    // ordem dos nós ao longo da rua: pelo número do PV; nós sem número (ex.: PV existente) ficam junto do vizinho numerado
+    var nos = [], arestas = [];
+    entradas.forEach(function(en){
+      var ns = ruaNosDoTrecho(en.trecho); en._nos = ns;
+      ns.forEach(function(n){ if(nos.indexOf(n)<0) nos.push(n); });
+      for(var k=1;k<ns.length;k++) arestas.push([ns[k-1], ns[k]]);
+    });
+    var numerados = nos.filter(function(n){ return ruaNumeroDoNo(n)!=null; }).sort(function(a,b){ return ruaNumeroDoNo(a)-ruaNumeroDoNo(b) || (a<b?-1:1); });
+    var ordem = numerados.slice();
+    nos.filter(function(n){ return ruaNumeroDoNo(n)==null; }).forEach(function(n){
+      var viz = [];
+      arestas.forEach(function(ar){ var o = ar[0]===n ? ar[1] : (ar[1]===n ? ar[0] : null); if(o && ordem.indexOf(o)>=0) viz.push(ordem.indexOf(o)); });
+      if(viz.length) ordem.splice(Math.min.apply(null, viz), 0, n); else ordem.push(n);
+    });
+    var N = ordem.length;
+    function frac(n){ var i = ordem.indexOf(n); return N<=1 ? 0.5 : i/(N-1); }
+    return entradas.map(function(en){
+      var f = en.f, tipo = f.tipoSugerido==='ramal' ? 'ramal' : 'pv', ns = en._nos, geom;
+      if(tipo==='pv') geom = [ ns.length ? pontoEm(frac(ns[0])) : pontoEm(0.5) ];
+      else if(ns.length>=2) geom = subLinha(frac(ns[0]), frac(ns[ns.length-1]));
+      else geom = linha.map(function(p){ return { lat:p.lat, lng:p.lng }; });
+      return { f:f, tipo:tipo, geom:geom };
+    });
+  }
+  function concluirTracadoRua(){
+    var ativa = state.mapaRuaAtiva;
+    var linha = state.mapaRamalPoints.slice();
+    if(!ativa) return;
+    if(linha.length<2){ toast('Marque pelo menos 2 pontos ao longo da rua.','error'); return; }
+    var itens = (state.mapaFilaIA||[]).filter(function(f){
+      return f.status==='pendente' && !(f.geom && f.geom.length) && f.planejamentoServicoId && f.endereco && normalizarEnderecoServico(f.endereco,'')===ativa.key;
+    });
+    state.mapaMode = null; state.mapaRamalPoints = []; state.mapaRuaAtiva = null; state.mapaDesenhoCatalogoItemId = null;
+    if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
+    updateMapaModeUI();
+    renderMapaFilaIA();
+    if(!itens.length) return;
+    buscarPlanosPorIds(itens.map(function(f){ return f.planejamentoServicoId; })).then(function(planos){
+      var planoPorId = {}; planos.forEach(function(pl){ planoPorId[pl.id] = pl; });
+      var lista = itens.filter(function(f){ return planoPorId[f.planejamentoServicoId]; });
+      if(!lista.length){ toast('Não foi possível localizar os serviços no Planejamento.','error'); return; }
+      var dist = distribuirItensNaRua(lista.map(function(f){ var pl = planoPorId[f.planejamentoServicoId]; return { f:f, trecho: pl.trecho || '' }; }), linha);
+      confirmModal({
+        title:'Posicionar a rua toda',
+        msg:'Isso cria '+dist.length+' marcação(ões) ao longo de "'+ativa.endereco+'", distribuídas na ordem dos PVs, como Pendente. As posições são aproximadas (ficam marcadas assim na observação) — confira em campo. Deseja continuar?',
+        okLabel:'Posicionar'
+      }).then(function(ok){
+        if(!ok) return;
+        var uid = state.currentUser ? state.currentUser.id : null;
+        var uidNome = state.currentUser ? state.currentUser.nome : null;
+        var rows = dist.map(function(d){
+          var pl = planoPorId[d.f.planejamentoServicoId];
+          return aplicarVinculoPlano({
+            obra_id: state.mapaObraId, tipo: d.tipo, rua: d.f.endereco||null, nome_local: null,
+            numero_servico: d.f.numeroLocal||null, status: 'parado',
+            observacao: 'Posição aproximada: distribuída ao longo da rua traçada, na ordem dos PVs'+(pl.trecho ? ' ('+pl.trecho+')' : '')+'. Confirme em campo.',
+            geom: d.geom, catalogo_item_id: d.f.catalogoItemId || null, foto: null,
+            created_by: uid, created_by_nome: uidNome
+          }, pl);
+        });
+        supabaseClient.from('mapa_marcacoes').insert(rows).select().then(function(res){
+          if(res.error){ toast('Erro ao posicionar a rua: '+res.error.message,'error'); return; }
+          var criadas = res.data||[];
+          Promise.all(criadas.map(function(m){
+            var d = dist.find(function(x){ return x.f.planejamentoServicoId===m.planejamento_servico_id; });
+            if(!d) return Promise.resolve();
+            return supabaseClient.from('mapa_fila_ia').update({ status:'posicionado', posicionado_marcacao_id: m.id }).eq('id', d.f.id).then(function(){
+              var p0 = d.geom && d.geom[0];
+              return p0 ? supabaseClient.from('planejamento_servicos').update({ latitude:p0.lat, longitude:p0.lng }).eq('id', d.f.planejamentoServicoId) : null;
+            });
+          })).then(function(){
+            toast(criadas.length+' serviço(s) posicionado(s) ao longo de '+ativa.endereco+' (posição aproximada).','ok');
+            loadMapaFilaIA(state.mapaObraId);
+            loadMapaMarcacoes(state.mapaObraId);
+          });
+        });
+      });
+    });
+  }
+
   function iniciarPosicionamentoFila(id){
     var item = (state.mapaFilaIA||[]).find(function(f){ return f.id===id; });
     if(!item) return;
@@ -4714,6 +4869,7 @@
     }
     state.mapaMode = item.tipoSugerido==='ramal' ? 'ramal' : 'pv';
     state.mapaFilaAtivaId = item.id;
+    state.mapaRuaAtiva = null;
     state.mapaDesenhoCatalogoItemId = item.catalogoItemId || null;
     state.mapaRamalPoints = [];
     if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
@@ -4781,13 +4937,16 @@
     // fila/UI em vez de criar uma tela nova do zero.
     var fila = modoRevisar ? filaTodas.filter(function(f){ return f.motivoPendencia==='ambiguo' || f.motivoPendencia==='endereco_incompleto'; }) : filaTodas;
     var modoAtivoHtml = '';
-    if(state.mapaFilaAtivaId){
+    if(state.mapaRuaAtiva){
+      modoAtivoHtml = '<div class="hint" style="background:var(--surface-2,#f5f5f0);padding:8px 10px;border-radius:8px;margin-bottom:10px;">Traçando <b>'+esc(state.mapaRuaAtiva.endereco)+'</b>: clique no mapa ao longo da rua, do começo ao fim, e depois em "Concluir rua". <button type="button" class="btn ghost sm" id="btnCancelarFilaPosicionar" style="margin-left:6px;">Cancelar</button></div>';
+    } else if(state.mapaFilaAtivaId){
       var itemAtivo = fila.find(function(f){ return f.id===state.mapaFilaAtivaId; });
       if(itemAtivo){
         modoAtivoHtml = '<div class="hint" style="background:var(--surface-2,#f5f5f0);padding:8px 10px;border-radius:8px;margin-bottom:10px;">Modo ativo: clique no mapa para posicionar <b>'+esc(itemAtivo.servicoTexto)+'</b>'+(itemAtivo.tipoSugerido==='ramal'?' (marque os pontos do trecho e depois "Concluir ramal")':'')+'. <button type="button" class="btn ghost sm" id="btnCancelarFilaPosicionar" style="margin-left:6px;">Cancelar</button></div>';
       }
     }
-    var listaHtml = !fila.length ? '' : ('<div class="table-wrap" style="margin-top:10px;"><table class="fin-list"><thead><tr><th>Serviço</th><th>Endereço/Local</th><th>Tipo</th><th></th></tr></thead><tbody>'+
+    var ruasHtml = modoRevisar ? '' : mapaFilaRuasHtml(fila);
+    var listaHtml = !fila.length ? '' : (ruasHtml+'<div class="table-wrap" style="margin-top:10px;"><table class="fin-list"><thead><tr><th>Serviço</th><th>Endereço/Local</th><th>Tipo</th><th></th></tr></thead><tbody>'+
       fila.map(function(f){
         return '<tr data-id="'+f.id+'">'+
           '<td>'+esc(f.servicoTexto)+' '+mapaFilaMotivoBadgeHtml(f)+(f.observacoes?'<div style="color:var(--steel);font-size:11.5px;">'+esc(f.observacoes)+'</div>':'')+'</td>'+
@@ -4855,6 +5014,9 @@
       root.querySelectorAll('[data-posicionar]').forEach(function(b){
         b.addEventListener('click', function(){ iniciarPosicionamentoFila(b.getAttribute('data-posicionar')); });
       });
+      root.querySelectorAll('[data-rua-tracar]').forEach(function(b){
+        b.addEventListener('click', function(){ iniciarTracadoRua(b.getAttribute('data-rua-tracar')); });
+      });
       root.querySelectorAll('[data-descartar]').forEach(function(b){
         b.addEventListener('click', function(){ descartarItemFila(b.getAttribute('data-descartar')); });
       });
@@ -4862,7 +5024,7 @@
     var btnCancelarPos = document.getElementById('btnCancelarFilaPosicionar');
     if(btnCancelarPos){
       btnCancelarPos.addEventListener('click', function(){
-        state.mapaMode = null; state.mapaFilaAtivaId = null; state.mapaDesenhoCatalogoItemId = null; state.mapaRamalPoints = [];
+        state.mapaMode = null; state.mapaFilaAtivaId = null; state.mapaRuaAtiva = null; state.mapaDesenhoCatalogoItemId = null; state.mapaRamalPoints = [];
         if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
         updateMapaModeUI();
         renderMapaFilaIA();
@@ -5192,6 +5354,7 @@
   }
 
   function cancelarRamal(){
+    state.mapaRuaAtiva = null;
     state.mapaMode = null;
     state.mapaRamalPoints = [];
     state.mapaDesenhoCatalogoItemId = null;
@@ -5207,6 +5370,8 @@
     });
     var actions = document.getElementById('mapaDrawActions');
     if(actions) actions.style.display = (state.mapaMode==='ramal') ? 'flex' : 'none';
+    var btnFinRamal = document.getElementById('btnMapaFinalizarRamal');
+    if(btnFinRamal) btnFinRamal.textContent = state.mapaRuaAtiva ? 'Concluir rua' : 'Concluir ramal';
   }
 
   function wireMapaToolbarEvents(){
@@ -5221,12 +5386,14 @@
         state.mapaDesenhoCatalogoItemId = btn.getAttribute('data-catalogo-item-id');
         state.mapaRamalPoints = [];
         state.mapaFilaAtivaId = null;
+        state.mapaRuaAtiva = null;
         if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers();
         updateMapaModeUI();
         renderMapaFilaIA();
       });
     }
     if(btnFinalizar) btnFinalizar.addEventListener('click', function(){
+      if(state.mapaRuaAtiva && state.mapaMode==='ramal'){ concluirTracadoRua(); return; }
       if(state.mapaRamalPoints.length<2){ toast('Marque pelo menos 2 pontos para o ramal.','error'); return; }
       var geom = state.mapaRamalPoints.slice();
       var catalogoItemId = state.mapaDesenhoCatalogoItemId||null;
