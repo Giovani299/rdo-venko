@@ -690,7 +690,7 @@
         <table class="rdo-list">
           <thead>
             <tr>
-              <th>Data</th><th>Obra</th><th>Responsável</th><th>Clima</th><th>Ocorrências</th><th>Status</th><th>Ações</th>
+              <th>Data</th><th>Obra</th><th>Responsável</th><th>Clima</th><th>Ocorrências</th><th>Último acesso</th><th>Ações</th>
             </tr>
           </thead>
           <tbody id="rdoTableBody"></tbody>
@@ -1540,6 +1540,7 @@
       b.classList.toggle('active', b.getAttribute('data-view')===view);
     });
     if(view==='novo' && state.editId===null){ renderRdoForm(null); }
+    if(view==='detail' && state.detailId){ registrarAcessoRdo(state.detailId); }
     if(view==='mapa'){ state.mapaMode=null; state.mapaRamalPoints=[]; if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers(); updateMapaModeUI(); }
     renderAll();
     if(view==='mapa-obra'){ setTimeout(function(){ if(leafletMapInstance) leafletMapInstance.invalidateSize(); }, 30); }
@@ -1806,6 +1807,7 @@
       renderAll();
       rdoAtualizarServicosAbertos();
       refreshPendingRdos();
+      loadUltimosAcessosRdo();
     });
   }
   function loadRdosExcluidas(){
@@ -1816,7 +1818,7 @@
     });
   }
   function excluirRdo(id){
-    if(!obrasGestaoCanAccess()) return;
+    if(!rdoCanDelete()) return;
     var idx = state.rdos.findIndex(function(r){ return r.id===id; });
     var removed = idx>-1 ? state.rdos.splice(idx,1)[0] : null;
     renderRdoTable();
@@ -1831,7 +1833,7 @@
     });
   }
   function restaurarRdo(id){
-    if(!obrasGestaoCanAccess()) return;
+    if(!rdoCanDelete()) return;
     supabaseClient.from('rdos').update({deleted_at: null}).eq('id', id).then(function(res){
       if(res.error){ toast('Não foi possível restaurar a RDO.','error'); return; }
       var idx = state.rdosExcluidas.findIndex(function(r){ return r.id===id; });
@@ -2414,6 +2416,12 @@
   function obrasGestaoCanAccess(){
     var u = state.currentUser;
     return !!(u && (u.is_admin || u.acesso_obras_gestao !== false));
+  }
+  // Excluir RDO (vai para a lixeira): admin, quem tem gestão de obras e Engenheiro(a) de Obras
+  // (o cargo vale mesmo quando o usuário está marcado como "Obras só visualizar").
+  function rdoCanDelete(){
+    var u = state.currentUser;
+    return !!(u && (u.is_admin || u.acesso_obras_gestao !== false || /engenheir/i.test(u.cargo||'')));
   }
   function planejamentoCanAccess(){
     var u = state.currentUser;
@@ -3989,7 +3997,7 @@
       '<div class="field"><label>Status</label><select id="fStatus">'+statusOpts+'</select></div>'+
       '<div class="field grow"><label>Buscar</label><input type="text" id="fBusca" placeholder="texto nos comentários, ocorrências..." value="'+esc(f.busca)+'"></div>'+
       '<button class="btn ghost sm" id="fClear" type="button">Limpar filtros</button>'+
-      (canGestao ? ('<button class="btn ghost sm'+(state.showingTrash?' active':'')+'" id="fTrash" type="button" title="Ver RDOs excluídas">'+(state.showingTrash?'← Voltar':'🗑 Lixeira')+'</button>') : '');
+      (rdoCanDelete() ? ('<button class="btn ghost sm'+(state.showingTrash?' active':'')+'" id="fTrash" type="button" title="Ver RDOs excluídas">'+(state.showingTrash?'← Voltar':'🗑 Lixeira')+'</button>') : '');
 
     var btnCdm = document.getElementById('btnExportCdm');
     if(btnCdm) btnCdm.style.display = cdmCanAccess() ? '' : 'none';
@@ -4050,8 +4058,8 @@
           '<td data-label="Responsável">'+esc(r.responsavel||'—')+'</td>'+
           '<td data-label="Clima">—</td>'+
           '<td data-label="Ocorrências">—</td>'+
-          '<td data-label="Status">'+statusChip(r.status)+'</td>'+
-          '<td data-label="Ações"><div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="btn ghost sm" data-restaurar="'+r.id+'">↺ Restaurar</button><button type="button" class="btn danger sm" data-excluir-definitivo="'+r.id+'">🗑 Excluir definitivamente</button></div></td>'+
+          '<td data-label="Último acesso">'+ultimoAcessoCellHtml(r.id)+'</td>'+
+          '<td data-label="Ações"><div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="btn ghost sm" data-restaurar="'+r.id+'">↺ Restaurar</button>'+(obrasGestaoCanAccess() ? '<button type="button" class="btn danger sm" data-excluir-definitivo="'+r.id+'">🗑 Excluir definitivamente</button>' : '')+'</div></td>'+
         '</tr>';
       }).join('');
       body.querySelectorAll('[data-restaurar]').forEach(function(b){
@@ -4079,8 +4087,8 @@
         '<td data-label="Responsável">'+esc(r.responsavel||'—')+'</td>'+
         '<td data-label="Clima">'+esc(climaTxt)+'</td>'+
         '<td data-label="Ocorrências">'+occText+'</td>'+
-        '<td data-label="Status">'+statusChip(r.status)+'</td>'+
-        '<td data-label="Ações">'+((canGestao && !isPending) ? ('<button type="button" class="btn ghost sm" data-delrdo="'+r.id+'" title="Excluir RDO">🗑</button>') : '')+'</td>'+
+        '<td data-label="Último acesso">'+ultimoAcessoCellHtml(r.id)+'</td>'+
+        '<td data-label="Ações">'+((rdoCanDelete() && !isPending) ? ('<button type="button" class="btn ghost sm" data-delrdo="'+r.id+'" title="Excluir RDO">🗑</button>') : '')+'</td>'+
       '</tr>';
     }).join('');
     body.querySelectorAll('tr[data-id]').forEach(function(tr){
@@ -7158,6 +7166,70 @@
   }
 
   /* ---------------- detail view ---------------- */
+  /* ---------------- histórico de acessos da RDO (quem abriu, dia e horário) ---------------- */
+  var rdoAcessosCache = {};      // rdoId -> [{nome, quando}] (mais recente primeiro) | 'erro'
+  var rdoAcessoUltimo = {};      // rdoId|usuário -> timestamp do último registro desta sessão (evita duplicar em re-render)
+  var rdoUltimoAcesso = {};      // rdoId -> {nome, quando}: último acesso, mostrado na lista de RDOs
+  function ultimoAcessoCellHtml(id){
+    var a = rdoUltimoAcesso[id];
+    if(!a) return '<span style="color:var(--muted);">—</span>';
+    return '<div style="line-height:1.35;"><b>'+esc(a.nome)+'</b><br><span style="color:var(--muted);font-size:12px;">'+esc(fmtDataHoraAcesso(a.quando))+'</span></div>';
+  }
+  function loadUltimosAcessosRdo(){
+    return supabaseClient.from('rdo_ultimo_acesso').select('rdo_id,user_nome,acessado_em').then(function(res){
+      if(res.error){ try{ console.warn('[rdo_ultimo_acesso]', res.error.message); }catch(e){} return; }
+      var m = {}; (res.data||[]).forEach(function(r){ m[r.rdo_id] = { nome:r.user_nome, quando:r.acessado_em }; });
+      rdoUltimoAcesso = m;
+      if(document.getElementById('rdoTableBody')) renderRdoTable();
+    }, function(){});
+  }
+  function fmtDataHoraAcesso(iso){
+    try{
+      var d = new Date(iso);
+      var f = new Intl.DateTimeFormat('pt-BR', { timeZone:'America/Sao_Paulo', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:false });
+      var p = {}; f.formatToParts(d).forEach(function(x){ p[x.type]=x.value; });
+      return p.day+'/'+p.month+'/'+p.year+' às '+p.hour+':'+p.minute;
+    }catch(e){ return String(iso||''); }
+  }
+  function rdoAcessosHtml(id){
+    var lista = rdoAcessosCache[id];
+    if(lista==='erro') return '';
+    var corpo;
+    if(!lista) corpo = '<p class="hint" style="margin:0;">Carregando…</p>';
+    else if(!lista.length) corpo = '<p class="hint" style="margin:0;">Nenhum acesso registrado ainda.</p>';
+    else corpo = '<div style="max-height:260px;overflow:auto;"><table class="readtable"><thead><tr><th>Quem acessou</th><th>Dia e horário</th></tr></thead><tbody>'+
+      lista.map(function(a){ return '<tr><td>'+esc(a.nome)+'</td><td>'+esc(fmtDataHoraAcesso(a.quando))+'</td></tr>'; }).join('')+'</tbody></table></div>';
+    return '<h2><span class="idx">·</span>Histórico de acessos'+(lista&&lista.length?' ('+lista.length+')':'')+'</h2>'+corpo;
+  }
+  function atualizarRdoAcessosUI(id){
+    var el = document.getElementById('rdoAcessosCard');
+    if(!el || state.detailId!==id) return;
+    var h = rdoAcessosHtml(id);
+    el.style.display = h ? '' : 'none';
+    el.innerHTML = h;
+  }
+  function carregarAcessosRdo(id){
+    return supabaseClient.from('rdo_acessos').select('user_nome,acessado_em').eq('rdo_id', id).order('acessado_em', {ascending:false}).limit(300).then(function(res){
+      if(res.error){ try{ console.warn('[rdo_acessos]', res.error.message); }catch(e){} rdoAcessosCache[id] = 'erro'; }
+      else rdoAcessosCache[id] = (res.data||[]).map(function(r){ return { nome:r.user_nome, quando:r.acessado_em }; });
+      atualizarRdoAcessosUI(id);
+    }, function(){ rdoAcessosCache[id] = 'erro'; atualizarRdoAcessosUI(id); });
+  }
+  function registrarAcessoRdo(id){
+    var u = state.currentUser;
+    if(!u || !id || String(id).indexOf('pending-')===0) return;
+    var agora = Date.now();
+    var chave = id+'|'+u.id;
+    if(rdoAcessoUltimo[chave] && agora-rdoAcessoUltimo[chave] < 5000) return;
+    rdoAcessoUltimo[chave] = agora;
+    var nome = u.nome || u.login || 'Usuário';
+    supabaseClient.from('rdo_acessos').insert({ rdo_id:id, user_id:u.id, user_nome:nome }).then(function(res){
+      if(res && res.error){ try{ console.warn('[rdo_acessos]', res.error.message); }catch(e){} }
+      else rdoUltimoAcesso[id] = { nome:nome, quando:new Date().toISOString() };
+      return carregarAcessosRdo(id);
+    }, function(){ return carregarAcessosRdo(id); });
+  }
+
   function renderDetail(id){
     var r = state.rdos.find(function(x){ return x.id===id; });
     var el = document.getElementById('detailContent');
@@ -7173,7 +7245,8 @@
         '</div>'+
       '</div>'+
 
-      rdoBodyHtml(r, {print:false});
+      rdoBodyHtml(r, {print:false})+
+      (function(){ var h = rdoAcessosHtml(id); return '<div class="card" id="rdoAcessosCard"'+(h?'':' style="display:none;"')+'>'+h+'</div>'; })();
 
     document.querySelectorAll('#detailGallery img').forEach(function(img){
       img.addEventListener('click', function(){ openLightbox(img.src); });
