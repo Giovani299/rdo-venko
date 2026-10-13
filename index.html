@@ -7148,6 +7148,7 @@
         }
         toast(isLockedEdit ? 'Alterações salvas.' : (wantsSend ? 'RDO enviada.' : 'Rascunho salvo.'), 'ok');
         var newId = res.data ? res.data.id : effId;
+        if(effIsEdit && effId) marcarRdoEditado(effId);
         state.editId = null; state.photos = []; state.videos = [];
         var cleanup = pendingEditItem ? pendingRemove(pendingEditItem.id) : Promise.resolve();
         state.editingPendingItem = null;
@@ -7170,17 +7171,40 @@
   var rdoAcessosCache = {};      // rdoId -> [{nome, quando}] (mais recente primeiro) | 'erro'
   var rdoAcessoUltimo = {};      // rdoId|usuário -> timestamp do último registro desta sessão (evita duplicar em re-render)
   var rdoUltimoAcesso = {};      // rdoId -> {nome, quando}: último acesso, mostrado na lista de RDOs
+  function acessoEdicaoChipHtml(editou){
+    return editou ? '<span class="chip map-processando" style="font-size:11px;">Editou</span>' : '<span class="chip" style="font-size:11px;">Só visualizou</span>';
+  }
   function ultimoAcessoCellHtml(id){
     var a = rdoUltimoAcesso[id];
     if(!a) return '<span style="color:var(--muted);">—</span>';
-    return '<div style="line-height:1.35;"><b>'+esc(a.nome)+'</b><br><span style="color:var(--muted);font-size:12px;">'+esc(fmtDataHoraAcesso(a.quando))+'</span></div>';
+    return '<div style="line-height:1.4;"><b>'+esc(a.nome)+'</b><br><span style="color:var(--muted);font-size:12px;">'+esc(fmtDataHoraAcesso(a.quando))+'</span><br>'+acessoEdicaoChipHtml(a.editou)+'</div>';
   }
   function loadUltimosAcessosRdo(){
-    return supabaseClient.from('rdo_ultimo_acesso').select('rdo_id,user_nome,acessado_em').then(function(res){
-      if(res.error){ try{ console.warn('[rdo_ultimo_acesso]', res.error.message); }catch(e){} return; }
-      var m = {}; (res.data||[]).forEach(function(r){ m[r.rdo_id] = { nome:r.user_nome, quando:r.acessado_em }; });
+    function aplicar(res){
+      var m = {}; (res.data||[]).forEach(function(r){ m[r.rdo_id] = { nome:r.user_nome, quando:r.acessado_em, editou:!!r.editou }; });
       rdoUltimoAcesso = m;
       if(document.getElementById('rdoTableBody')) renderRdoTable();
+    }
+    return supabaseClient.from('rdo_ultimo_acesso').select('rdo_id,user_nome,acessado_em,editou').then(function(res){
+      if(!res.error){ aplicar(res); return; }
+      // banco ainda sem a coluna "editou" (migration 044 não rodada): carrega sem ela
+      return supabaseClient.from('rdo_ultimo_acesso').select('rdo_id,user_nome,acessado_em').then(function(r2){
+        if(r2.error){ try{ console.warn('[rdo_ultimo_acesso]', r2.error.message); }catch(e){} return; }
+        aplicar(r2);
+      });
+    }, function(){});
+  }
+  // Marca no histórico que a pessoa EDITOU a RDO (salvou alterações). Função do banco: só mexe no
+  // acesso da própria pessoa; ninguém altera o histórico dos outros.
+  function marcarRdoEditado(id){
+    var u = state.currentUser;
+    if(!u || !id) return;
+    rdoAcessoUltimo[id+'|'+u.id] = Date.now()+20000;   // o redirecionamento depois de salvar não conta como outro acesso
+    supabaseClient.rpc('rdo_marcar_editado', { p_rdo_id:id }).then(function(res){
+      if(res && res.error){ try{ console.warn('[rdo_marcar_editado]', res.error.message); }catch(e){} return; }
+      rdoUltimoAcesso[id] = { nome:(u.nome||u.login||'Usuário'), quando:new Date().toISOString(), editou:true };
+      carregarAcessosRdo(id);
+      loadUltimosAcessosRdo();
     }, function(){});
   }
   function fmtDataHoraAcesso(iso){
@@ -7197,8 +7221,8 @@
     var corpo;
     if(!lista) corpo = '<p class="hint" style="margin:0;">Carregando…</p>';
     else if(!lista.length) corpo = '<p class="hint" style="margin:0;">Nenhum acesso registrado ainda.</p>';
-    else corpo = '<div style="max-height:260px;overflow:auto;"><table class="readtable"><thead><tr><th>Quem acessou</th><th>Dia e horário</th></tr></thead><tbody>'+
-      lista.map(function(a){ return '<tr><td>'+esc(a.nome)+'</td><td>'+esc(fmtDataHoraAcesso(a.quando))+'</td></tr>'; }).join('')+'</tbody></table></div>';
+    else corpo = '<div style="max-height:260px;overflow:auto;"><table class="readtable"><thead><tr><th>Quem acessou</th><th>Dia e horário</th><th>Edição</th></tr></thead><tbody>'+
+      lista.map(function(a){ return '<tr><td>'+esc(a.nome)+'</td><td>'+esc(fmtDataHoraAcesso(a.quando))+'</td><td>'+acessoEdicaoChipHtml(a.editou)+'</td></tr>'; }).join('')+'</tbody></table></div>';
     return '<h2><span class="idx">·</span>Histórico de acessos'+(lista&&lista.length?' ('+lista.length+')':'')+'</h2>'+corpo;
   }
   function atualizarRdoAcessosUI(id){
@@ -7209,10 +7233,18 @@
     el.innerHTML = h;
   }
   function carregarAcessosRdo(id){
-    return supabaseClient.from('rdo_acessos').select('user_nome,acessado_em').eq('rdo_id', id).order('acessado_em', {ascending:false}).limit(300).then(function(res){
-      if(res.error){ try{ console.warn('[rdo_acessos]', res.error.message); }catch(e){} rdoAcessosCache[id] = 'erro'; }
-      else rdoAcessosCache[id] = (res.data||[]).map(function(r){ return { nome:r.user_nome, quando:r.acessado_em }; });
+    function aplicar(res){
+      rdoAcessosCache[id] = (res.data||[]).map(function(r){ return { nome:r.user_nome, quando:r.acessado_em, editou:!!r.editou }; });
       atualizarRdoAcessosUI(id);
+    }
+    function consulta(cols){ return supabaseClient.from('rdo_acessos').select(cols).eq('rdo_id', id).order('acessado_em', {ascending:false}).limit(300); }
+    return consulta('user_nome,acessado_em,editou').then(function(res){
+      if(!res.error){ aplicar(res); return; }
+      // banco ainda sem a coluna "editou" (migration 044 não rodada): mostra só nome, dia e horário
+      return consulta('user_nome,acessado_em').then(function(r2){
+        if(r2.error){ try{ console.warn('[rdo_acessos]', r2.error.message); }catch(e){} rdoAcessosCache[id] = 'erro'; atualizarRdoAcessosUI(id); return; }
+        aplicar(r2);
+      });
     }, function(){ rdoAcessosCache[id] = 'erro'; atualizarRdoAcessosUI(id); });
   }
   function registrarAcessoRdo(id){
@@ -7225,7 +7257,7 @@
     var nome = u.nome || u.login || 'Usuário';
     supabaseClient.from('rdo_acessos').insert({ rdo_id:id, user_id:u.id, user_nome:nome }).then(function(res){
       if(res && res.error){ try{ console.warn('[rdo_acessos]', res.error.message); }catch(e){} }
-      else rdoUltimoAcesso[id] = { nome:nome, quando:new Date().toISOString() };
+      else rdoUltimoAcesso[id] = { nome:nome, quando:new Date().toISOString(), editou:false };
       return carregarAcessosRdo(id);
     }, function(){ return carregarAcessosRdo(id); });
   }
