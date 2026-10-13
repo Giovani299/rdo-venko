@@ -2618,6 +2618,8 @@
     var obra = state.obras.find(function(o){ return o.id===state.financeiroObraId; });
     if(!obra){ root.innerHTML = '<p class="empty-hint">Obra não encontrada.</p>'; return; }
 
+    // Barra de filtros do Financeiro removida: o relatório mostra sempre a obra inteira.
+    state.financeiroFilters = { categoria:'', unidade:'', dataIni:'', dataFim:'', busca:'' };
     var todos = state.financeiroItens;
     var filtrados = financeiroFilteredItens();
     var filtroAtivo = financeiroIsFiltroAtivo();
@@ -2643,15 +2645,6 @@
         kpiTile(resumo.totalItens, 'Total de itens', '')+
         kpiTile(resumo.categorias, 'Categorias', '')+
       '</div>'+
-      '<div class="filters" id="finFilterBar">'+
-        '<div class="field"><label>Categoria</label><select id="finFCategoria"><option value="">Todas</option>'+categorias.map(function(c){return opt(c,f.categoria);}).join('')+'</select></div>'+
-        '<div class="field"><label>Unidade</label><select id="finFUnidade"><option value="">Todas</option>'+unidades.map(function(c){return opt(c,f.unidade);}).join('')+'</select></div>'+
-        '<div class="field"><label>De</label><div class="date-wrap"><input type="date" id="finFDataIni" value="'+esc(f.dataIni)+'"><span class="date-ph" data-for="finFDataIni">dd/mm/aaaa</span></div></div>'+
-        '<div class="field"><label>Até</label><div class="date-wrap"><input type="date" id="finFDataFim" value="'+esc(f.dataFim)+'"><span class="date-ph" data-for="finFDataFim">dd/mm/aaaa</span></div></div>'+
-        '<div class="field grow"><label>Buscar</label><input type="text" id="finFBusca" placeholder="Produto, descrição…" value="'+esc(f.busca)+'"></div>'+
-        (filtroAtivo ? '<button type="button" class="btn ghost sm" id="finFClear">Limpar filtros</button>' : '')+
-      '</div>'+
-      (filtroAtivo ? '<p class="hint">Mostrando '+filtrados.length+' de '+todos.length+' itens — os valores acima já refletem o filtro aplicado.</p>' : '')+
       financeiroFormHtml()+
       '<div id="finPrintArea">'+
         '<div class="print-only"><b>'+esc(obra.nome)+'</b> — Relatório financeiro'+(filtroAtivo?' (filtro aplicado)':'')+'<br><span style="font-size:12px;color:#555;">Gerado em '+esc(geradoEm)+'</span></div>'+
