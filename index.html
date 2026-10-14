@@ -469,6 +469,11 @@
   .chip-contratado{background:#DDF3E4;color:#1E6B3A;}
   .chip-aparte{background:#FFE3CC;color:#9A3412;}
   .map-legend-aparte{margin:0 0 10px;margin-left:0;}
+  .rdo-pv-grupo{margin:10px 0 4px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+  .rdo-pv-item{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 8px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;}
+  .rdo-pv-item.marcado{border-color:var(--venko-yellow-deep,#C99A00);background:#FFFBEA;}
+  .rdo-pv-item .rdo-pv-nome{flex:1 1 220px;min-width:0;}
+  .rdo-pv-item select{max-width:220px;}
   .map-circle.geo-nc{border:2px dashed #14130F;}
   .map-geo-badge{position:absolute;right:-8px;top:-8px;min-width:15px;height:15px;border-radius:8px;background:#14130F;color:#fff;font:800 10px/15px Inter,sans-serif;text-align:center;padding:0 3px;box-shadow:0 0 0 1.5px #fff;}
   .map-geo-badge.ruim{background:#C6433F;}
@@ -2140,6 +2145,14 @@
       });
   }
   var realtimeSubscribed = false;
+  // Uma análise de projeto grava dezenas de linhas em segundos; cada linha gera um
+  // evento em tempo real. Agrupa os eventos (450 ms) para recarregar a lista uma
+  // vez só, em vez de uma recarga completa por linha gravada.
+  var cargaRealtimeTimers = {};
+  function cargaRealtime(chave, fn){
+    clearTimeout(cargaRealtimeTimers[chave]);
+    cargaRealtimeTimers[chave] = setTimeout(function(){ delete cargaRealtimeTimers[chave]; fn(); }, 450);
+  }
   function subscribeRealtime(){
     if(realtimeSubscribed) return;
     realtimeSubscribed = true;
@@ -2155,10 +2168,10 @@
       .on('postgres_changes', {event:'*', schema:'public', table:'financeiro_itens'}, function(){ if(state.financeiroObraId) loadFinanceiroItens(state.financeiroObraId); })
       .on('postgres_changes', {event:'*', schema:'public', table:'produtos_catalogo'}, function(){ loadCatalogoProdutos(); loadCatalogoInativos(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'obra_servicos_contratados'}, function(){ loadObraServicosContratados(); })
-      .on('postgres_changes', {event:'*', schema:'public', table:'mapa_marcacoes'}, function(){ if(state.mapaObraId) loadMapaMarcacoes(state.mapaObraId); })
-      .on('postgres_changes', {event:'*', schema:'public', table:'planejamento_servicos'}, function(){ if(state.planejamentoObraId) loadPlanejamentoServicos(state.planejamentoObraId); })
-      .on('postgres_changes', {event:'*', schema:'public', table:'mapa_fila_ia'}, function(){ if(state.mapaObraId) loadMapaFilaIA(state.mapaObraId); })
-      .on('postgres_changes', {event:'*', schema:'public', table:'projetos_obra'}, function(){ if(state.planejamentoObraId) loadProjetosObra(state.planejamentoObraId); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'mapa_marcacoes'}, function(){ cargaRealtime('marc', function(){ if(state.mapaObraId) loadMapaMarcacoes(state.mapaObraId); }); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'planejamento_servicos'}, function(){ cargaRealtime('plan', function(){ if(state.planejamentoObraId) loadPlanejamentoServicos(state.planejamentoObraId); }); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'mapa_fila_ia'}, function(){ cargaRealtime('fila', function(){ if(state.mapaObraId) loadMapaFilaIA(state.mapaObraId); }); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'projetos_obra'}, function(){ cargaRealtime('proj', function(){ if(state.planejamentoObraId) loadProjetosObra(state.planejamentoObraId); }); })
       .subscribe();
   }
 
@@ -7246,6 +7259,7 @@
     if(!box) return;
     box.innerHTML = equipesDetalheHtml(rdo);
     wireEquipesDetalhe(rdo);
+    renderRdoPvsProjeto(rdo);
   }
   function numeroEquipeCompute(rdo){
     return (rdo.equipesDia||[]).map(function(nome, i){
@@ -7267,10 +7281,132 @@
           if(rdo.equipesDia.indexOf(nome)===-1) rdo.equipesDia.push(nome);
         } else {
           var idx = rdo.equipesDia.indexOf(nome);
-          if(idx!==-1){ rdo.equipesDia.splice(idx,1); if(rdo.equipesDetalhe) rdo.equipesDetalhe.splice(idx,1); }
+          if(idx!==-1){ if(rdo.equipesDetalhe && rdo.equipesDetalhe[idx] && (rdo.equipesDetalhe[idx].pvsExecutados||[]).length){ rdo.pvsSemEquipe = rdo.pvsSemEquipe || {}; rdo.equipesDetalhe[idx].pvsExecutados.forEach(function(p){ rdo.pvsSemEquipe[p.servicoId] = p; }); } rdo.equipesDia.splice(idx,1); if(rdo.equipesDetalhe) rdo.equipesDetalhe.splice(idx,1); }
         }
         autofillMaoDeObraFromEquipes(rdo);
         refreshEquipesDetalheUI(rdo);
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // PVs e trechos do projeto executados no RDO. Fica SÓ no RDO (dentro de
+  // equipes_detalhe[i].pvsExecutados, por equipe) — não altera Mapa nem
+  // Planejamento. A lista vem dos serviços do projeto da obra que citam
+  // PV/PI/trecho (RPC rdo_servicos_projeto, para quem não tem acesso ao
+  // Planejamento; sem a migration 047 tenta a leitura direta).
+  // ---------------------------------------------------------------
+  var rdoServProjCache = {};
+  var RDO_REF_PONTO_RE = /\b(PV|PI|TL|CP)\b/i;
+  function rdoCarregarServicosProjeto(obraId){
+    var c = rdoServProjCache[obraId];
+    if(c && (c.status==='ok' || c.status==='carregando')) return c.promise;
+    var entrada = { status:'carregando', itens:[], erro:'' };
+    entrada.promise = Promise.resolve(supabaseClient.rpc('rdo_servicos_projeto', { p_obra_id: obraId })).then(function(res){
+      if(res && !res.error) return res.data||[];
+      return Promise.resolve(supabaseClient.from('planejamento_servicos').select('id, codigo, servico_nome, trecho, endereco').eq('obra_id', obraId).is('deleted_at', null)).then(function(r2){
+        if(r2 && r2.error) throw r2.error;
+        return (r2 && r2.data) || [];
+      });
+    }).then(function(lista){
+      entrada.itens = (lista||[]).filter(function(s){ return s && s.id && RDO_REF_PONTO_RE.test(String(s.trecho||'')); }).map(function(s){
+        return { servicoId:s.id, codigo:s.codigo||'', servico:s.servico_nome||'', trecho:s.trecho||'', rua:s.endereco||'' };
+      });
+      entrada.itens.sort(function(a,b){ return (a.rua||'').localeCompare(b.rua||'') || String(a.codigo).localeCompare(String(b.codigo), undefined, {numeric:true}); });
+      entrada.status = 'ok';
+      return entrada.itens;
+    }).catch(function(err){
+      entrada.status = 'erro'; entrada.erro = (err && err.message) || String(err);
+      console.error('[rdo] lista de PVs do projeto:', entrada.erro);
+      return [];
+    });
+    rdoServProjCache[obraId] = entrada;
+    return entrada.promise;
+  }
+  function rdoPvsMarcados(rdo){
+    var m = {};
+    (rdo.equipesDetalhe||[]).forEach(function(d, i){ (d && d.pvsExecutados||[]).forEach(function(p){ if(p && p.servicoId) m[p.servicoId] = { idx:i, item:p }; }); });
+    Object.keys(rdo.pvsSemEquipe||{}).forEach(function(k){ m[k] = { idx:-1, item:rdo.pvsSemEquipe[k] }; });
+    return m;
+  }
+  // Onde o PV já foi marcado em OUTROS RDOs desta obra (só informativo).
+  function rdoPvsEmOutrosRdos(obraId, rdoId){
+    var m = {};
+    (state.rdos||[]).forEach(function(r){
+      if(r.obraId!==obraId || r.deletedAt || (rdoId && r.id===rdoId)) return;
+      (r.equipesDetalhe||[]).forEach(function(d, i){
+        (d && d.pvsExecutados||[]).forEach(function(p){ (m[p.servicoId] = m[p.servicoId] || []).push(fmtDate(r.data)+' · '+((r.equipesDia||[])[i]||'equipe')); });
+      });
+    });
+    return m;
+  }
+  function rdoTirarPv(rdo, servicoId){
+    if(rdo.pvsSemEquipe) delete rdo.pvsSemEquipe[servicoId];
+    (rdo.equipesDetalhe||[]).forEach(function(d){ if(d && d.pvsExecutados) d.pvsExecutados = d.pvsExecutados.filter(function(p){ return p.servicoId!==servicoId; }); });
+  }
+  function rdoPorPvNaEquipe(rdo, item, idx){
+    rdoTirarPv(rdo, item.servicoId);
+    if(idx<0){ rdo.pvsSemEquipe = rdo.pvsSemEquipe || {}; rdo.pvsSemEquipe[item.servicoId] = item; return; }
+    syncEquipesDetalhe(rdo);
+    var d = rdo.equipesDetalhe[idx];
+    if(!d) return;
+    d.pvsExecutados = (d.pvsExecutados||[]).concat([{ servicoId:item.servicoId, codigo:item.codigo, servico:item.servico, trecho:item.trecho, rua:item.rua }]);
+  }
+  function renderRdoPvsProjeto(rdo){
+    var box = document.getElementById('rdoPvsProjetoBox');
+    if(!box) return;
+    var obraId = (document.getElementById('rdoObra') && document.getElementById('rdoObra').value) || rdo.obraId || '';
+    if(!obraId){ box.innerHTML = '<p class="empty-hint">Selecione a obra.</p>'; return; }
+    var cache = rdoServProjCache[obraId];
+    if(!cache || cache.status==='carregando'){
+      box.innerHTML = '<p class="hint" style="margin:0;">Carregando PVs do projeto…</p>';
+      rdoCarregarServicosProjeto(obraId).then(function(){ var o2 = (document.getElementById('rdoObra')||{}).value || rdo.obraId; if(o2===obraId) renderRdoPvsProjeto(rdo); });
+      return;
+    }
+    if(cache.status==='erro'){ box.innerHTML = '<p class="hint" style="margin:0;color:#a33;">Não foi possível carregar os PVs do projeto: '+esc(cache.erro)+'</p>'; return; }
+    var marcados = rdoPvsMarcados(rdo);
+    var itens = cache.itens.slice();
+    // PV já marcado neste RDO que saiu do projeto continua visível (não some do registro)
+    Object.keys(marcados).forEach(function(k){ if(!itens.some(function(x){ return x.servicoId===k; })) itens.push(marcados[k].item); });
+    if(!itens.length){ box.innerHTML = '<p class="hint" style="margin:0;">Esta obra ainda não tem PVs/trechos vindos de projeto.</p>'; return; }
+    var equipes = rdo.equipesDia||[];
+    var outros = rdoPvsEmOutrosRdos(obraId, rdo.id);
+    var ruaAtual = null, html = '';
+    if(!equipes.length) html += '<p class="hint" style="margin:0 0 8px;color:#a33;">Selecione as equipes em campo (acima) para poder marcar quem concluiu cada PV.</p>';
+    itens.forEach(function(it){
+      var rua = it.rua || 'Sem rua informada';
+      if(rua!==ruaAtual){ ruaAtual = rua; html += '<div class="rdo-pv-grupo">'+esc(rua)+'</div>'; }
+      var m = marcados[it.servicoId];
+      var jaFeito = outros[it.servicoId];
+      html += '<div class="rdo-pv-item'+(m?' marcado':'')+'">'+
+        '<label style="display:flex;align-items:center;gap:8px;margin:0;" class="rdo-pv-nome">'+
+          '<input type="checkbox" data-pvchk="'+esc(it.servicoId)+'"'+(m?' checked':'')+(equipes.length?'':' disabled')+'>'+
+          '<span><b>'+esc(it.trecho||it.codigo)+'</b> <span style="color:var(--muted);">— '+esc(it.servico)+(it.codigo?' · '+esc(it.codigo):'')+'</span>'+
+          (jaFeito ? '<br><span class="hint" style="margin:0;font-size:11px;">Já marcado em: '+esc(jaFeito.join('; '))+'</span>' : '')+'</span>'+
+        '</label>'+
+        (m ? ('<select data-pveq="'+esc(it.servicoId)+'"'+(m.idx<0?' style="border-color:#C6433F;"':'')+'>'+
+              (m.idx<0 ? '<option value="-1" selected>Equipe que concluiu…</option>' : '')+
+              equipes.map(function(nome, i){ return '<option value="'+i+'"'+(m.idx===i?' selected':'')+'>'+esc(nome)+'</option>'; }).join('')+
+             '</select>') : '')+
+      '</div>';
+    });
+    box.innerHTML = html;
+    var porId = {}; itens.forEach(function(it){ porId[it.servicoId] = it; });
+    box.querySelectorAll('[data-pvchk]').forEach(function(cb){
+      cb.addEventListener('change', function(){
+        var id = cb.getAttribute('data-pvchk'), it = porId[id];
+        if(!it) return;
+        if(cb.checked) rdoPorPvNaEquipe(rdo, it, equipes.length===1 ? 0 : -1);
+        else rdoTirarPv(rdo, id);
+        renderRdoPvsProjeto(rdo);
+        if(cb.checked && equipes.length>1){ var s = box.querySelector('[data-pveq="'+id+'"]'); if(s) s.focus(); }
+      });
+    });
+    box.querySelectorAll('[data-pveq]').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        var id = sel.getAttribute('data-pveq'), it = porId[id];
+        if(it) rdoPorPvNaEquipe(rdo, it, parseInt(sel.value, 10));
+        renderRdoPvsProjeto(rdo);
       });
     });
   }
@@ -7330,6 +7466,9 @@
         '<h2><span class="idx">5</span>Atividades por equipe</h2>'+
         '<p class="hint">Para cada equipe em campo: frente de trabalho, status, o que foi feito, itens concluídos/pendentes e o resumo que entra no quadro de produção do relatório.</p>'+
         '<div id="equipesDetalheContainer">'+equipesDetalheHtml(rdo)+'</div>'+
+        '<h3 style="font-size:13px;font-weight:700;margin:18px 0 4px;">PVs e trechos do projeto executados hoje</h3>'+
+        '<p class="hint" style="margin:0 0 8px;">Marque os PVs e trechos concluídos hoje e escolha a equipe que fez cada um. Isto fica só registrado neste RDO — não altera o Mapa nem o Planejamento.</p>'+
+        '<div id="rdoPvsProjetoBox"></div>'+
       '</div>'+
 
       '<div class="card">'+
@@ -7395,6 +7534,7 @@
     document.getElementById('rdoGestaoAdm').addEventListener('input', function(){ rdo.gestao = rdo.gestao||{}; rdo.gestao.adm = this.value; var t=document.getElementById('rdoGestaoTotal'); if(t) t.value = (parseFloat(rdo.gestao.adm)||0)+(parseFloat(rdo.gestao.eng)||0); });
     document.getElementById('rdoGestaoEng').addEventListener('input', function(){ rdo.gestao = rdo.gestao||{}; rdo.gestao.eng = this.value; var t=document.getElementById('rdoGestaoTotal'); if(t) t.value = (parseFloat(rdo.gestao.adm)||0)+(parseFloat(rdo.gestao.eng)||0); });
     wireEquipesDetalhe(rdo);
+    renderRdoPvsProjeto(rdo);
     wireChecklistTable('eq', 'nome', [{key:'qtd',type:'number'},{key:'horas',type:'number'}], function(v){ rdo.equipamentos=v; }, 'Outro equipamento');
     wireDynTable('oc', [{key:'tipo',type:'select',options:OCC_TIPOS},{key:'texto'},{key:'acao'}], function(){ return rdo.ocorrencias; }, function(v){ rdo.ocorrencias=v; });
 
@@ -7481,6 +7621,8 @@
 
       var obraId = document.getElementById('rdoObra').value;
       if(!obraId){ toast('Selecione a obra.','error'); return; }
+      var pvsSemEquipe = Object.keys(rdo.pvsSemEquipe||{}).map(function(k){ return rdo.pvsSemEquipe[k]; });
+      if(pvsSemEquipe.length){ toast('Escolha a equipe que concluiu: '+pvsSemEquipe.map(function(p){ return p.trecho||p.codigo; }).join(', ')+'.','error'); var bx = document.getElementById('rdoPvsProjetoBox'); if(bx) bx.scrollIntoView({behavior:'smooth', block:'center'}); return; }
       var obra = state.obras.find(function(o){ return o.id===obraId; });
       var responsavel = document.getElementById('rdoResponsavel').value.trim();
       if(!responsavel){ toast('Informe quem está preenchendo a RDO.','error'); return; }
@@ -7503,7 +7645,10 @@
               return { tipo: c.tipo||'', catalogoItemId: c.catalogoItemId||null, quantidade: (c.quantidade===null||c.quantidade===undefined||c.quantidade==='')?null:Number(c.quantidade) };
             }),
             resumoAtividades: (d.resumoAtividades||[]).filter(function(s){ return s; }),
-            resumoItens: (d.resumoItens||[]).filter(function(s){ return s; })
+            resumoItens: (d.resumoItens||[]).filter(function(s){ return s; }),
+            pvsExecutados: (d.pvsExecutados||[]).filter(function(p){ return p && p.servicoId; }).map(function(p){
+              return { servicoId: p.servicoId, codigo: p.codigo||'', servico: p.servico||'', trecho: p.trecho||'', rua: p.rua||'' };
+            })
           };
         }),
         mao_de_obra: rdo.maoDeObra.filter(function(r){ return r.nome; }),
@@ -7815,6 +7960,7 @@
       '<div style="font-size:10.5px;margin-top:4px;">Integrantes: '+integrantesTxt+'</div>'+
       (d.atividades ? '<div style="margin-top:6px;white-space:pre-wrap;">'+esc(d.atividades)+'</div>' : '')+
       (concl ? '<div style="margin-top:6px;">'+concl+'</div>' : '')+
+      ((d.pvsExecutados&&d.pvsExecutados.length) ? '<div style="margin-top:6px;"><b>PVs/trechos do projeto concluídos:</b> '+d.pvsExecutados.map(function(p){ return esc(p.trecho||p.codigo)+(p.servico?' <span style="color:'+RDO_MUTED+';">('+esc(p.servico)+')</span>':''); }).join(' · ')+'</div>' : '')+
     '</div>';
   }
   function rdoResumoQtdEquipeRowHtml(nome, i, d){
