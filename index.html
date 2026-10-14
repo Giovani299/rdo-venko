@@ -428,7 +428,7 @@
 
   /* ---------- Modal / Toast ---------- */
   .overlay{position:fixed;inset:0;background:rgba(20,19,15,.5);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
-  .modal{background:var(--surface);border-radius:12px;box-shadow:var(--shadow-md);max-width:420px;width:100%;padding:22px;border:1px solid var(--line);}
+  .modal{background:var(--surface);border-radius:12px;box-shadow:var(--shadow-md);max-width:420px;width:100%;padding:22px;border:1px solid var(--line);max-height:calc(100vh - 40px);overflow-y:auto;}
   .map-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;}
   .map-toolbar-servicos{max-height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:12px;background:var(--surface-2);}
   .mapa-servico-grupo{margin-bottom:10px;}
@@ -469,6 +469,67 @@
   .chip-contratado{background:#DDF3E4;color:#1E6B3A;}
   .chip-aparte{background:#FFE3CC;color:#9A3412;}
   .map-legend-aparte{margin:0 0 10px;margin-left:0;}
+  /* Visão de rede (cdm29) */
+  .map-visao-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 10px;}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface);}
+  .seg button{border:0;background:transparent;color:var(--ink-soft);font:600 13px/1 Inter,sans-serif;padding:9px 16px;cursor:pointer;min-height:36px;}
+  .seg button + button{border-left:1px solid var(--line);}
+  .seg button.ativo{background:var(--ink);color:var(--paper);}
+  .seg button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px;}
+  .rede-resumo{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:12px 14px;margin:0 0 10px;}
+  .rede-resumo-topo{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;margin-bottom:8px;}
+  .rede-resumo-num{display:flex;align-items:baseline;gap:8px;}
+  .rede-resumo-num b{font-size:28px;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink);}
+  .rede-resumo-num span{font-size:13px;color:var(--ink-soft);}
+  .rede-resumo-det{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+  .rede-resumo-det b{color:var(--ink);}
+  .rede-bar{display:flex;height:10px;border-radius:6px;overflow:hidden;background:var(--line);margin-bottom:10px;}
+  .rede-bar-seg{height:100%;}
+  .rede-bar-seg.st-concluido,.rede-chip.st-concluido .rede-chip-dot{background:var(--map-verde);}
+  .rede-bar-seg.st-processando,.rede-chip.st-processando .rede-chip-dot{background:var(--map-amarelo);}
+  .rede-bar-seg.st-parado,.rede-chip.st-parado .rede-chip-dot{background:var(--map-vermelho);}
+  .rede-chips{display:flex;gap:8px;flex-wrap:wrap;}
+  .rede-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);border-radius:18px;padding:6px 12px;font:600 12.5px/1.2 Inter,sans-serif;cursor:pointer;min-height:34px;font-variant-numeric:tabular-nums;}
+  .rede-chip .rede-chip-v{font-weight:500;color:var(--ink-soft);}
+  .rede-chip-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+  .rede-chip.ativo{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink) inset;background:var(--surface);}
+  .rede-chip.limpar{background:transparent;color:var(--ink-soft);}
+  .rede-chip:focus-visible{outline:2px solid var(--focus);outline-offset:1px;}
+  .rede-leg-linha{display:inline-block;width:22px;height:5px;border-radius:3px;}
+  .rede-leg-linha.tracejada{background:repeating-linear-gradient(90deg,var(--ink-soft) 0 6px,transparent 6px 10px);}
+  .rede-leg-pv{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--surface);border:3px solid var(--ink-soft);box-sizing:border-box;}
+  .rede-pv-wrap{background:transparent;border:0;}
+  .rede-pv{position:absolute;left:7px;top:7px;width:16px;height:16px;box-sizing:border-box;border-radius:50%;background:#fff;border:4px solid var(--c);box-shadow:0 0 0 2px #fff,0 1px 4px rgba(20,19,15,.5);cursor:pointer;}
+  .rede-pv.st-concluido{background:var(--c);}
+  .rede-pv.multi{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--c),0 1px 4px rgba(20,19,15,.5);}
+  .rede-pv.nc{border-style:dashed;}
+  .rede-pv .map-geo-badge{right:-12px;top:-12px;}
+  .leaflet-tooltip.rede-lbl{padding:1px 6px;font-size:11px;}
+  .leaflet-tooltip.rede-ext{padding:0 5px;font:600 10px/1.5 Inter,sans-serif;color:#333;background:rgba(255,255,255,.92);}
+  #leafletMap:not(.z-lbl) .leaflet-tooltip.rede-lbl{display:none;}
+  #leafletMap:not(.z-ext) .leaflet-tooltip.rede-ext{display:none;}
+  .leaflet-tooltip.rede-hover{white-space:normal;max-width:260px;padding:8px 10px;font-weight:500;}
+  .rede-tt-h{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;}
+  .rede-tt-st{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:9px;white-space:nowrap;}
+  .rede-tt-st.st-concluido{background:#E4F3E9;color:#1E6B3A;}
+  .rede-tt-st.st-processando{background:#FFF3CC;color:#7A5900;}
+  .rede-tt-st.st-parado{background:#FBE7E6;color:#9B2C28;}
+  .rede-tt-sub{color:#555;font-size:11.5px;margin-top:2px;}
+  .rede-tt-f{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+  .rede-tt-f span{background:#F1F0EA;border-radius:5px;padding:1px 6px;font-size:11px;font-weight:600;}
+  .rede-tt-dica{color:#777;font-size:10.5px;margin-top:6px;}
+  .rede-halo{animation:redeHalo 1.2s ease-out 2;}
+  @keyframes redeHalo{0%{opacity:1;}100%{opacity:.15;}}
+  @media (prefers-reduced-motion:reduce){ .rede-halo{animation:none;} }
+  .ficha-grid{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;margin:6px 0 0;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface-2);}
+  .ficha-grid dt{color:var(--muted);}
+  .ficha-grid dd{margin:0;font-weight:600;overflow-wrap:anywhere;}
+  .seg-status{display:flex;width:100%;}
+  .seg-status button{flex:1 1 0;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:42px;padding:9px 6px;white-space:nowrap;}
+  .seg-status button::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--dot);}
+  .seg-status button.ativo{background:var(--ink);color:var(--paper);}
+  .marcacao-row .rotulo{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .marcacao-row .ver-mapa{padding:6px 9px;}
   .rdo-pv-grupo{margin:10px 0 4px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
   .rdo-pv-item{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 8px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;}
   .rdo-pv-item.marcado{border-color:var(--venko-yellow-deep,#C99A00);background:#FFFBEA;}
@@ -5242,14 +5303,7 @@
     }
     var canGestao = obrasGestaoCanAccess();
     if(mapaCurrentRenderedObraId !== state.mapaObraId || mapaCurrentRenderedCanGestao !== canGestao){
-      var legendHtml =
-        '<div class="map-legend">'+
-          '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-amarelo);"></span>Em andamento</span>'+
-          '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-vermelho);"></span>Pendente</span>'+
-          '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-verde);"></span>Concluído</span>'+
-          '<span class="map-legend-item" title="Coordenada do projeto ainda não conferida"><span class="map-legend-dot" style="background:#fff;border:2px dashed #14130F;"></span>? a validar</span>'+
-          '<span class="map-legend-item" title="Posição pelo nome da rua, não é a coordenada do projeto"><span class="map-legend-dot" style="background:#fff;border:2px dashed #14130F;"></span>≈ aproximada</span>'+
-        '</div>';
+      var legendHtml = '<div class="map-legend" id="mapaLegenda">'+mapaLegendaHtml()+'</div>';
       content.innerHTML =
         '<h1 style="margin-bottom:2px;">'+esc(obra.nome)+'</h1>'+
         '<p class="hint" style="margin-bottom:14px;">Cliente: '+esc(clienteNomeById(obra.clienteId)||'—')+(obra.endereco?' · '+esc(obra.endereco):'')+(obra.localidade?' · '+esc(obra.localidade):'')+'</p>'+
@@ -5286,9 +5340,16 @@
             '<option value="avalidar">A validar (? / ≈)</option>'+
             '<option value="problema">Com problema (!)</option>'+
           '</select>'+
-          '<label style="font-size:13px;color:var(--muted);">Região/endereço:</label><input type="text" id="mapaFiltroRegiao" placeholder="Ex: Rua das Flores" style="max-width:160px;">'+
+          '<label style="font-size:13px;color:var(--muted);">Buscar rua ou PV:</label><input type="text" id="mapaFiltroRegiao" placeholder="Ex: Rua das Flores, PV-7" style="max-width:180px;">'+
           '<label style="font-size:13px;color:var(--muted);">Nº do local:</label><input type="text" id="mapaFiltroNumeroLocal" placeholder="Ex: 100" style="max-width:90px;">'+
         '</div>'+
+        '<div class="map-visao-bar">'+
+          '<div class="seg" id="mapaVisaoSeg" role="group" aria-label="Forma de ver o mapa">'+
+            '<button type="button" data-visao="rede" title="Trechos como linhas de PV a PV, na cor do status">Rede</button>'+
+            '<button type="button" data-visao="locais" title="Um círculo numerado por ponto">Locais</button>'+
+          '</div>'+
+        '</div>'+
+        '<div id="mapaRedeResumo" class="rede-resumo" style="display:none;"></div>'+
         '<div id="mapaLegendaAparte" class="map-legend map-legend-aparte" style="display:none;"></div>'+
         '<div id="mapaAvisoForaCidade" style="display:none;"></div>'+
         '<div id="leafletMap"></div>'+
@@ -5298,6 +5359,10 @@
       mapaCurrentRenderedCanGestao = canGestao;
       initLeafletMap(obra);
       if(canGestao) wireMapaToolbarEvents();
+      var segVisao = document.getElementById('mapaVisaoSeg');
+      if(segVisao) segVisao.querySelectorAll('[data-visao]').forEach(function(b){
+        b.addEventListener('click', function(){ mapaDefinirVisao(b.getAttribute('data-visao')); });
+      });
       var btnLimparMapa = document.getElementById('btnLimparMapa');
       if(btnLimparMapa) btnLimparMapa.addEventListener('click', function(){ limparMapeamentoDaObra(obra); });
       refreshMapaFiltroProjeto();
@@ -5418,6 +5483,8 @@
     mapaLayerGroup = L.layerGroup().addTo(leafletMapInstance);
     mapaTempLayerGroup = L.layerGroup().addTo(leafletMapInstance);
     leafletMapInstance.on('click', onMapaClick);
+    leafletMapInstance.on('zoomend', mapaAtualizarClassesZoom);
+    mapaAtualizarClassesZoom();
     var mapaFotoHoverEl = document.createElement('div');
     mapaFotoHoverEl.id = 'mapaFotoHover';
     mapaFotoHoverEl.className = 'map-photo-hover';
@@ -5636,19 +5703,19 @@
   // Filtros do Mapeamento (projeto / status / tipo de serviço / região /
   // número do local) — usado tanto para desenhar os pontos no mapa quanto
   // para a lista textual abaixo dele, para as duas visões nunca divergirem.
-  function mapaMarcacaoPassaFiltros(m){
+  function mapaMarcacaoPassaFiltros(m, ignorarStatus){
     if(state.mapaFiltroServico && state.mapaFiltroServico!=='all' && m.catalogoItemId!==state.mapaFiltroServico) return false;
     if(state.mapaFiltroProjeto && state.mapaFiltroProjeto!=='all' && m.projetoId!==state.mapaFiltroProjeto) return false;
     if(state.mapaFiltroEscopo && state.mapaFiltroEscopo!=='all' && mapaEscopoMarcacao(m)!==state.mapaFiltroEscopo) return false;
-    if(state.mapaFiltroStatus && state.mapaFiltroStatus!=='all' && (m.status||'processando')!==state.mapaFiltroStatus) return false;
+    if(!ignorarStatus && state.mapaFiltroStatus && state.mapaFiltroStatus!=='all' && (m.status||'processando')!==state.mapaFiltroStatus) return false;
     if(state.mapaFiltroGeo && state.mapaFiltroGeo!=='all'){
       var gf = geoProblema(m) ? 'problema' : (geoNaoConfirmada(m) ? 'avalidar' : 'confirmada');
       if(gf!==state.mapaFiltroGeo) return false;
     }
     if(state.mapaFiltroRegiao){
       var alvo = normalizarTextoBusca(state.mapaFiltroRegiao);
-      var campo = normalizarTextoBusca((m.rua||'')+' '+(m.nomeLocal||''));
-      if(alvo && campo.indexOf(alvo)===-1) return false;
+      var campo = normalizarTextoBusca((m.rua||'')+' '+(m.nomeLocal||'')+' '+mapaTrechoDe(m)+' '+mapaRotulo(m));
+      if(alvo && campo.indexOf(alvo)===-1 && campo.replace(/[\s-]/g,'').indexOf(alvo.replace(/[\s-]/g,''))===-1) return false;
     }
     if(state.mapaFiltroNumeroLocal){
       var alvoNum = normalizarTextoBusca(state.mapaFiltroNumeroLocal);
@@ -5784,11 +5851,360 @@
     return grupos;
   }
 
+  /* ---------------- Mapeamento: VISÃO DE REDE ----------------
+     A obra de esgoto é uma rede: PVs ligados por trechos. Nesta visão cada
+     trecho é uma linha de um PV ao outro, na cor do status, e cada PV é um
+     ponto com o nome (PV-3) escrito ao lado. A visão "Locais" (círculos
+     numerados por ponto) continua disponível no botão ao lado.
+     Nada aqui grava no banco: é só a forma de desenhar o que já existe. */
+  var MAPA_REF_RX = /\b(PVEX|PVE|PVI|PV|PI|TL|CP)[-\s.]*([0-9]+[A-Z]?(?:\.[0-9]+)?)/gi;
+  var _mapaSvcIdx = { arr:null, n:-1, idx:{} };
+  function mapaSvcDe(m){
+    if(!m || !m.planejamentoServicoId) return null;
+    var arr = state.planejamentoServicos || [];
+    if(_mapaSvcIdx.arr !== arr || _mapaSvcIdx.n !== arr.length){
+      var idx = {};
+      arr.forEach(function(s){ idx[s.id] = s; });
+      _mapaSvcIdx = { arr:arr, n:arr.length, idx:idx };
+    }
+    return _mapaSvcIdx.idx[m.planejamentoServicoId] || null;
+  }
+  // "PV-2 AO PV-3" -> ['PV-2','PV-3'];  "PV 12" -> ['PV-12']
+  function mapaRefsTrecho(t){
+    var out = [];
+    String(t||'').replace(MAPA_REF_RX, function(_, a, b){ out.push(a.toUpperCase()+'-'+b.toUpperCase()); return _; });
+    return out;
+  }
+  function mapaTrechoDe(m){ var s = mapaSvcDe(m); return (s && s.trecho) || ''; }
+  // Nome curto da marcação, igual ao do projeto: "PV-3" ou "PV-2 → PV-3".
+  function mapaRotulo(m){
+    var t = mapaTrechoDe(m), refs = mapaRefsTrecho(t);
+    if(m && m.geom && m.geom.length>1) return refs.length>=2 ? (refs[0]+' → '+refs[1]) : t;
+    if(refs.length===1) return refs[0];
+    return t;
+  }
+  function mapaEhTrechoRede(m){ return !!(m && m.geom && m.geom.length>1 && mapaRefsTrecho(mapaTrechoDe(m)).length>=2); }
+  function mapaTipoLabel(m){
+    if(mapaEhTrechoRede(m)) return 'Trecho';
+    return m.tipo==='pv' ? 'PV' : 'Ramal';
+  }
+  // Ordem natural (PV-2 antes de PV-10) para a lista seguir a rede.
+  function mapaCmpNatural(a, b){
+    return String(a||'').localeCompare(String(b||''), 'pt-BR', { numeric:true, sensitivity:'base' });
+  }
+  var MAPA_VISAO_KEY = 'venko.mapaVisao';
+  function mapaVisaoAtual(){
+    if(state.mapaVisao==='rede' || state.mapaVisao==='locais') return state.mapaVisao;
+    var salvo = null;
+    try{ salvo = localStorage.getItem(MAPA_VISAO_KEY); }catch(e){}
+    if(salvo==='rede' || salvo==='locais') return salvo;
+    // Sem escolha salva: Rede quando a obra tem trechos PV→PV desenhados.
+    return (state.mapaMarcacoes||[]).some(mapaEhTrechoRede) ? 'rede' : 'locais';
+  }
+  function mapaDefinirVisao(v){
+    state.mapaVisao = v;
+    try{ localStorage.setItem(MAPA_VISAO_KEY, v); }catch(e){}
+    renderMapaMarkersOnMap();
+  }
+  // Separa o que a visão de rede desenha (PVs e trechos) do resto.
+  // Trecho antigo gravado com 1 ponto só (meio do trecho) é redesenhado
+  // ligando os dois PVs citados, quando os dois estão no mapa.
+  function mapaSepararRede(lista){
+    var nos = {}, rede = [], resto = [];
+    lista.forEach(function(m){
+      if(!(m.geom && m.geom.length===1)) return;
+      var refs = mapaRefsTrecho(mapaTrechoDe(m));
+      if(refs.length===1) nos[(m.projetoId||'')+'|'+refs[0]] = m.geom[0];
+    });
+    lista.forEach(function(m){
+      if(!(m.geom && m.geom.length)) { resto.push(m); return; }
+      var refs = mapaRefsTrecho(mapaTrechoDe(m));
+      if(m.geom.length>1){ rede.push({ m:m, linha:m.geom }); return; }
+      if(refs.length===1 || (m.tipo==='pv' && !m.planejamentoServicoId)){ rede.push({ m:m, no:m.geom[0] }); return; }
+      if(refs.length>=2){
+        var a = nos[(m.projetoId||'')+'|'+refs[0]], b = nos[(m.projetoId||'')+'|'+refs[1]];
+        if(a && b){ rede.push({ m:m, linha:[a,b], derivado:true }); return; }
+      }
+      resto.push(m);
+    });
+    return { rede:rede, resto:resto };
+  }
+  function mapaDistM(a, b){
+    var R = 6371000, rad = Math.PI/180;
+    var dLat = (b.lat-a.lat)*rad, dLng = (b.lng-a.lng)*rad;
+    var h = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(a.lat*rad)*Math.cos(b.lat*rad)*Math.sin(dLng/2)*Math.sin(dLng/2);
+    return 2*R*Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+  // Extensão do trecho: a do projeto (Planejamento); sem ela, medida no mapa (≈).
+  function mapaExtensaoTrecho(m, linha){
+    var s = mapaSvcDe(m);
+    if(s && s.comprimento!=null && isFinite(s.comprimento) && s.comprimento>0) return { m:Number(s.comprimento), aprox:false };
+    if(s && /^m$/i.test(String(s.unidade||'').trim()) && s.quantidadePrevista>0) return { m:Number(s.quantidadePrevista), aprox:false };
+    var pts = linha || m.geom || [], tot = 0;
+    for(var i=1;i<pts.length;i++) tot += mapaDistM(pts[i-1], pts[i]);
+    return { m:tot, aprox:true };
+  }
+  function mapaFmtM(v){ return (v>=100 ? Math.round(v) : Math.round(v*10)/10).toLocaleString('pt-BR')+' m'; }
+  function mapaStatusRede(st){ return st==='concluido' ? 'concluido' : (st==='parado' ? 'parado' : 'processando'); }
+  // Ficha técnica curta (hover do mapa e modal).
+  function mapaFichaItens(m){
+    var s = mapaSvcDe(m), out = [];
+    if(!s) return out;
+    if(s.servicoNome) out.push(['Serviço', s.servicoNome]);
+    if(s.trecho) out.push([m.geom && m.geom.length>1 ? 'Trecho' : 'Ponto', s.trecho]);
+    if(m.geom && m.geom.length>1){ var e = mapaExtensaoTrecho(m); if(e.m>0) out.push(['Extensão', (e.aprox?'≈ ':'')+mapaFmtM(e.m)+(e.aprox?' (medida no mapa)':'')]); }
+    if(s.diametro!=null) out.push(['Diâmetro', 'Ø'+fmtQtd(s.diametro)+' mm']);
+    if(s.material) out.push(['Material', s.material]);
+    if(s.metodo) out.push(['Método', s.metodo]);
+    if(s.profundidadeTexto) out.push(['Profundidade', s.profundidadeTexto]);
+    else if(s.profundidade!=null) out.push(['Profundidade', fmtQtd(s.profundidade)+' m']);
+    return out;
+  }
+  function mapaRedeTooltipHtml(m, extra){
+    var rot = mapaRotulo(m) || m.rua || m.nomeLocal || 'Marcação';
+    var st = mapaStatusRede(m.status);
+    var ficha = mapaFichaItens(m).filter(function(kv){ return kv[0]!=='Trecho' && kv[0]!=='Ponto'; });
+    var gi = geoNaoConfirmada(m) ? GEO_STATUS_INFO[m.geoStatus] : null;
+    return '<div class="rede-tt">'+
+      '<div class="rede-tt-h"><b>'+esc(rot)+'</b><span class="rede-tt-st st-'+st+'">'+esc(statusMapLabel(st))+'</span></div>'+
+      (m.rua ? '<div class="rede-tt-sub">'+esc(m.rua)+'</div>' : '')+
+      (ficha.length ? '<div class="rede-tt-f">'+ficha.map(function(kv){ return '<span>'+esc(kv[1])+'</span>'; }).join('')+'</div>' : '')+
+      (mapaEscopoMarcacao(m)==='aparte' ? '<div class="rede-tt-sub">À parte (fora da lista contratada)</div>' : '')+
+      (gi ? '<div class="rede-tt-sub">'+(gi.badge?esc(gi.badge)+' ':'')+esc(gi.label)+'</div>' : '')+
+      (extra ? '<div class="rede-tt-sub">'+extra+'</div>' : '')+
+      '<div class="rede-tt-dica">Clique para abrir</div>'+
+    '</div>';
+  }
+  function mapaDesenharRede(itens){
+    var cores = { concluido:statusMapColor('concluido'), processando:statusMapColor('processando'), parado:statusMapColor('parado') };
+    // Trechos primeiro (ficam por baixo dos PVs).
+    itens.filter(function(it){ return it.linha; }).forEach(function(it){
+      var m = it.m, st = mapaStatusRede(m.status), cor = cores[st];
+      var latlngs = it.linha.map(function(p){ return [p.lat, p.lng]; });
+      var aparte = mapaEscopoMarcacao(m)==='aparte';
+      var nc = geoNaoConfirmada(m) || it.derivado;
+      L.polyline(latlngs, { color:'#FFFFFF', weight:11, opacity:nc?0.6:0.95, lineCap:'round', lineJoin:'round', interactive:false, className:'rede-casing' }).addTo(mapaLayerGroup);
+      L.polyline(latlngs, { color:cor, weight:6, opacity:nc?0.55:1, lineCap:aparte?'butt':'round', lineJoin:'round', dashArray:aparte?'11 7':null, interactive:false, className:'rede-linha st-'+st }).addTo(mapaLayerGroup);
+      // Faixa larga invisível: fácil de tocar no celular.
+      var hit = L.polyline(latlngs, { color:cor, weight:22, opacity:0, lineCap:'round', className:'rede-hit' }).addTo(mapaLayerGroup);
+      var ext = mapaExtensaoTrecho(m, it.linha);
+      hit.bindTooltip(mapaRedeTooltipHtml(m, it.derivado ? 'Linha ligando os PVs do projeto (o trecho foi gravado com 1 ponto só)' : ''), { sticky:true, direction:'top', className:'map-pin-label rede-hover' });
+      hit.on('click', function(){ abrirModalMarcacao(m); });
+      if(ext.m>0){
+        L.tooltip({ permanent:true, direction:'center', className:'map-pin-label rede-ext', interactive:false, opacity:1 })
+          .setLatLng(L.latLngBounds(latlngs).getCenter()).setContent((ext.aprox?'≈':'')+mapaFmtM(ext.m)).addTo(mapaLayerGroup);
+      }
+      if(m.foto && m.status!=='processando'){
+        hit.on('mouseover mousemove', function(e){ showMapaFotoHover(m.foto, e.containerPoint); });
+        hit.on('mouseout', hideMapaFotoHover);
+      }
+    });
+    // PVs: um ponto por coordenada (vários serviços no mesmo PV dividem o ponto, pior status vence).
+    var porCoord = {}, nos = [];
+    itens.filter(function(it){ return it.no; }).forEach(function(it){
+      var k = Number(it.no.lat).toFixed(6)+','+Number(it.no.lng).toFixed(6);
+      if(!porCoord[k]){ porCoord[k] = { p:it.no, items:[] }; nos.push(porCoord[k]); }
+      porCoord[k].items.push(it.m);
+    });
+    nos.forEach(function(g){
+      // O item "dono" do ponto é o que tem nome de PV; o resto entra como extra.
+      g.items.sort(function(a, b){ return (mapaRefsTrecho(mapaTrechoDe(b)).length===1) - (mapaRefsTrecho(mapaTrechoDe(a)).length===1); });
+      var m = g.items[0];
+      var st = statusAgregadoPiorVence(g.items.map(function(x){ return mapaStatusRede(x.status); }));
+      var nc = g.items.some(geoNaoConfirmada), ruim = g.items.some(geoProblema);
+      var rot = mapaRotulo(m) || m.nomeLocal || m.rua || '';
+      var html = '<div class="rede-pv st-'+st+(nc?' nc':'')+(g.items.length>1?' multi':'')+'" style="--c:'+cores[st]+';">'+
+        (nc ? '<span class="map-geo-badge'+(ruim?' ruim':'')+'">'+(ruim?'!':esc(((GEO_STATUS_INFO[(g.items.find(geoNaoConfirmada)||{}).geoStatus]||{}).badge)||'?'))+'</span>' : '')+
+      '</div>';
+      var icon = L.divIcon({ className:'rede-pv-wrap', html:html, iconSize:[30,30], iconAnchor:[15,15] });
+      var mk = L.marker([g.p.lat, g.p.lng], { icon:icon, riseOnHover:true, keyboard:true, title:rot }).addTo(mapaLayerGroup);
+      var extraTxt = g.items.length>1 ? (g.items.length-1)+' outro(s) serviço(s) neste ponto' : '';
+      mk.bindTooltip(mapaRedeTooltipHtml(m, extraTxt), { direction:'top', offset:[0,-12], className:'map-pin-label rede-hover' });
+      mk.on('click', function(){ abrirModalMarcacao(m); });
+      // Nome do PV: etiqueta fixa ao lado (só aparece com zoom de rua).
+      if(rot){
+        L.tooltip({ permanent:true, direction:'right', offset:[13,0], className:'map-pin-label rede-lbl', interactive:false, opacity:1 })
+          .setLatLng([g.p.lat, g.p.lng]).setContent('<b>'+esc(rot)+'</b>').addTo(mapaLayerGroup);
+      }
+      var itemComFoto = g.items.find(function(x){ return x.foto && x.status!=='processando'; });
+      if(itemComFoto){
+        mk.on('mouseover mousemove', function(e){ showMapaFotoHover(itemComFoto.foto, e.containerPoint); });
+        mk.on('mouseout', hideMapaFotoHover);
+      }
+    });
+    mapaAgendarRotulos();
+  }
+  // Mostra os nomes dos PVs só com zoom de rua (17+) e as extensões no 18+,
+  // para o mapa não virar uma sopa de etiquetas quando está afastado.
+  function mapaAtualizarClassesZoom(){
+    if(!leafletMapInstance) return;
+    var z = leafletMapInstance.getZoom(), el = leafletMapInstance.getContainer();
+    el.classList.toggle('z-lbl', z>=17);
+    el.classList.toggle('z-ext', z>=18);
+    mapaAgendarRotulos();
+  }
+  // Espera a animação de zoom terminar antes de medir as etiquetas.
+  var _mapaRotulosTimer = null;
+  function mapaAgendarRotulos(){
+    clearTimeout(_mapaRotulosTimer);
+    _mapaRotulosTimer = setTimeout(mapaEvitarSobreposicaoRotulos, 320);
+  }
+  // Etiquetas que cairiam umas por cima das outras: fica a primeira, as
+  // outras somem até aproximar mais o zoom (o nome continua no hover).
+  function mapaEvitarSobreposicaoRotulos(){
+    if(!leafletMapInstance) return;
+    var el = leafletMapInstance.getContainer();
+    var nomes = Array.prototype.slice.call(el.querySelectorAll('.leaflet-tooltip.rede-lbl'));
+    var exts = Array.prototype.slice.call(el.querySelectorAll('.leaflet-tooltip.rede-ext'));
+    nomes.concat(exts).forEach(function(t){ t.style.visibility = ''; t.style.marginLeft = ''; });
+    // Os próprios PVs também são obstáculo: etiqueta nenhuma tampa um PV.
+    var usados = Array.prototype.slice.call(el.querySelectorAll('.rede-pv')).map(function(p){ return p.getBoundingClientRect(); }).filter(function(r){ return r.width; });
+    var bate = function(r){ return usados.some(function(u){ return !(r.right <= u.left || r.left >= u.right || r.bottom <= u.top || r.top >= u.bottom); }); };
+    // Nomes dos PVs têm prioridade; se o lado direito estiver ocupado, tenta o esquerdo.
+    nomes.forEach(function(t){
+      var r = t.getBoundingClientRect();
+      if(!r.width) return;
+      if(bate(r)){
+        t.style.marginLeft = (-(r.width + 32))+'px';
+        r = t.getBoundingClientRect();
+        if(bate(r)){ t.style.marginLeft = ''; t.style.visibility = 'hidden'; return; }
+      }
+      usados.push(r);
+    });
+    exts.forEach(function(t){
+      var r = t.getBoundingClientRect();
+      if(!r.width) return;
+      if(bate(r)) t.style.visibility = 'hidden'; else usados.push(r);
+    });
+  }
+  // Leva o mapa até a marcação e pisca um destaque (usado pela lista).
+  function mapaFocarMarcacao(m){
+    if(!leafletMapInstance || !m || !(m.geom && m.geom.length)) return;
+    var pts = m.geom.map(function(p){ return [p.lat, p.lng]; });
+    var el = document.getElementById('leafletMap');
+    if(el && el.scrollIntoView) el.scrollIntoView({ behavior:'smooth', block:'center' });
+    if(pts.length===1) leafletMapInstance.setView(pts[0], Math.max(leafletMapInstance.getZoom(), 18));
+    else leafletMapInstance.fitBounds(pts, { padding:[60,60], maxZoom:19 });
+    var halo = pts.length===1
+      ? L.circleMarker(pts[0], { radius:20, color:'#2B6CB0', weight:4, fillOpacity:0, interactive:false, className:'rede-halo' })
+      : L.polyline(pts, { color:'#2B6CB0', weight:16, opacity:0.45, interactive:false, className:'rede-halo' });
+    halo.addTo(mapaTempLayerGroup);
+    setTimeout(function(){ try{ mapaTempLayerGroup.removeLayer(halo); }catch(e){} }, 2600);
+  }
+  // Resumo da rede: metros e PVs por status (respeita projeto/serviço/escopo/
+  // região, mas NÃO o filtro de status — senão o avanço sempre daria 0% ou 100%).
+  function mapaRedeResumoCalc(){
+    var base = (state.mapaMarcacoes||[]).filter(function(m){ return mapaMarcacaoPassaFiltros(m, true); });
+    var sep = mapaSepararRede(base);
+    var r = { m:{ concluido:0, processando:0, parado:0 }, pv:{ concluido:0, processando:0, parado:0 }, totM:0, totPv:0, aprox:false, nTrechos:0 };
+    var vistos = {}, pvVistos = {};
+    sep.rede.forEach(function(it){
+      var st = mapaStatusRede(it.m.status);
+      if(it.linha){
+        var k = it.m.planejamentoServicoId ? 's'+it.m.planejamentoServicoId : 'm'+it.m.id;
+        if(vistos[k]) return; vistos[k] = 1;
+        var e = mapaExtensaoTrecho(it.m, it.linha);
+        r.m[st] += e.m; r.totM += e.m; r.nTrechos++; if(e.aprox) r.aprox = true;
+      } else if(mapaRefsTrecho(mapaTrechoDe(it.m)).length===1 || it.m.tipo==='pv'){
+        var kp = Number(it.no.lat).toFixed(6)+','+Number(it.no.lng).toFixed(6);
+        if(pvVistos[kp]){ // mesmo ponto: pior status vence
+          var ant = pvVistos[kp], novo = statusAgregadoPiorVence([ant, st]);
+          if(novo!==ant){ r.pv[ant]--; r.pv[novo]++; pvVistos[kp] = novo; }
+          return;
+        }
+        pvVistos[kp] = st; r.pv[st]++; r.totPv++;
+      }
+    });
+    return r;
+  }
+  function renderMapaRedeResumo(){
+    var el = document.getElementById('mapaRedeResumo');
+    if(!el) return;
+    if(mapaVisaoAtual()!=='rede'){ el.innerHTML = ''; el.style.display = 'none'; return; }
+    var r = mapaRedeResumoCalc();
+    if(!r.nTrechos && !r.totPv){ el.innerHTML = ''; el.style.display = 'none'; return; }
+    el.style.display = '';
+    var pct = r.totM>0 ? r.m.concluido/r.totM*100 : (r.totPv>0 ? r.pv.concluido/r.totPv*100 : 0);
+    var pctTxt = pct>=10 || pct===0 ? String(Math.round(pct)) : pct.toLocaleString('pt-BR', { maximumFractionDigits:1 });
+    var seg = function(st){ var w = r.totM>0 ? r.m[st]/r.totM*100 : (r.totPv>0 ? r.pv[st]/r.totPv*100 : 0); return w>0 ? '<span class="rede-bar-seg st-'+st+'" style="width:'+w+'%;"></span>' : ''; };
+    var filtro = state.mapaFiltroStatus || 'all';
+    var chip = function(st){
+      var partes = [];
+      if(r.nTrechos) partes.push(mapaFmtM(r.m[st]));
+      if(r.totPv) partes.push(r.pv[st]+' PV'+(r.pv[st]===1?'':'s'));
+      return '<button type="button" class="rede-chip st-'+st+(filtro===st?' ativo':'')+'" data-redefiltro="'+st+'" aria-pressed="'+(filtro===st)+'">'+
+        '<span class="rede-chip-dot"></span><span class="rede-chip-n">'+esc(statusMapLabel(st))+'</span><span class="rede-chip-v">'+esc(partes.join(' · '))+'</span></button>';
+    };
+    el.innerHTML =
+      '<div class="rede-resumo-topo">'+
+        '<div class="rede-resumo-num"><b>'+pctTxt+'%</b><span>da rede concluída</span></div>'+
+        '<div class="rede-resumo-det">'+
+          (r.nTrechos ? '<span><b>'+mapaFmtM(r.m.concluido)+'</b> de '+(r.aprox?'≈ ':'')+mapaFmtM(r.totM)+' em '+r.nTrechos+' trecho'+(r.nTrechos===1?'':'s')+'</span>' : '')+
+          (r.totPv ? '<span><b>'+r.pv.concluido+'</b> de '+r.totPv+' PV'+(r.totPv===1?'':'s')+' concluído'+(r.pv.concluido===1?'':'s')+'</span>' : '')+
+        '</div>'+
+      '</div>'+
+      '<div class="rede-bar" role="img" aria-label="'+pctTxt+'% da rede concluída">'+seg('concluido')+seg('processando')+seg('parado')+'</div>'+
+      '<div class="rede-chips">'+chip('concluido')+chip('processando')+chip('parado')+
+        (filtro!=='all' ? '<button type="button" class="rede-chip limpar" data-redefiltro="all">Mostrar todos</button>' : '')+
+      '</div>'+
+      (r.aprox ? '<p class="hint" style="margin:6px 0 0;">≈ alguns trechos não têm extensão no projeto; foi usada a medida no mapa.</p>' : '');
+    el.querySelectorAll('[data-redefiltro]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var v = b.getAttribute('data-redefiltro');
+        state.mapaFiltroStatus = (v!=='all' && state.mapaFiltroStatus===v) ? 'all' : v;
+        var sel = document.getElementById('mapaFiltroStatus'); if(sel) sel.value = state.mapaFiltroStatus;
+        renderMapaMarkersOnMap();
+        renderMapaMarcacoesList();
+      });
+    });
+  }
+  function mapaLegendaHtml(){
+    if(mapaVisaoAtual()==='rede'){
+      return '<span class="map-legend-item"><span class="rede-leg-linha" style="background:var(--map-verde);"></span>Concluído</span>'+
+        '<span class="map-legend-item"><span class="rede-leg-linha" style="background:var(--map-amarelo);"></span>Em andamento</span>'+
+        '<span class="map-legend-item"><span class="rede-leg-linha" style="background:var(--map-vermelho);"></span>Pendente</span>'+
+        '<span class="map-legend-item" title="Serviço fora da lista contratada da obra"><span class="rede-leg-linha tracejada"></span>À parte</span>'+
+        '<span class="map-legend-item"><span class="rede-leg-pv"></span>PV</span>'+
+        '<span class="map-legend-item" title="Coordenada ainda não conferida"><span class="map-legend-dot" style="background:#fff;border:2px dashed #14130F;"></span>? a validar</span>';
+    }
+    return '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-amarelo);"></span>Em andamento</span>'+
+      '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-vermelho);"></span>Pendente</span>'+
+      '<span class="map-legend-item"><span class="map-legend-dot" style="background:var(--map-verde);"></span>Concluído</span>'+
+      '<span class="map-legend-item" title="Coordenada do projeto ainda não conferida"><span class="map-legend-dot" style="background:#fff;border:2px dashed #14130F;"></span>? a validar</span>'+
+      '<span class="map-legend-item" title="Posição pelo nome da rua, não é a coordenada do projeto"><span class="map-legend-dot" style="background:#fff;border:2px dashed #14130F;"></span>≈ aproximada</span>';
+  }
+  function renderMapaVisaoControles(){
+    var v = mapaVisaoAtual();
+    var seg = document.getElementById('mapaVisaoSeg');
+    if(seg) seg.querySelectorAll('[data-visao]').forEach(function(b){
+      var on = b.getAttribute('data-visao')===v;
+      b.classList.toggle('ativo', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    var leg = document.getElementById('mapaLegenda');
+    if(leg) leg.innerHTML = mapaLegendaHtml();
+    renderMapaRedeResumo();
+  }
+  // Ficha técnica no modal da marcação.
+  function mapaFichaTecnicaHtml(m){
+    var itens = mapaFichaItens(m);
+    if(!itens.length) return '';
+    return '<div class="field ficha-tec" style="margin-bottom:12px;"><label>Ficha técnica</label>'+
+      '<dl class="ficha-grid">'+itens.map(function(kv){ return '<dt>'+esc(kv[0])+'</dt><dd>'+esc(kv[1])+'</dd>'; }).join('')+'</dl></div>';
+  }
+
   function renderMapaMarkersOnMap(){
     if(!mapaLayerGroup) return;
     mapaLayerGroup.clearLayers();
     hideMapaFotoHover();
-    var marcacoesFiltradas = state.mapaMarcacoes.filter(mapaMarcacaoPassaFiltros);
+    var marcacoesFiltradas = state.mapaMarcacoes.filter(function(m){ return mapaMarcacaoPassaFiltros(m); });
+    renderMapaVisaoControles();
+    // Visão de rede: PVs e trechos desenhados como rede; o que não é rede
+    // (outros serviços) segue o desenho normal logo abaixo.
+    if(mapaVisaoAtual()==='rede'){
+      var sepRede = mapaSepararRede(marcacoesFiltradas);
+      mapaDesenharRede(sepRede.rede);
+      marcacoesFiltradas = sepRede.resto;
+    }
     // Serviço À PARTE (fora do contrato) não entra no círculo numerado do local:
     // cada um ganha o seu próprio marcador (ponto) ou traço, desenhados mais abaixo.
     var marcacoesAparte = marcacoesFiltradas.filter(function(m){ return mapaEscopoMarcacao(m)==='aparte'; });
@@ -5896,17 +6312,24 @@
       return;
     }
     var canGestao = obrasGestaoCanAccess();
-    var marcacoesFiltradas = state.mapaMarcacoes.filter(mapaMarcacaoPassaFiltros);
+    var marcacoesFiltradas = state.mapaMarcacoes.filter(function(m){ return mapaMarcacaoPassaFiltros(m); });
     if(marcacoesFiltradas.length===0){
       wrap.innerHTML = '<p class="empty-hint">Nenhuma marcação para os filtros selecionados.</p>';
       return;
     }
-    var ordenadas = marcacoesFiltradas.slice().sort(function(a,b){ return (a.nomeLocal||a.rua||'').localeCompare(b.nomeLocal||b.rua||''); });
+    var ordenadas = marcacoesFiltradas.slice().sort(function(a,b){
+      var ra = mapaRotulo(a), rb = mapaRotulo(b);
+      if(!!ra !== !!rb) return ra ? -1 : 1;           // primeiro o que tem nome de PV/trecho, na ordem da rede
+      return mapaCmpNatural(ra, rb) || (a.nomeLocal||a.rua||'').localeCompare(b.nomeLocal||b.rua||'');
+    });
     wrap.innerHTML = ordenadas.map(function(m){
+      var rot = mapaRotulo(m);
       return '<div class="marcacao-row" data-id="'+m.id+'">'+
+        (m.geom && m.geom.length ? '<button type="button" class="btn ghost sm ver-mapa" data-vermapa="'+m.id+'" title="Mostrar no mapa" aria-label="Mostrar no mapa">📍</button>' : '')+
+        (rot ? '<span class="rotulo">'+esc(rot)+'</span>' : '')+
         (m.nomeLocal ? '<span class="rua" style="font-weight:700;">'+esc(m.nomeLocal)+'</span>' : '')+
-        '<span class="rua"'+(m.nomeLocal?' style="color:var(--muted);font-weight:400;"':'')+'>'+esc(m.rua||'(sem rua informada)')+'</span>'+
-        '<span class="tag-example" style="background:transparent;">'+(m.tipo==='pv'?'PV':'Ramal')+'</span>'+escopoChipHtml(mapaEscopoMarcacao(m))+(m.geoStatus?geoChipHtml(m.geoStatus):'')+
+        '<span class="rua"'+(m.nomeLocal||rot?' style="color:var(--muted);font-weight:400;"':'')+'>'+esc(m.rua||'(sem rua informada)')+'</span>'+
+        '<span class="tag-example" style="background:transparent;">'+mapaTipoLabel(m)+'</span>'+escopoChipHtml(mapaEscopoMarcacao(m))+(m.geoStatus?geoChipHtml(m.geoStatus):'')+
         (m.numeroServico?'<span class="tag-example" style="background:transparent;">Nº '+esc(m.numeroServico)+'</span>':'')+
         '<select class="status-select" data-statusid="'+m.id+'">'+
           '<option value="processando"'+(m.status==='processando'?' selected':'')+'>Em andamento</option>'+
@@ -5931,6 +6354,12 @@
     });
     wrap.querySelectorAll('[data-delmarc]').forEach(function(b){
       b.addEventListener('click', function(){ excluirMarcacao(b.getAttribute('data-delmarc')); });
+    });
+    wrap.querySelectorAll('[data-vermapa]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-vermapa');
+        mapaFocarMarcacao(state.mapaMarcacoes.find(function(x){ return x.id===id; }));
+      });
     });
   }
 
@@ -6061,7 +6490,7 @@
         if(x.id!==m.id && x.planejamentoServicoId && x.geom && x.geom.length===1 && (Number(x.geom[0].lat).toFixed(6)+','+Number(x.geom[0].lng).toFixed(6))===chaveP) idsNoPonto[x.planejamentoServicoId] = true;
       });
       servicosRelacionados = (state.planejamentoServicos||[]).filter(function(x){ return idsNoPonto[x.id] && (!svcAtual || x.id!==svcAtual.id); });
-    } else if(m.localKey){
+    } else if(m.localKey && !(m.geom && m.geom.length>1)){
       servicosRelacionados = (state.planejamentoServicos||[]).filter(function(x){
         return x.obraId===obraIdAtual && x.localKey===m.localKey && (!svcAtual || x.id!==svcAtual.id);
       });
@@ -6104,12 +6533,20 @@
       : (isEdit ? ('<div class="field" style="margin-bottom:10px;"><label>Local</label><div class="hint" style="margin:0;">'+esc(m.nomeLocal||m.rua||'(sem endereço)')+(m.nomeLocal&&m.rua?' · '+esc(m.rua):'')+(m.numeroServico?' · Nº '+esc(m.numeroServico):'')+'</div></div>') : '');
     wrap.innerHTML =
       '<div class="modal">'+
-        '<h3>'+(isEdit ? (canGestao ? 'Editar marcação' : 'Atualizar marcação') : (m.tipo==='pv' ? 'Novo PV' : 'Novo ramal'))+'</h3>'+
+        '<h3>'+(isEdit && mapaRotulo(m) ? esc(mapaRotulo(m))+' <span style="font-weight:500;color:var(--muted);font-size:14px;">· '+(canGestao ? 'editar' : 'atualizar')+'</span>' : (isEdit ? (canGestao ? 'Editar marcação' : 'Atualizar marcação') : (m.tipo==='pv' ? 'Novo PV' : 'Novo ramal')))+'</h3>'+
+        (isEdit ? mapaFichaTecnicaHtml(m) : '')+
+        '<div class="field" style="margin-bottom:12px;"><label>Status</label>'+
+          '<div class="seg seg-status" id="marcStatusSeg" role="group" aria-label="Status">'+
+            '<button type="button" data-st="parado" style="--dot:var(--map-vermelho);">Pendente</button>'+
+            '<button type="button" data-st="processando" style="--dot:var(--map-amarelo);">Em andamento</button>'+
+            '<button type="button" data-st="concluido" style="--dot:var(--map-verde);">Concluído</button>'+
+          '</div>'+
+        '</div>'+
         projetoOrigemHtml+
         escopoMarcacaoHtml+
         camposIdentificacao+
         geoOrigemHtml(m)+
-        '<div class="field" style="margin-bottom:10px;"><label>Status</label>'+
+        '<div class="field" style="margin-bottom:10px;display:none;"><label>Status</label>'+
           '<select id="marcStatus">'+
             '<option value="processando"'+((m.status||'processando')==='processando'?' selected':'')+'>Em andamento</option>'+
             '<option value="parado"'+(m.status==='parado'?' selected':'')+'>Pendente</option>'+
@@ -6129,6 +6566,14 @@
       '</div>';
     root.appendChild(wrap);
     var marcStatusEl = document.getElementById('marcStatus'), marcValorEl = document.getElementById('marcValorBox');
+    var marcStatusSeg = document.getElementById('marcStatusSeg');
+    if(marcStatusSeg && marcStatusEl){
+      var pintarSeg = function(){ marcStatusSeg.querySelectorAll('[data-st]').forEach(function(b){ var on = b.getAttribute('data-st')===marcStatusEl.value; b.classList.toggle('ativo', on); b.setAttribute('aria-pressed', on?'true':'false'); }); };
+      pintarSeg();
+      marcStatusSeg.querySelectorAll('[data-st]').forEach(function(b){
+        b.addEventListener('click', function(){ marcStatusEl.value = b.getAttribute('data-st'); marcStatusEl.dispatchEvent(new Event('change')); pintarSeg(); });
+      });
+    }
     if(marcStatusEl && marcValorEl) marcStatusEl.addEventListener('change', function(){ marcValorEl.innerHTML = mapaValorBoxInner(m, svcAtual, servicosRelacionados, marcStatusEl.value); });
     var marcFotoInputEl = document.getElementById('marcFotoInput');
     if(marcFotoInputEl){
@@ -6334,8 +6779,14 @@
   }
 
   function atualizarStatusMarcacao(id, status){
+    var alvo = (state.mapaMarcacoes||[]).find(function(x){ return x.id===id; });
+    var anterior = alvo ? alvo.status : null;
+    if(alvo){ alvo.status = status; renderMapaMarkersOnMap(); renderMapaValorResumo(); }
     supabaseClient.from('mapa_marcacoes').update({ status: status, updated_at: new Date().toISOString() }).eq('id', id).then(function(res){
-      if(res.error){ toast('Erro ao atualizar status: '+res.error.message,'error'); return; }
+      if(res.error){
+        if(alvo){ alvo.status = anterior; renderMapaMarkersOnMap(); renderMapaMarcacoesList(); }
+        toast('Erro ao atualizar status: '+res.error.message,'error'); return;
+      }
       loadMapaMarcacoes(state.mapaObraId);
     });
   }
