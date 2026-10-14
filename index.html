@@ -6988,13 +6988,26 @@
       assinaturas:[]
     };
   }
-  function renderEquipeChecklist(selectedNames){
+  function renderEquipeChecklist(selectedNames, rdo){
     var ativas = state.equipes.filter(function(e){ return e.ativa; });
     if(!ativas.length) return '<p class="empty-hint">Nenhuma equipe cadastrada ainda — cadastre em "Equipes".</p>';
     return '<div class="checklist-wrap" id="rdoEquipesWrap">' + ativas.map(function(e){
-      var checked = (selectedNames||[]).indexOf(e.nome)!==-1;
-      return '<label class="checklist-item"><input type="checkbox" data-eqdia="'+esc(e.nome)+'"'+(checked?' checked':'')+'><span class="checklist-label">'+esc(e.nome)+'</span></label>';
+      var idx = (selectedNames||[]).indexOf(e.nome), checked = idx!==-1;
+      var qtd = checked && rdo ? equipeQtdPessoas(rdo, idx, e.nome) : '';
+      return '<div class="rdo-eq-linha" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
+        '<label class="checklist-item" style="flex:1 1 200px;"><input type="checkbox" data-eqdia="'+esc(e.nome)+'"'+(checked?' checked':'')+'><span class="checklist-label">'+esc(e.nome)+'</span></label>'+
+        '<span data-eqqtdwrap="'+esc(e.nome)+'" style="'+(checked?'':'display:none;')+'white-space:nowrap;font-size:13px;color:var(--muted);">Qtd. de pessoas: '+
+          '<input type="number" min="0" step="1" inputmode="numeric" data-eqqtd="'+esc(e.nome)+'" value="'+esc(String(qtd))+'" style="width:72px;margin-left:4px;"></span>'+
+      '</div>';
     }).join('') + '</div>';
+  }
+  // Quantidade de pessoas da equipe no dia (número). Fica gravada no RDO
+  // (equipes_detalhe[i].qtdPessoas); num RDO novo começa com o nº de
+  // colaboradores ativos cadastrados na equipe.
+  function equipeQtdPessoas(rdo, idx, nome){
+    var d = (rdo.equipesDetalhe||[])[idx];
+    if(d && d.qtdPessoas!=null && d.qtdPessoas!=='') return d.qtdPessoas;
+    return equipeColaboradores(nome).length;
   }
   function equipeColaboradores(nome){
     var eq = state.equipes.find(function(e){ return e.nome===nome; });
@@ -7274,11 +7287,25 @@
   function wireEquipeChecklist(rdo){
     var wrap = document.getElementById('rdoEquipesWrap');
     if(!wrap) return;
+    wrap.querySelectorAll('[data-eqqtd]').forEach(function(inp){
+      inp.addEventListener('input', function(){
+        var idx = rdo.equipesDia.indexOf(inp.getAttribute('data-eqqtd'));
+        if(idx===-1) return;
+        syncEquipesDetalhe(rdo);
+        rdo.equipesDetalhe[idx].qtdPessoas = inp.value==='' ? '' : Math.max(0, Math.round(Number(inp.value)||0));
+      });
+    });
     wrap.querySelectorAll('[data-eqdia]').forEach(function(chk){
       chk.addEventListener('change', function(){
         var nome = chk.getAttribute('data-eqdia');
+        var qtdWrap = wrap.querySelector('[data-eqqtdwrap="'+nome.replace(/"/g,'\\"')+'"]');
+        if(qtdWrap) qtdWrap.style.display = chk.checked ? '' : 'none';
         if(chk.checked){
           if(rdo.equipesDia.indexOf(nome)===-1) rdo.equipesDia.push(nome);
+          syncEquipesDetalhe(rdo);
+          var dNovo = rdo.equipesDetalhe[rdo.equipesDia.indexOf(nome)];
+          if(dNovo && (dNovo.qtdPessoas==null || dNovo.qtdPessoas==='')) dNovo.qtdPessoas = equipeColaboradores(nome).length;
+          var qInp = qtdWrap && qtdWrap.querySelector('input'); if(qInp) qInp.value = dNovo ? dNovo.qtdPessoas : '';
         } else {
           var idx = rdo.equipesDia.indexOf(nome);
           if(idx!==-1){ if(rdo.equipesDetalhe && rdo.equipesDetalhe[idx] && (rdo.equipesDetalhe[idx].pvsExecutados||[]).length){ rdo.pvsSemEquipe = rdo.pvsSemEquipe || {}; rdo.equipesDetalhe[idx].pvsExecutados.forEach(function(p){ rdo.pvsSemEquipe[p.servicoId] = p; }); } rdo.equipesDia.splice(idx,1); if(rdo.equipesDetalhe) rdo.equipesDetalhe.splice(idx,1); }
@@ -7448,7 +7475,7 @@
       '<div class="card">'+
         '<h2><span class="idx">3</span>Equipes em campo</h2>'+
         '<p class="hint">Selecione as equipes que atuaram na obra hoje — a mão de obra abaixo é preenchida automaticamente a partir dos colaboradores de cada equipe (pode ajustar se faltou alguém).</p>'+
-        renderEquipeChecklist(rdo.equipesDia) +
+        renderEquipeChecklist(rdo.equipesDia, rdo) +
       '</div>'+
 
       '<div class="card">'+
@@ -7646,6 +7673,7 @@
             }),
             resumoAtividades: (d.resumoAtividades||[]).filter(function(s){ return s; }),
             resumoItens: (d.resumoItens||[]).filter(function(s){ return s; }),
+            qtdPessoas: (d.qtdPessoas===''||d.qtdPessoas==null) ? null : Math.max(0, Math.round(Number(d.qtdPessoas)||0)),
             pvsExecutados: (d.pvsExecutados||[]).filter(function(p){ return p && p.servicoId; }).map(function(p){
               return { servicoId: p.servicoId, codigo: p.codigo||'', servico: p.servico||'', trecho: p.trecho||'', rua: p.rua||'' };
             })
@@ -8057,7 +8085,7 @@
         )
       ) +
 
-      rdoCard(rdoCardHead('Equipes em campo', equipesDia.length) + (equipesDia.length ? '<div style="padding:10px 14px;">'+esc(equipesDia.join(', '))+'</div>' : rdoEmptyMsg())) +
+      rdoCard(rdoCardHead('Equipes em campo', equipesDia.length) + (equipesDia.length ? '<div style="padding:10px 14px;">'+equipesDia.map(function(nome, i){ var q = (equipesDetalhe[i]||{}).qtdPessoas; return esc(nome)+((q!=null && q!=='') ? ' — '+esc(String(q))+' pessoa(s)' : ''); }).join('<br>')+(equipesDia.some(function(n, i){ var q = (equipesDetalhe[i]||{}).qtdPessoas; return q!=null && q!==''; }) ? '<div style="margin-top:6px;font-weight:bold;">Total: '+equipesDia.reduce(function(s, n, i){ return s + (Number((equipesDetalhe[i]||{}).qtdPessoas)||0); }, 0)+' pessoa(s)</div>' : '')+'</div>' : rdoEmptyMsg())) +
 
       rdoCard(rdoCardHead('Gestão') + rdoTileGridHtml(gestaoTiles,3)) +
 
