@@ -503,6 +503,7 @@
   .rede-pv.st-concluido{background:var(--c);}
   .rede-pv.multi{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--c),0 1px 4px rgba(20,19,15,.5);}
   .rede-pv.nc{border-style:dashed;}
+  .rede-pv.fantasma{border:3px solid #6B6B66;background:#fff;box-shadow:0 0 0 2px #fff,0 1px 3px rgba(20,19,15,.35);}
   .rede-pv .map-geo-badge{right:-12px;top:-12px;}
   .leaflet-tooltip.rede-lbl{padding:1px 6px;font-size:11px;}
   .leaflet-tooltip.rede-ext{padding:0 5px;font:600 10px/1.5 Inter,sans-serif;color:#333;background:rgba(255,255,255,.92);}
@@ -3619,9 +3620,21 @@
     }
     if(p.statusAnalise==='analisado'){
       var partes = [];
-      if(p.qtdServicosIdentificados!=null) partes.push('Serviços encontrados: '+p.qtdServicosIdentificados);
-      if(p.enderecosIdentificados!=null) partes.push('Locais encontrados: '+p.enderecosIdentificados);
-      if(p.pontosLocalizados!=null) partes.push('Locais georreferenciados: '+p.pontosLocalizados);
+      var svsProj = (state.planejamentoServicos||[]).filter(function(s){ return s.projetoId===p.id; });
+      if(svsProj.length){
+        var comPos = svsProj.filter(function(s){ return s.latitude!=null && s.longitude!=null; });
+        var pelaCoord = comPos.filter(function(s){ return /coordenada_projeto/.test(String(s.geoMetodo||'')); });
+        var nPv = svsProj.filter(function(s){ var r = mapaRefsTrecho(s.trecho); return r.length===1; }).length;
+        var trechos = svsProj.filter(function(s){ return mapaRefsTrecho(s.trecho).length>=2; });
+        var metros = trechos.reduce(function(a, s){ return a + (Number(s.comprimento)||0); }, 0);
+        partes.push('Serviços: '+svsProj.length);
+        partes.push('No mapa: '+comPos.length+' de '+svsProj.length+(pelaCoord.length ? ' ('+pelaCoord.length+' pela coordenada do projeto)' : ''));
+        if(nPv || trechos.length) partes.push('Rede: '+nPv+' PV(s) e '+trechos.length+' trecho(s)'+(metros>0 ? ' · '+mapaFmtM(metros) : ''));
+      } else {
+        if(p.qtdServicosIdentificados!=null) partes.push('Serviços encontrados: '+p.qtdServicosIdentificados);
+        if(p.enderecosIdentificados!=null) partes.push('Locais encontrados: '+p.enderecosIdentificados);
+        if(p.pontosLocalizados!=null) partes.push('Locais georreferenciados: '+p.pontosLocalizados);
+      }
       var qtdPendentes = p.locaisPendentesLocalizacao;
       if(qtdPendentes==null){
         // fallback para projetos analisados antes da migration 024 (ainda
@@ -3665,12 +3678,13 @@
       var locaisKeys = {};
       (state.planejamentoServicos||[]).forEach(function(s){ if(s.projetoId===p.id && s.localKey) locaisKeys[s.localKey]=true; });
       var qtdLocais = Object.keys(locaisKeys).length;
+      var qtdNoMapa = (state.planejamentoServicos||[]).filter(function(s){ return s.projetoId===p.id && s.latitude!=null && s.longitude!=null; }).length;
       return '<div class="checklist-item" data-id="'+p.id+'" style="justify-content:space-between;flex-wrap:wrap;">'+
         '<div><b>'+esc(p.nome)+'</b><div class="hint" style="margin:2px 0 0;">'+kb+'</div></div>'+
         '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
           projetoStatusChip(p.statusAnalise)+
           (podeAnalisar ? '<button type="button" class="btn primary sm" data-analisar="'+p.id+'">'+(p.statusAnalise==='erro'?'Analisar novamente':(p.statusAnalise==='analisado'?'Reanalisar':'Analisar projeto'))+'</button>' : '')+
-          (qtdLocais ? '<button type="button" class="btn ghost sm" data-vernomapa="'+p.id+'">Ver no mapa ('+qtdLocais+' local(is))</button>' : '')+
+          (qtdLocais ? '<button type="button" class="btn ghost sm" data-vernomapa="'+p.id+'">Ver no mapa'+(qtdNoMapa ? ' ('+qtdNoMapa+' serviço(s))' : ' ('+qtdLocais+' local(is))')+'</button>' : '')+
           (p.arquivoUrl ? '<a href="'+esc(p.arquivoUrl)+'" target="_blank" rel="noopener" class="btn ghost sm">Abrir arquivo</a>' : '')+
           '<button type="button" class="btn danger sm" data-delprojeto="'+p.id+'">Excluir</button>'+
         '</div>'+
@@ -5958,7 +5972,27 @@
     if(s.metodo) out.push(['Método', s.metodo]);
     if(s.profundidadeTexto) out.push(['Profundidade', s.profundidadeTexto]);
     else if(s.profundidade!=null) out.push(['Profundidade', fmtQtd(s.profundidade)+' m']);
+    var obsP = mapaObsProjeto(s.observacoes);
+    if(obsP.declividade) out.push(['Declividade', obsP.declividade]);
+    if(s.quantidadePrevista>0 && !(m.geom && m.geom.length>1)) out.push(['Quantidade', fmtQtd(s.quantidadePrevista)+' '+(s.unidade||'')]);
+    if(obsP.texto) out.push(['Obs. do projeto', obsP.texto]);
     return out;
+  }
+  // Observação do serviço sem as notas que o próprio sistema acrescenta
+  // (quantidade, escopo, posição aproximada...); a declividade vira campo próprio.
+  function mapaObsProjeto(obs){
+    var r = { declividade:'', texto:'' };
+    var partes = String(obs||'').split(/\s+—\s+/).map(function(x){ return x.trim(); }).filter(Boolean);
+    var resto = [];
+    partes.forEach(function(p){
+      var md = /declividade\s*[:=]?\s*([\d.,]+\s*(?:m\/m|%)?)/i.exec(p);
+      if(md && !r.declividade){ r.declividade = md[1].trim(); p = p.replace(md[0], '').replace(/^[\s\-–,;]+|[\s\-–,;]+$/g, ''); }
+      if(!p) return;
+      if(/^(quantidade|posi[cç][aã]o aproximada|contratado:|[àa] parte|rua localizada|posicionado|localiza[cç][aã]o)/i.test(p)) return;
+      resto.push(p);
+    });
+    r.texto = resto.join(' — ');
+    return r;
   }
   function mapaRedeTooltipHtml(m, extra){
     var rot = mapaRotulo(m) || m.rua || m.nomeLocal || 'Marcação';
@@ -6032,6 +6066,31 @@
         mk.on('mouseout', hideMapaFotoHover);
       }
     });
+    // Ponta de trecho cujo PV não aparece como serviço no projeto (ex.: o PV
+    // inicial já existente): desenha o PV vazado, com o nome, para a rede
+    // ficar completa. É só desenho — não cria serviço nem marcação.
+    var pertoDeNo = function(p){ return nos.some(function(g){ return mapaDistM(p, g.p) < 0.5; }); };
+    var pontas = {};
+    itens.filter(function(it){ return it.linha && it.linha.length>1; }).forEach(function(it){
+      var refs = mapaRefsTrecho(mapaTrechoDe(it.m));
+      if(refs.length<2) return;
+      [[it.linha[0], refs[0]], [it.linha[it.linha.length-1], refs[refs.length-1]]].forEach(function(par){
+        var p = par[0], ref = par[1];
+        if(!p || pertoDeNo(p)) return;
+        var k = Number(p.lat).toFixed(6)+','+Number(p.lng).toFixed(6);
+        if(pontas[k]) return;
+        pontas[k] = { p:p, ref:ref, m:it.m };
+      });
+    });
+    Object.keys(pontas).forEach(function(k){
+      var pt = pontas[k];
+      var icon = L.divIcon({ className:'rede-pv-wrap', html:'<div class="rede-pv fantasma"></div>', iconSize:[30,30], iconAnchor:[15,15] });
+      var mk = L.marker([pt.p.lat, pt.p.lng], { icon:icon, keyboard:false, title:pt.ref }).addTo(mapaLayerGroup);
+      mk.bindTooltip('<div class="rede-tt"><div class="rede-tt-h"><b>'+esc(pt.ref)+'</b></div><div class="rede-tt-sub">Ponta do trecho '+esc(mapaRotulo(pt.m))+'. O projeto não lista este PV como serviço (ex.: PV existente ou início do trecho).</div><div class="rede-tt-dica">Clique para abrir o trecho</div></div>', { direction:'top', offset:[0,-12], className:'map-pin-label rede-hover' });
+      mk.on('click', function(){ abrirModalMarcacao(pt.m); });
+      L.tooltip({ permanent:true, direction:'right', offset:[13,0], className:'map-pin-label rede-lbl', interactive:false, opacity:1 })
+        .setLatLng([pt.p.lat, pt.p.lng]).setContent('<b>'+esc(pt.ref)+'</b>').addTo(mapaLayerGroup);
+    });
     mapaAgendarRotulos();
   }
   // Mostra os nomes dos PVs só com zoom de rua (17+) e as extensões no 18+,
@@ -6058,7 +6117,7 @@
     var exts = Array.prototype.slice.call(el.querySelectorAll('.leaflet-tooltip.rede-ext'));
     nomes.concat(exts).forEach(function(t){ t.style.visibility = ''; t.style.marginLeft = ''; });
     // Os próprios PVs também são obstáculo: etiqueta nenhuma tampa um PV.
-    var usados = Array.prototype.slice.call(el.querySelectorAll('.rede-pv')).map(function(p){ return p.getBoundingClientRect(); }).filter(function(r){ return r.width; });
+    var usados = Array.prototype.slice.call(el.querySelectorAll('.rede-pv, .rede-pv.fantasma')).map(function(p){ return p.getBoundingClientRect(); }).filter(function(r){ return r.width; });
     var bate = function(r){ return usados.some(function(u){ return !(r.right <= u.left || r.left >= u.right || r.bottom <= u.top || r.top >= u.bottom); }); };
     // Nomes dos PVs têm prioridade; se o lado direito estiver ocupado, tenta o esquerdo.
     nomes.forEach(function(t){
