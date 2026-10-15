@@ -350,6 +350,12 @@
   .checklist-item .checklist-label{flex:1 1 160px;font-weight:600;}
   .checklist-extra{display:flex;gap:8px;flex:1 1 260px;}
   .checklist-extra input,.checklist-extra select{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:6px 7px;width:100%;}
+  /* v32: quantidade obrigatória nos serviços do RDO */
+  .checklist-extra select{flex:1 1 110px;min-width:0;}
+  .conc-qtd{display:flex;align-items:center;gap:6px;flex:1 1 140px;min-width:0;}
+  .conc-qtd input{flex:1 1 auto;min-width:0;font-variant-numeric:tabular-nums;font-weight:600;}
+  .conc-qtd .conc-un{font-size:12px;color:var(--muted);white-space:nowrap;}
+  .checklist-extra input.qtd-falta{border:2px solid #C6433F;background:rgba(198,67,63,.06);}
   .checklist-custom{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
   .checklist-custom-row{display:flex;gap:8px;align-items:center;}
   .checklist-custom-row input,.checklist-custom-row select{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:6px 7px;}
@@ -7985,6 +7991,7 @@
         return {
           value: it.id,
           label: (it.itemNumero?it.itemNumero+' — ':'')+it.descricao+' ('+it.unidade+')'+(it.ativo===false?' — fora da tabela vigente':''),
+          unidade: it.unidade || '',
           info: obraServicoSaldoTxt(obraId, it.id, it.unidade, s ? s.quantidade : null, excl)
         };
       });
@@ -8064,7 +8071,7 @@
           '<select data-eqconcltipo="'+i+'" data-item="'+esc(opt.value)+'">'+
             CONCLUIDO_TIPO_OPTS.map(function(o){ return '<option value="'+esc(o)+'"'+(tipoVal===o?' selected':'')+'>'+esc(o)+'</option>'; }).join('')+
           '</select>'+
-          '<input type="number" step="any" min="0" inputmode="decimal" data-eqconclqtd="'+i+'" data-item="'+esc(opt.value)+'" value="'+esc(String(qtdVal))+'" placeholder="Qtd." style="width:70px;margin-left:6px;">'+
+          '<span class="conc-qtd"><input type="number" step="any" min="0" inputmode="decimal" data-eqconclqtd="'+i+'" data-item="'+esc(opt.value)+'" value="'+esc(String(qtdVal))+'" placeholder="Qtd. hoje" aria-label="Quantidade feita hoje">'+(opt.unidade ? '<span class="conc-un">'+esc(opt.unidade)+'</span>' : '')+'</span>'+
         '</span>'+
       '</label>';
     }).join('');
@@ -8096,7 +8103,7 @@
         '<div class="hint" style="margin:8px 0 4px;">Integrantes: '+(integrantes.length ? integrantes.map(function(c){return esc(c.nome)+' — '+esc(c.funcao);}).join(', ') : 'Nenhum colaborador ativo nesta equipe.')+'</div>'+
         '<div class="field full" style="margin-top:8px;"><label>Atividades do dia</label><textarea data-eqativ="'+i+'" placeholder="O que a equipe fez hoje...">'+esc(d.atividades||'')+'</textarea></div>'+
         '<h3 style="font-size:13px;font-weight:700;margin:14px 0 4px;">Serviços contratados realizados</h3>'+
-        '<p class="hint" style="margin:0 0 8px;">Marque os serviços contratados que esta equipe realizou hoje e a situação de cada um.</p>'+
+        '<p class="hint" style="margin:0 0 8px;">Marque os serviços contratados que esta equipe realizou hoje, a situação e a <b>quantidade feita hoje</b> (obrigatória — sem ela o RDO não é salvo).</p>'+
         equipeConcluidosChecklistHtml(i, d, servOpts) +
         '<div class="grid2" style="margin-top:12px;">'+
           '<div><h3 style="font-size:13px;font-weight:700;margin:0 0 4px;">Resumo — atividades</h3>'+
@@ -8148,6 +8155,7 @@
         chk.addEventListener('change', function(){
           var extra = chk.closest('.checklist-item') && chk.closest('.checklist-item').querySelector('.checklist-extra');
           if(extra) extra.style.display = chk.checked ? '' : 'none';
+          if(chk.checked && extra){ var qi = extra.querySelector('[data-eqconclqtd]'); if(qi && qi.value==='') setTimeout(function(){ try{ qi.focus(); }catch(e){} }, 0); }
           rebuildEquipeConcluidos(i, rdo, container);
           updateEquipeValorBadge(i, rdo, container);
         });
@@ -8160,6 +8168,7 @@
       });
       container.querySelectorAll('[data-eqconclqtd="'+i+'"]').forEach(function(inp){
         inp.addEventListener('input', function(){
+          inp.classList.remove('qtd-falta');
           rebuildEquipeConcluidos(i, rdo, container);
           updateEquipeValorBadge(i, rdo, container);
         });
@@ -8584,6 +8593,27 @@
       if(!obraId){ toast('Selecione a obra.','error'); return; }
       var pvsSemEquipe = Object.keys(rdo.pvsSemEquipe||{}).map(function(k){ return rdo.pvsSemEquipe[k]; });
       if(pvsSemEquipe.length){ toast('Escolha a equipe que concluiu: '+pvsSemEquipe.map(function(p){ return p.trecho||p.codigo; }).join(', ')+'.','error'); var bx = document.getElementById('rdoPvsProjetoBox'); if(bx) bx.scrollIntoView({behavior:'smooth', block:'center'}); return; }
+      // Serviço marcado (Concluído ou Pendente) exige a quantidade feita no dia.
+      var faltaQtd = null;
+      (rdo.equipesDia||[]).some(function(nomeEq, i){
+        var d = (rdo.equipesDetalhe||[])[i];
+        return (d && d.concluidos || []).some(function(c){
+          if(!c || !c.catalogoItemId) return false;
+          var q = c.quantidade;
+          if(q!=null && q!=='' && isFinite(Number(q)) && Number(q)>0) return false;
+          var inp = document.querySelector('[data-eqconclqtd="'+i+'"][data-item="'+c.catalogoItemId+'"]');
+          if(!inp) return false;   // serviço que saiu do contrato e não aparece na tela
+          faltaQtd = { equipe:nomeEq, item:catalogoItemById(c.catalogoItemId), inp:inp, tipo:c.tipo };
+          return true;
+        });
+      });
+      if(faltaQtd){
+        toast('Informe a quantidade feita hoje em “'+(faltaQtd.item ? faltaQtd.item.descricao : 'serviço')+'” ('+faltaQtd.equipe+'). Sem a quantidade o RDO não é salvo.','error');
+        faltaQtd.inp.classList.add('qtd-falta');
+        try{ faltaQtd.inp.scrollIntoView({behavior:'smooth', block:'center'}); }catch(e){}
+        setTimeout(function(){ try{ faltaQtd.inp.focus({preventScroll:true}); }catch(e){} }, 350);
+        return;
+      }
       var obra = state.obras.find(function(o){ return o.id===obraId; });
       var responsavel = document.getElementById('rdoResponsavel').value.trim();
       if(!responsavel){ toast('Informe quem está preenchendo a RDO.','error'); return; }
@@ -8609,7 +8639,8 @@
             resumoItens: (d.resumoItens||[]).filter(function(s){ return s; }),
             qtdPessoas: (d.qtdPessoas===''||d.qtdPessoas==null) ? null : Math.max(0, Math.round(Number(d.qtdPessoas)||0)),
             pvsExecutados: (d.pvsExecutados||[]).filter(function(p){ return p && p.servicoId; }).map(function(p){
-              return { servicoId: p.servicoId, codigo: p.codigo||'', servico: p.servico||'', trecho: p.trecho||'', rua: p.rua||'' };
+              var mt = (p.metros!=null && p.metros!=='' && isFinite(Number(p.metros)) && Number(p.metros)>0) ? Number(p.metros) : null;
+              return { servicoId: p.servicoId, codigo: p.codigo||'', servico: p.servico||'', trecho: p.trecho||'', rua: p.rua||'', metros: mt };
             })
           };
         }),
@@ -8922,7 +8953,7 @@
       '<div style="font-size:10.5px;margin-top:4px;">Integrantes: '+integrantesTxt+'</div>'+
       (d.atividades ? '<div style="margin-top:6px;white-space:pre-wrap;">'+esc(d.atividades)+'</div>' : '')+
       (concl ? '<div style="margin-top:6px;">'+concl+'</div>' : '')+
-      ((d.pvsExecutados&&d.pvsExecutados.length) ? '<div style="margin-top:6px;"><b>PVs/trechos do projeto concluídos:</b> '+d.pvsExecutados.map(function(p){ return esc(p.trecho||p.codigo)+(p.servico?' <span style="color:'+RDO_MUTED+';">('+esc(p.servico)+')</span>':''); }).join(' · ')+'</div>' : '')+
+      ((d.pvsExecutados&&d.pvsExecutados.length) ? '<div style="margin-top:6px;"><b>PVs/trechos do projeto executados:</b> '+d.pvsExecutados.map(function(p){ var mt = (p.metros!=null && Number(p.metros)>0) ? Number(p.metros) : null; return esc(p.trecho||p.codigo)+(mt!=null ? ' — '+esc(mapaFmtM(mt)) : (mapaRefsTrecho(p.trecho).length>=2 ? ' — trecho todo' : ''))+(p.servico?' <span style="color:'+RDO_MUTED+';">('+esc(p.servico)+')</span>':''); }).join(' · ')+'</div>' : '')+
     '</div>';
   }
   function rdoResumoQtdEquipeRowHtml(nome, i, d){
