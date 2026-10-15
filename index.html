@@ -352,10 +352,27 @@
   .checklist-extra input,.checklist-extra select{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:6px 7px;width:100%;}
   /* v32: quantidade obrigatória nos serviços do RDO */
   .checklist-extra select{flex:1 1 110px;min-width:0;}
-  .conc-qtd{display:flex;align-items:center;gap:6px;flex:1 1 140px;min-width:0;}
-  .conc-qtd input{flex:1 1 auto;min-width:0;font-variant-numeric:tabular-nums;font-weight:600;}
+  .conc-qtd{display:flex;align-items:center;flex-wrap:wrap;gap:6px;flex:1 1 140px;min-width:0;}
+  .conc-qtd input{flex:1 1 72px;min-width:72px;font-variant-numeric:tabular-nums;font-weight:600;}
   .conc-qtd .conc-un{font-size:12px;color:var(--muted);white-space:nowrap;}
   .checklist-extra input.qtd-falta{border:2px solid #C6433F;background:rgba(198,67,63,.06);}
+  /* v33: tabela de serviços no RDO + resumo com valor */
+  .serv-busca{width:100%;margin:0 0 8px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--paper);font-size:14px;}
+  .serv-lista{max-height:440px;overflow:auto;}
+  .serv-grupo{position:sticky;top:0;z-index:1;padding:6px 10px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--paper);border-bottom:1px solid var(--line);}
+  .serv-grupo.contr{color:var(--venko-yellow-deep);}
+  .serv-nada{padding:10px;font-size:13px;color:var(--muted);display:none;}
+  .conc-val{font-size:12px;font-weight:700;color:var(--venko-yellow-deep);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .rdo-resumo-serv{margin:4px 0 12px;padding:12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);}
+  .rdo-resumo-serv h3{font-size:13px;font-weight:700;margin:0 0 8px;}
+  .rr-linha{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;}
+  .rr-nome{min-width:0;}
+  .rr-sub{font-size:12px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums;}
+  .rr-tot{flex:none;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .rdo-resumo-serv .falta{color:#C6433F;font-weight:700;}
+  .rr-total{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding-top:9px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;}
+  .rr-total b{font-size:17px;letter-spacing:0;color:var(--venko-yellow-deep);font-variant-numeric:tabular-nums;}
+  .tag-pend{font-size:10.5px;font-weight:700;color:#8a6a00;background:rgba(240,190,40,.18);border-radius:4px;padding:1px 5px;}
   .checklist-custom{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
   .checklist-custom-row{display:flex;gap:8px;align-items:center;}
   .checklist-custom-row input,.checklist-custom-row select{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:6px 7px;}
@@ -7964,7 +7981,7 @@
       if(excluirRdoId && r.id===excluirRdoId) return;
       (r.equipesDetalhe||[]).forEach(function(d){
         (d.concluidos||[]).forEach(function(c){
-          if(c.catalogoItemId===catalogoItemId && c.tipo==='Concluído') total += Number(c.quantidade)||0;
+          if(c.catalogoItemId===catalogoItemId && (c.tipo==='Concluído' || c.tipo==='Pendente')) total += Number(c.quantidade)||0;
         });
       });
     });
@@ -7992,10 +8009,37 @@
           value: it.id,
           label: (it.itemNumero?it.itemNumero+' — ':'')+it.descricao+' ('+it.unidade+')'+(it.ativo===false?' — fora da tabela vigente':''),
           unidade: it.unidade || '',
+          categoria: it.categoriaNome || '',
+          contratado: true,
           info: obraServicoSaldoTxt(obraId, it.id, it.unidade, s ? s.quantidade : null, excl)
         };
       });
   }
+  // RDO: os contratados da obra + todos os outros serviços da tabela (planilha) da
+  // obra, para quem preenche enxergar a tabela inteira e não se perder.
+  function rdoServicosTabelaOptions(obraId){
+    var contr = obraServicosOptions(obraId);
+    var t = tabelaDaObra(obraId);
+    if(!t) return contr;
+    var chave = function(it){ return String(it.itemNumero||'')+'|'+String(it.descricao||'').trim().toLowerCase(); };
+    var ja = {}, jaCh = {};
+    contr.forEach(function(o){ ja[o.value] = true; var it = catalogoItemById(o.value); if(it) jaCh[chave(it)] = true; });
+    var excl = state.editId || null;
+    var resto = (state.catalogoItens||[]).filter(function(it){ return it.ativo!==false && String(it.tabela||'').toUpperCase()===t && !ja[it.id] && !jaCh[chave(it)]; })
+      .sort(function(a,b){ return (a.ordem-b.ordem) || String(a.itemNumero).localeCompare(String(b.itemNumero), undefined, {numeric:true}); })
+      .map(function(it){
+        return {
+          value: it.id,
+          label: (it.itemNumero?it.itemNumero+' — ':'')+it.descricao+' ('+it.unidade+')',
+          unidade: it.unidade || '',
+          categoria: it.categoriaNome || '',
+          contratado: false,
+          info: obraServicoSaldoTxt(obraId, it.id, it.unidade, null, excl)
+        };
+      });
+    return contr.concat(resto);
+  }
+  function rdoNorm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/\p{M}/gu, ''); }
   var rdoFormAtual = null;
   // Se a lista de serviços/tabela chega depois de o formulário já estar aberto, redesenha as equipes
   // (antes ficava "vazio" até a pessoa sair e voltar).
@@ -8059,33 +8103,58 @@
     }
     var byId = {};
     (d.concluidos||[]).forEach(function(c){ if(c.catalogoItemId) byId[c.catalogoItemId] = c; });
+    var temContr = servOpts.some(function(o){ return o.contratado; }), temResto = servOpts.some(function(o){ return !o.contratado; });
+    var canValor = financeiroCanAccess();
+    var grupoAtual = null;
     var itemsHtml = servOpts.map(function(opt){
       var c = byId[opt.value];
       var checked = !!c;
+      var g = opt.contratado && temResto ? 'Contratados nesta obra' : (opt.categoria || 'Serviços');
+      var cab = '';
+      if(g!==grupoAtual){ grupoAtual = g; cab = '<div class="serv-grupo'+(opt.contratado && temResto ? ' contr' : '')+'" data-servgrupo="'+i+'">'+esc(g)+'</div>'; }
       var tipoVal = checked ? (c.tipo||CONCLUIDO_TIPO_OPTS[0]) : CONCLUIDO_TIPO_OPTS[0];
       var qtdVal = checked && c.quantidade!=null ? c.quantidade : '';
-      return '<label class="checklist-item">'+
+      return cab+'<label class="checklist-item" data-busca="'+esc(rdoNorm(opt.label+' '+(opt.categoria||'')))+'">'+
         '<input type="checkbox" data-eqconclchk="'+i+'" data-item="'+esc(opt.value)+'"'+(checked?' checked':'')+'>'+
         '<span class="checklist-label">'+esc(opt.label)+(opt.info?'<br><span class="hint" style="margin:0;font-size:11px;">'+esc(opt.info)+'</span>':'')+'</span>'+
         '<span class="checklist-extra" style="'+(checked?'':'display:none')+'">'+
           '<select data-eqconcltipo="'+i+'" data-item="'+esc(opt.value)+'">'+
             CONCLUIDO_TIPO_OPTS.map(function(o){ return '<option value="'+esc(o)+'"'+(tipoVal===o?' selected':'')+'>'+esc(o)+'</option>'; }).join('')+
           '</select>'+
-          '<span class="conc-qtd"><input type="number" step="any" min="0" inputmode="decimal" data-eqconclqtd="'+i+'" data-item="'+esc(opt.value)+'" value="'+esc(String(qtdVal))+'" placeholder="Qtd. hoje" aria-label="Quantidade feita hoje">'+(opt.unidade ? '<span class="conc-un">'+esc(opt.unidade)+'</span>' : '')+'</span>'+
+          '<span class="conc-qtd"><input type="number" step="any" min="0" inputmode="decimal" data-eqconclqtd="'+i+'" data-item="'+esc(opt.value)+'" value="'+esc(String(qtdVal))+'" placeholder="Qtd. hoje" aria-label="Quantidade feita hoje">'+(opt.unidade ? '<span class="conc-un">'+esc(opt.unidade)+'</span>' : '')+(canValor ? '<span class="conc-val" data-eqconclval="'+i+'" data-item="'+esc(opt.value)+'"></span>' : '')+'</span>'+
         '</span>'+
       '</label>';
     }).join('');
-    return '<div class="checklist-wrap">'+itemsHtml+'</div>';
+    var busca = servOpts.length > 8 ? '<input type="search" class="serv-busca" data-servbusca="'+i+'" placeholder="Buscar serviço na tabela ('+servOpts.length+' itens)…" aria-label="Buscar serviço na tabela">' : '';
+    return busca+'<div class="checklist-wrap serv-lista" data-servwrap="'+i+'">'+itemsHtml+'<div class="serv-nada">Nenhum serviço da tabela com esse nome.</div></div>';
+  }
+  function rdoFiltrarServicos(container, i, q){
+    var wrap = container.querySelector('[data-servwrap="'+i+'"]');
+    if(!wrap) return;
+    var termos = rdoNorm(q).split(/\s+/).filter(Boolean);
+    var vis = 0, cab = null, cabVis = false;
+    Array.prototype.forEach.call(wrap.children, function(el){
+      if(el.classList.contains('serv-grupo')){ if(cab) cab.style.display = cabVis ? '' : 'none'; cab = el; cabVis = false; return; }
+      if(!el.classList.contains('checklist-item')) return;
+      var chk = el.querySelector('[data-eqconclchk]');
+      var txt = el.getAttribute('data-busca')||'';
+      var ok = !termos.length || (chk && chk.checked) || termos.every(function(t){ return txt.indexOf(t)!==-1; });
+      el.style.display = ok ? '' : 'none';
+      if(ok){ vis++; cabVis = true; }
+    });
+    if(cab) cab.style.display = cabVis ? '' : 'none';
+    var nada = wrap.querySelector('.serv-nada'); if(nada) nada.style.display = vis ? 'none' : 'block';
   }
   function equipesDetalheHtml(rdo){
     if(!(rdo.equipesDia&&rdo.equipesDia.length)){
       var obraSel = (document.getElementById('rdoObra') && document.getElementById('rdoObra').value) || rdo.obraId || '';
-      var nServ = obraSel ? obraServicosOptions(obraSel).length : 0;
-      return '<p class="empty-hint">Selecione ao menos uma equipe em campo para detalhar as atividades.'+(nServ ? ' Os <b>'+nServ+' serviço(s) contratado(s)</b> desta obra aparecem aqui, dentro de cada equipe marcada.' : '')+'</p>';
+      var nServ = obraSel ? rdoServicosTabelaOptions(obraSel).length : 0;
+      return '<p class="empty-hint">Selecione ao menos uma equipe em campo para detalhar as atividades.'+(nServ ? ' Os <b>'+nServ+' serviço(s) da tabela</b> desta obra aparecem aqui, dentro de cada equipe marcada.' : '')+'</p>';
     }
     syncEquipesDetalhe(rdo);
     var obraIdNow = (document.getElementById('rdoObra') && document.getElementById('rdoObra').value) || rdo.obraId || '';
-    var servOpts = obraServicosOptions(obraIdNow);
+    var servOpts = rdoServicosTabelaOptions(obraIdNow);
+    var tabNome = tabelaDaObra(obraIdNow) ? tabelaPrecoNome(tabelaDaObra(obraIdNow)) : '';
     var canValor = financeiroCanAccess();
     return rdo.equipesDia.map(function(nome, i){
       var d = rdo.equipesDetalhe[i];
@@ -8102,8 +8171,8 @@
         '</div>'+
         '<div class="hint" style="margin:8px 0 4px;">Integrantes: '+(integrantes.length ? integrantes.map(function(c){return esc(c.nome)+' — '+esc(c.funcao);}).join(', ') : 'Nenhum colaborador ativo nesta equipe.')+'</div>'+
         '<div class="field full" style="margin-top:8px;"><label>Atividades do dia</label><textarea data-eqativ="'+i+'" placeholder="O que a equipe fez hoje...">'+esc(d.atividades||'')+'</textarea></div>'+
-        '<h3 style="font-size:13px;font-weight:700;margin:14px 0 4px;">Serviços contratados realizados</h3>'+
-        '<p class="hint" style="margin:0 0 8px;">Marque os serviços contratados que esta equipe realizou hoje, a situação e a <b>quantidade feita hoje</b> (obrigatória — sem ela o RDO não é salvo).</p>'+
+        '<h3 style="font-size:13px;font-weight:700;margin:14px 0 4px;">Serviços realizados hoje'+(tabNome ? ' — tabela '+esc(tabNome) : '')+'</h3>'+
+        '<p class="hint" style="margin:0 0 8px;">Marque o serviço que esta equipe fez hoje, a situação e a <b>quantidade feita hoje</b> (obrigatória — sem ela o RDO não é salvo).</p>'+
         equipeConcluidosChecklistHtml(i, d, servOpts) +
         '<div class="grid2" style="margin-top:12px;">'+
           '<div><h3 style="font-size:13px;font-weight:700;margin:0 0 4px;">Resumo — atividades</h3>'+
@@ -8114,7 +8183,50 @@
           '</div>'+
         '</div>'+
       '</div>';
-    }).join('');
+    }).join('') + '<div id="rdoResumoServicos" class="rdo-resumo-serv">'+rdoResumoServicosFormHtml(rdo)+'</div>';
+  }
+  // Linhas de serviço do RDO (todas as equipes): serviço, quantidade, valor unitário e total.
+  function rdoServicosLinhas(equipesDia, equipesDetalhe){
+    var out = [];
+    (equipesDia||[]).forEach(function(nome, i){
+      var d = (equipesDetalhe||[])[i];
+      (d && d.concluidos || []).forEach(function(c){
+        if(!c || !c.catalogoItemId) return;
+        var it = catalogoItemById(c.catalogoItemId);
+        var q = (c.quantidade!=null && c.quantidade!=='' && isFinite(Number(c.quantidade)) && Number(c.quantidade)>0) ? Number(c.quantidade) : null;
+        var vu = it ? (Number(it.custoUnitario)||0) : 0;
+        out.push({ equipe:nome, idx:i, tipo:c.tipo||'', itemId:c.catalogoItemId, item:it, qtd:q, unidade: it ? (it.unidade||'') : '', vu:vu, cents: q!=null ? Math.round(q*vu*100) : 0 });
+      });
+    });
+    return out;
+  }
+  function rdoServicoNome(l){ return l.item ? ((l.item.itemNumero ? l.item.itemNumero+' — ' : '')+l.item.descricao) : 'Serviço (fora da tabela atual)'; }
+  function rdoResumoServicosFormHtml(rdo){
+    var linhas = rdoServicosLinhas(rdo.equipesDia, rdo.equipesDetalhe);
+    var canValor = financeiroCanAccess();
+    var h = '<h3>Resumo dos serviços deste RDO</h3>';
+    if(!linhas.length) return h+'<p class="hint" style="margin:0;">Nenhum serviço marcado ainda. Marque acima o serviço, a situação e a quantidade feita hoje.</p>';
+    var cents = 0;
+    h += '<div class="rr-lista">'+linhas.map(function(l){
+      cents += l.cents;
+      var qtdTxt = l.qtd!=null ? esc(fmtQtd(l.qtd)+(l.unidade ? ' '+l.unidade : '')) : '<span class="falta">falta a quantidade</span>';
+      return '<div class="rr-linha"><div class="rr-nome"><b>'+esc(rdoServicoNome(l))+'</b>'+(l.tipo==='Pendente' ? ' <span class="tag-pend">pendente</span>' : '')+
+        '<div class="rr-sub">'+esc(l.equipe)+' · '+qtdTxt+(canValor && l.qtd!=null ? ' × '+esc(fmtMoeda(l.vu)) : '')+'</div></div>'+
+        '<div class="rr-tot">'+(canValor ? (l.qtd!=null ? esc(fmtMoeda(l.cents/100)) : '—') : qtdTxt)+'</div></div>';
+    }).join('')+'</div>';
+    if(canValor) h += '<div class="rr-total"><span>Valor total do RDO</span><b>'+esc(fmtMoeda(cents/100))+'</b></div>';
+    return h;
+  }
+  function atualizarRdoResumoServicos(rdo){
+    var el = document.getElementById('rdoResumoServicos');
+    if(el) el.innerHTML = rdoResumoServicosFormHtml(rdo);
+    var box = document.getElementById('equipesDetalheContainer');
+    if(!box) return;
+    box.querySelectorAll('[data-eqconclval]').forEach(function(s){ s.textContent = ''; });
+    rdoServicosLinhas(rdo.equipesDia, rdo.equipesDetalhe).forEach(function(l){
+      var s = box.querySelector('[data-eqconclval="'+l.idx+'"][data-item="'+l.itemId+'"]');
+      if(s) s.textContent = l.qtd!=null ? '= '+fmtMoeda(l.cents/100) : '';
+    });
   }
   function rebuildEquipeConcluidos(i, rdo, container){
     var rows = [];
@@ -8129,6 +8241,7 @@
     rdo.equipesDetalhe[i].concluidos = rows;
   }
   function updateEquipeValorBadge(i, rdo, container){
+    atualizarRdoResumoServicos(rdo);
     if(!financeiroCanAccess()) return;
     var badge = container.querySelector('[data-eqvalorbadge="'+i+'"]');
     if(!badge) return;
@@ -8137,6 +8250,7 @@
   function wireEquipesDetalhe(rdo){
     var container = document.getElementById('equipesDetalheContainer');
     if(!container) return;
+    try{ atualizarRdoResumoServicos(rdo); }catch(e){}
     container.querySelectorAll('[data-recarregarserv]').forEach(function(b){
       b.addEventListener('click', function(){
         state.obraServicosEstado = 'carregando';
@@ -8151,6 +8265,8 @@
       if(frenteInp) frenteInp.addEventListener('input', function(){ rdo.equipesDetalhe[i].frente = frenteInp.value; });
       if(statusSel) statusSel.addEventListener('change', function(){ rdo.equipesDetalhe[i].status = statusSel.value; });
       if(ativTa) ativTa.addEventListener('input', function(){ rdo.equipesDetalhe[i].atividades = ativTa.value; });
+      var buscaServ = container.querySelector('[data-servbusca="'+i+'"]');
+      if(buscaServ) buscaServ.addEventListener('input', function(){ rdoFiltrarServicos(container, i, buscaServ.value); });
       container.querySelectorAll('[data-eqconclchk="'+i+'"]').forEach(function(chk){
         chk.addEventListener('change', function(){
           var extra = chk.closest('.checklist-item') && chk.closest('.checklist-item').querySelector('.checklist-extra');
@@ -8923,7 +9039,7 @@
       || null;
   }
   function computeEquipeValor(d){
-    return sumMoeda((d.concluidos||[]).filter(function(c){ return c.tipo==='Concluído' && c.catalogoItemId; }), function(c){
+    return sumMoeda((d.concluidos||[]).filter(function(c){ return (c.tipo==='Concluído' || c.tipo==='Pendente') && c.catalogoItemId; }), function(c){
       var item = catalogoItemById(c.catalogoItemId);
       var custo = item ? Number(item.custoUnitario)||0 : 0;
       var qtd = Number(c.quantidade)||0;
@@ -8955,6 +9071,25 @@
       (concl ? '<div style="margin-top:6px;">'+concl+'</div>' : '')+
       ((d.pvsExecutados&&d.pvsExecutados.length) ? '<div style="margin-top:6px;"><b>PVs/trechos do projeto executados:</b> '+d.pvsExecutados.map(function(p){ var mt = (p.metros!=null && Number(p.metros)>0) ? Number(p.metros) : null; return esc(p.trecho||p.codigo)+(mt!=null ? ' — '+esc(mapaFmtM(mt)) : (mapaRefsTrecho(p.trecho).length>=2 ? ' — trecho todo' : ''))+(p.servico?' <span style="color:'+RDO_MUTED+';">('+esc(p.servico)+')</span>':''); }).join(' · ')+'</div>' : '')+
     '</div>';
+  }
+  function rdoServicosExecutadosCardHtml(equipesDia, equipesDetalhe){
+    var linhas = rdoServicosLinhas(equipesDia, equipesDetalhe);
+    var canValor = financeiroCanAccess();
+    if(!linhas.length) return rdoCard(rdoCardHead('Serviços executados neste RDO', 0) + '<div style="padding:10px 14px;color:'+RDO_MUTED+';">Nenhum serviço da tabela lançado neste RDO.</div>');
+    var cel = function(txt, w, extra){ return '<div style="flex:0 0 '+w+';text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;'+(extra||'')+'">'+txt+'</div>'; };
+    var cab = '<div data-pdf-row="1" style="display:flex;gap:8px;padding:6px 14px;border-bottom:1px solid '+RDO_BORDER+';font-size:9.5px;font-weight:bold;letter-spacing:.4px;text-transform:uppercase;color:'+RDO_MUTED+';">'+
+      '<div style="flex:1;min-width:0;">Serviço</div>'+cel('Qtd.', '86px')+(canValor ? cel('Valor unit.', '96px')+cel('Total', '104px') : '')+'</div>';
+    var cents = 0;
+    var corpo = linhas.map(function(l){
+      cents += l.cents;
+      return '<div data-pdf-row="1" style="display:flex;gap:8px;align-items:baseline;padding:8px 14px;border-bottom:1px solid '+RDO_LINE_SOFT+';font-size:12px;">'+
+        '<div style="flex:1;min-width:0;"><b>'+esc(rdoServicoNome(l))+'</b><div style="font-size:10.5px;color:'+RDO_MUTED+';margin-top:1px;">EQ'+(l.idx+1)+' — '+esc(l.equipe)+' · '+esc(l.tipo||'—')+'</div></div>'+
+        cel(l.qtd!=null ? esc(fmtQtd(l.qtd)+(l.unidade ? ' '+l.unidade : '')) : '<span style="color:#C6433F;font-weight:bold;">sem qtd.</span>', '86px')+
+        (canValor ? cel(esc(fmtMoeda(l.vu)), '96px', 'color:'+RDO_MUTED+';')+cel(esc(fmtMoeda(l.cents/100)), '104px', 'font-weight:bold;') : '')+
+      '</div>';
+    }).join('');
+    var tot = canValor ? '<div data-pdf-row="1" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:10px 14px;font-weight:bold;"><span style="font-size:12px;letter-spacing:.3px;text-transform:uppercase;">Valor total do RDO</span><span style="font-size:17px;color:var(--venko-yellow-deep);font-variant-numeric:tabular-nums;">'+esc(fmtMoeda(cents/100))+'</span></div>' : '';
+    return rdoCard(rdoCardHead('Serviços executados neste RDO', linhas.length) + cab + corpo + tot);
   }
   function rdoResumoQtdEquipeRowHtml(nome, i, d){
         var qtd = computeEquipeQtdFeita(d);
@@ -9056,7 +9191,7 @@
 
       rdoCard(rdoCardHead('Atividades por equipe', equipesDia.length) + (equipesDia.length ? equipesDia.map(function(nome,i){ return rdoEquipeDetalheRowHtml(nome, i, equipesDetalhe[i]||{}, numEq[i]||{}); }).join('') : rdoEmptyMsg())) +
 
-      (financeiroCanAccess() ? rdoCard(rdoCardHead('Resumo de produção das equipes') + (equipesDia.length ? equipesDia.map(function(nome,i){ return rdoResumoQtdEquipeRowHtml(nome, i, equipesDetalhe[i]||{}); }).join('') : rdoEmptyMsg())) : '') +
+      rdoServicosExecutadosCardHtml(equipesDia, equipesDetalhe) +
 
       rdoCard(rdoCardHead('Equipamentos', totalEq) + (eqTiles.length ? rdoTileGridHtml(eqTiles,6) : rdoEmptyMsg())) +
 
