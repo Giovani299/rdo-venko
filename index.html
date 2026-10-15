@@ -504,6 +504,27 @@
   .rede-pv.multi{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--c),0 1px 4px rgba(20,19,15,.5);}
   .rede-pv.nc{border-style:dashed;}
   .rede-pv.fantasma{border:3px solid #6B6B66;background:#fff;box-shadow:0 0 0 2px #fff,0 1px 3px rgba(20,19,15,.35);}
+  /* v31: avanço por trecho, recorte do PDF, obras por usuário, erro da análise */
+  .avanco-box{margin:0 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper,#fff);}
+  .avanco-topo{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;}
+  .avanco-topo b{font-size:18px;font-variant-numeric:tabular-nums;}
+  .avanco-bar{height:8px;border-radius:99px;background:rgba(20,19,15,.08);overflow:hidden;margin:6px 0 8px;}
+  .avanco-bar span{display:block;height:100%;background:var(--map-verde);border-radius:99px;}
+  .avanco-regs{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .avanco-regs span b{color:var(--ink,#14130F);font-weight:600;}
+  .rdo-pv-metros{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 0 26px;font-size:12px;color:var(--muted);}
+  .rdo-pv-metros input{width:92px;padding:4px 6px;font-variant-numeric:tabular-nums;}
+  .pdf-recorte-overlay .modal{max-width:980px;width:calc(100vw - 32px);}
+  .pdf-recorte-sec{margin:0 0 14px;}
+  .pdf-recorte-sec h4{margin:0 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
+  .pdf-recorte-canvas{display:block;max-width:100%;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:zoom-in;}
+  .pdf-recorte-wrap{overflow:auto;max-height:62vh;}
+  .pdf-recorte-wrap.zoom .pdf-recorte-canvas{max-width:none;cursor:zoom-out;}
+  .pdf-recorte-status{font-size:13px;color:var(--muted);padding:18px 0;}
+  .user-obras-lista{display:flex;flex-direction:column;gap:4px;margin:6px 0 0 4px;}
+  #userObrasBox .checkline label{text-transform:none;letter-spacing:0;font-size:14px;font-weight:500;color:var(--ink,#14130F);}
+  .analise-erro{margin:8px 0 0;width:100%;padding:10px 12px;border:1px solid #e3b3b3;border-left:4px solid #C6433F;border-radius:var(--radius);background:rgba(198,67,63,.06);font-size:13px;line-height:1.45;color:#7a2522;}
+  .analise-erro b{display:block;margin-bottom:2px;color:#a33;}
   .rede-pv .map-geo-badge{right:-12px;top:-12px;}
   .leaflet-tooltip.rede-lbl{padding:1px 6px;font-size:11px;}
   .leaflet-tooltip.rede-ext{padding:0 5px;font:600 10px/1.5 Inter,sans-serif;color:#333;background:rgba(255,255,255,.92);}
@@ -1000,6 +1021,12 @@
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoObras" checked><label for="userAcessoObras">Acesso à aba Obras</label></div>
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoObrasGestao" checked><label for="userAcessoObrasGestao">Pode cadastrar/editar/excluir clientes e obras (desmarque para deixar só visualizar e lançar serviços contratados)</label></div>
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoPlanejamento"><label for="userAcessoPlanejamento">Acesso ao módulo Planejamento (Matriz de Serviços, Cronograma, Acompanhamento da Obra)</label></div>
+          <div class="field" id="userObrasBox" style="margin-top:12px;display:none;">
+            <label>Obras que este usuário vê</label>
+            <div class="checkline"><input type="checkbox" id="userObrasTodas" checked><label for="userObrasTodas">Todas as obras (inclusive as cadastradas depois)</label></div>
+            <div id="userObrasLista" class="user-obras-lista"></div>
+            <p class="hint" style="margin:4px 0 0;">Desmarque “Todas” para escolher. O banco de dados só entrega a esse usuário as RDOs, mapas e projetos das obras marcadas. Administrador vê todas.</p>
+          </div>
           <div class="form-actions">
             <button type="button" class="btn ghost" id="userCancelEdit" style="display:none">Cancelar edição</button>
             <button type="submit" class="btn primary" id="userSubmitBtn">Cadastrar usuário</button>
@@ -1943,6 +1970,8 @@
     return supabaseClient.from('profiles').select('*').then(function(res){
       if(res.error){ toast('Não foi possível carregar usuários.','error'); return; }
       state.profiles = (res.data||[]).sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+      state.temObrasIds = (res.data||[]).some(function(p){ return Object.prototype.hasOwnProperty.call(p, 'obras_ids'); });
+      if(!editingUserId) renderUserObrasBox(null);
       if(state.currentUser){
         var fresh = state.profiles.find(function(p){ return p.id===state.currentUser.id; });
         if(fresh){
@@ -2135,6 +2164,24 @@
     });
   }
   var PROJETO_MAX_MB = 60;
+  // Arquivos dos projetos abrem por link temporário (o bucket não é público).
+  function abrirArquivoProjeto(path, janela){
+    return Promise.resolve(supabaseClient.storage.from('projetos-obras').createSignedUrl(path, 600)).then(function(r){
+      var url = r && r.data && r.data.signedUrl;
+      if(!url) throw (r && r.error) || new Error('sem link');
+      if(janela) janela.location.href = url; else window.open(url, '_blank', 'noopener');
+    }).catch(function(err){
+      if(janela) janela.close();
+      toast('Não foi possível abrir o arquivo: '+((err && err.message) || err), 'error');
+    });
+  }
+  document.addEventListener('click', function(e){
+    var a = e.target && e.target.closest ? e.target.closest('a[data-arqpath]') : null;
+    if(!a || !a.getAttribute('data-arqpath')) return;
+    e.preventDefault();
+    var w = window.open('', '_blank');
+    abrirArquivoProjeto(a.getAttribute('data-arqpath'), w);
+  });
   function mapProjetoObraRow(row){
     var url = '';
     try{ url = supabaseClient.storage.from('projetos-obras').getPublicUrl(row.arquivo_path).data.publicUrl; }catch(e){}
@@ -2359,9 +2406,34 @@
   }
   populateCargoSelect();
 
+  // Obras por usuário (coluna profiles.obras_ids, migration 048). NULL = todas.
+  function renderUserObrasBox(obrasIds){
+    var box = document.getElementById('userObrasBox');
+    if(!box) return;
+    if(!state.temObrasIds){ box.style.display = 'none'; return; }
+    box.style.display = '';
+    var todas = !obrasIds;
+    var chkTodas = document.getElementById('userObrasTodas');
+    chkTodas.checked = todas;
+    var lista = document.getElementById('userObrasLista');
+    var obras = (state.obras||[]).slice().sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+    lista.innerHTML = obras.map(function(o){
+      var on = todas || (obrasIds||[]).indexOf(o.id)>-1;
+      return '<div class="checkline"><input type="checkbox" data-userobra="'+esc(o.id)+'" id="uob_'+esc(o.id)+'"'+(on?' checked':'')+(todas?' disabled':'')+'><label for="uob_'+esc(o.id)+'">'+esc(o.nome)+'</label></div>';
+    }).join('') || '<p class="hint" style="margin:0;">Nenhuma obra cadastrada.</p>';
+    chkTodas.onchange = function(){ renderUserObrasBox(chkTodas.checked ? null : obras.map(function(o){ return o.id; })); };
+  }
+  function lerUserObrasIds(){
+    if(!state.temObrasIds) return { ok:true, valor:undefined };
+    if(document.getElementById('userObrasTodas').checked) return { ok:true, valor:null };
+    var ids = Array.prototype.slice.call(document.querySelectorAll('[data-userobra]')).filter(function(c){ return c.checked; }).map(function(c){ return c.getAttribute('data-userobra'); });
+    if(!ids.length) return { ok:false };
+    return { ok:true, valor:ids };
+  }
   function cancelUserEdit(){
     editingUserId = null;
     document.getElementById('userForm').reset();
+    renderUserObrasBox(null);
     document.getElementById('userLogin').disabled = false;
     document.getElementById('userPassField').style.display = '';
     document.getElementById('userPass').required = true;
@@ -2383,9 +2455,13 @@
     var isObrasGestao = document.getElementById('userAcessoObrasGestao').checked;
     var isPlanejamento = document.getElementById('userAcessoPlanejamento').checked;
     if(!login || !nome){ toast('Preencha usuário e nome.','error'); return; }
+    var obrasSel = lerUserObrasIds();
+    if(!obrasSel.ok){ toast('Marque ao menos uma obra (ou “Todas as obras”).','error'); return; }
 
     if(editingUserId){
-      supabaseClient.from('profiles').update({ nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao, acesso_planejamento:isPlanejamento }).eq('id', editingUserId)
+      var upd = { nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao, acesso_planejamento:isPlanejamento };
+      if(obrasSel.valor!==undefined) upd.obras_ids = obrasSel.valor;
+      supabaseClient.from('profiles').update(upd).eq('id', editingUserId)
         .then(function(res){
           if(res.error){ toast('Erro ao salvar usuário: '+res.error.message,'error'); return; }
           toast('Usuário atualizado.','ok');
@@ -2411,7 +2487,13 @@
         return Promise.reject(new Error('sem sessão'));
       }
       var newId = res.data.user.id;
-      return tempClient.from('profiles').insert({ id:newId, login:login, nome:nome, cargo:cargo, is_admin:false, acesso_financeiro:false, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao }).then(function(res2){
+      // Perfil criado pelo ADMIN (com as permissões de uma vez). Com a migration 048 o
+      // banco só aceita assim; sem ela, cai no jeito antigo (o novo login cria o próprio perfil).
+      var perfilAdmin = { id:newId, login:login, nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao, acesso_planejamento:isPlanejamento };
+      if(obrasSel.valor!==undefined) perfilAdmin.obras_ids = obrasSel.valor;
+      return supabaseClient.from('profiles').insert(perfilAdmin).then(function(resAdm){
+        if(!resAdm.error) return null;
+        return tempClient.from('profiles').insert({ id:newId, login:login, nome:nome, cargo:cargo, is_admin:false, acesso_financeiro:false, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao }).then(function(res2){
         if(res2.error){ toast('Usuário criado, mas houve erro ao salvar o perfil: '+res2.error.message,'error'); return Promise.reject(res2.error); }
         // acesso_financeiro (assim como is_admin) nunca pode ser definido pelo próprio novo
         // usuário no insert acima — só o admin que está criando a conta, com seu próprio
@@ -2422,6 +2504,7 @@
         if(isFinanceiro) updates.acesso_financeiro = true;
         if(isPlanejamento) updates.acesso_planejamento = true;
         if(Object.keys(updates).length){ return supabaseClient.from('profiles').update(updates).eq('id', newId); }
+        });
       });
     }).then(function(){
       toast('Usuário cadastrado.','ok');
@@ -2437,7 +2520,7 @@
     list.innerHTML = state.profiles.map(function(u){
       var isSelf = state.currentUser && state.currentUser.id===u.id;
       return '<div class="obra-card" data-id="'+u.id+'">'+
-        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+(u.acesso_financeiro?'<span class="tag-financeiro">Financeiro</span>':'')+(u.acesso_planejamento?'<span class="tag-financeiro">Planejamento</span>':'')+(u.acesso_obras===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Sem Obras</span>':'')+(!u.is_admin && u.acesso_obras!==false && u.acesso_obras_gestao===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Obras só visualizar</span>':'')+'</b>'+
+        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+(u.acesso_financeiro?'<span class="tag-financeiro">Financeiro</span>':'')+(u.acesso_planejamento?'<span class="tag-financeiro">Planejamento</span>':'')+(!u.is_admin && u.obras_ids && u.obras_ids.length ? '<span class="tag-example" title="'+esc((u.obras_ids||[]).map(function(id){ var o=(state.obras||[]).find(function(x){ return x.id===id; }); return o?o.nome:'obra removida'; }).join(', '))+'">'+u.obras_ids.length+' obra'+(u.obras_ids.length===1?'':'s')+'</span>':'')+(u.acesso_obras===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Sem Obras</span>':'')+(!u.is_admin && u.acesso_obras!==false && u.acesso_obras_gestao===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Obras só visualizar</span>':'')+'</b>'+
           '<div class="meta">'+esc(u.login)+' · '+esc(u.cargo||'—')+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
@@ -2464,6 +2547,7 @@
         document.getElementById('userAcessoObras').checked = (u.acesso_obras !== false);
         document.getElementById('userAcessoObrasGestao').checked = (u.acesso_obras_gestao !== false);
         document.getElementById('userAcessoPlanejamento').checked = !!u.acesso_planejamento;
+        renderUserObrasBox(u.obras_ids || null);
         document.getElementById('userFormTitle').textContent = 'Editar usuário — '+u.nome;
         document.getElementById('userSubmitBtn').textContent = 'Salvar alterações';
         document.getElementById('userCancelEdit').style.display = '';
@@ -2477,7 +2561,7 @@
         var u = state.profiles.find(function(x){ return x.id===id; });
         confirmModal({
           title:'Remover acesso',
-          msg:'Isso remove o acesso de '+(u?u.nome:'este usuário')+' ao sistema RDO Venko. O login em si continua existindo no Supabase — para apagar de vez, use o painel do Supabase (Authentication > Users). Deseja continuar?',
+          msg:'Isso remove o acesso de '+(u?u.nome:'este usuário')+' ao sistema RDO Venko: mesmo que ele ainda consiga entrar com a senha, o banco não entrega mais nenhum dado (obras, RDOs, mapa). Para apagar o login de vez, use o painel do Supabase (Authentication > Users). Deseja continuar?',
           okLabel:'Remover acesso', danger:true
         }).then(function(ok){
           if(!ok) return;
@@ -3630,6 +3714,12 @@
         partes.push('Serviços: '+svsProj.length);
         partes.push('No mapa: '+comPos.length+' de '+svsProj.length+(pelaCoord.length ? ' ('+pelaCoord.length+' pela coordenada do projeto)' : ''));
         if(nPv || trechos.length) partes.push('Rede: '+nPv+' PV(s) e '+trechos.length+' trecho(s)'+(metros>0 ? ' · '+mapaFmtM(metros) : ''));
+        if(metros>0){
+          var av = avancoPorServico(p.obraId);
+          var feitoM = trechos.reduce(function(a, s){ var x = av[s.id]; var tot = Number(s.comprimento)||0; return a + (x ? (x.todo ? tot : Math.min(tot, x.metros)) : 0); }, 0);
+          if(feitoM>0) partes.push('Executado (RDOs): '+mapaFmtM(feitoM)+' de '+mapaFmtM(metros)+' ('+Math.round(feitoM/metros*100)+'%)');
+        }
+        if(p.geoResumo && p.geoResumo.perfil) partes.push('Perfil conferido no PDF: '+p.geoResumo.perfil.trechos+' trecho(s)'+((p.geoResumo.perfil.correcoes||[]).length ? ', '+p.geoResumo.perfil.correcoes.length+' correção(ões) da leitura da IA' : ''));
       } else {
         if(p.qtdServicosIdentificados!=null) partes.push('Serviços encontrados: '+p.qtdServicosIdentificados);
         if(p.enderecosIdentificados!=null) partes.push('Locais encontrados: '+p.enderecosIdentificados);
@@ -3660,11 +3750,15 @@
       return '<div class="hint" style="margin:6px 0 0;width:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
         '<span>'+esc(partes.join(' · ')||'Análise concluída.')+'</span>'+
         avisoRevisar+
-        (p.excelUrl ? '<a href="'+esc(p.excelUrl)+'" target="_blank" rel="noopener" class="btn ghost sm">Baixar Excel</a>' : '')+
+        (p.excelUrl ? '<a href="'+esc(p.excelUrl)+'" data-arqpath="'+esc(p.excelPath)+'" target="_blank" rel="noopener" class="btn ghost sm">Baixar Excel</a>' : '')+
       '</div>';
     }
     if(p.statusAnalise==='erro' && p.erroMensagem){
-      return '<div class="hint" style="margin:6px 0 0;width:100%;color:#a33;">'+esc(p.erroMensagem)+'</div>';
+      var msgErro = p.erroMensagem;
+      // mensagens antigas (antes da v21 da função) — traduz as mais comuns
+      if(/requisi[cç][aã]o rejeitada/i.test(msgErro)) msgErro += ' Causa mais comum: créditos da IA (Anthropic) esgotados — o administrador recarrega em console.anthropic.com → Billing e depois é só clicar em “Analisar novamente”.';
+      else if(/tente novamente em alguns minutos/i.test(msgErro)) msgErro += ' A IA pode estar sobrecarregada; espere alguns minutos e clique em “Analisar novamente”.';
+      return '<div class="analise-erro" role="alert"><b>A análise parou</b>'+esc(msgErro)+'</div>';
     }
     return '';
   }
@@ -3685,7 +3779,7 @@
           projetoStatusChip(p.statusAnalise)+
           (podeAnalisar ? '<button type="button" class="btn primary sm" data-analisar="'+p.id+'">'+(p.statusAnalise==='erro'?'Analisar novamente':(p.statusAnalise==='analisado'?'Reanalisar':'Analisar projeto'))+'</button>' : '')+
           (qtdLocais ? '<button type="button" class="btn ghost sm" data-vernomapa="'+p.id+'">Ver no mapa'+(qtdNoMapa ? ' ('+qtdNoMapa+' serviço(s))' : ' ('+qtdLocais+' local(is))')+'</button>' : '')+
-          (p.arquivoUrl ? '<a href="'+esc(p.arquivoUrl)+'" target="_blank" rel="noopener" class="btn ghost sm">Abrir arquivo</a>' : '')+
+          (p.arquivoUrl ? '<a href="'+esc(p.arquivoUrl)+'" data-arqpath="'+esc(p.arquivoPath)+'" target="_blank" rel="noopener" class="btn ghost sm">Abrir arquivo</a>' : '')+
           '<button type="button" class="btn danger sm" data-delprojeto="'+p.id+'">Excluir</button>'+
         '</div>'+
         projetoDetalheHtml(p)+
@@ -4539,7 +4633,8 @@
     coordenada_projeto_geografica:'Latitude/longitude impressa no projeto',
     geocodificacao_endereco:'Geocodificação pelo endereço (aproximada)',
     manual:'Clique no mapa (manual)',
-    tracado_rua:'Distribuída ao longo da rua traçada (aproximada)'
+    tracado_rua:'No meio dos PVs da mesma rua (aproximada)',
+    proximo_pv:'Junto ao PV onde o rótulo está desenhado (aproximada)'
   };
   var GEO_LEITURA_LABEL = { ia_recorte:'leitura do recorte da folha', ia_pagina:'leitura da página', ia_releitura:'releitura dirigida', texto_rotulo:'transcrição do rótulo', texto_pdf:'texto do PDF' };
   function geoInfoStatus(st){ return GEO_STATUS_INFO[st] || null; }
@@ -4768,12 +4863,39 @@
       if(state.view==='mapa-obra') renderMapaFilaIA();
     });
   }
+  // Pontos para enquadrar o mapa: ignora o que está muito longe do grupo
+  // principal (ex.: rua homônima achada em outra cidade). A referência é a
+  // mediana dos pontos com coordenada conferida; sem eles, a de todos.
+  function mapaPontosParaEnquadrar(lista){
+    var pts = [], bons = [];
+    lista.forEach(function(m){
+      (m.geom||[]).forEach(function(p){
+        if(!(p && typeof p.lat==='number' && typeof p.lng==='number' && isFinite(p.lat) && isFinite(p.lng))) return;
+        pts.push([p.lat,p.lng]);
+        if(m.geoStatus==='validada') bons.push([p.lat,p.lng]);
+      });
+    });
+    if(pts.length<3) return { pts:pts, fora:0 };
+    var base = bons.length>=2 ? bons : pts;
+    var med = function(arr, i){ var v = arr.map(function(p){ return p[i]; }).sort(function(a,b){ return a-b; }); return v[Math.floor(v.length/2)]; };
+    var c = { lat:med(base,0), lng:med(base,1) };
+    var dk = function(p){ return mapaDistM(c, { lat:p[0], lng:p[1] })/1000; };
+    var ds = base.map(dk).sort(function(a,b){ return a-b; });
+    var lim = Math.max(3, (ds[Math.floor(ds.length*0.9)]||0)*3);
+    var dentro = pts.filter(function(p){ return dk(p) <= lim; });
+    if(!dentro.length) return { pts:pts, fora:0 };
+    return { pts:dentro, fora:pts.length-dentro.length };
+  }
   function fitMapaViewParaMarcacoes(obraId){
     if(mapaViewFitted || !leafletMapInstance || state.mapaObraId!==obraId) return;
-    var pts = [];
-    state.mapaMarcacoes.forEach(function(m){
-      (m.geom||[]).forEach(function(p){ if(p && typeof p.lat==='number' && typeof p.lng==='number') pts.push([p.lat,p.lng]); });
-    });
+    var lista = state.mapaMarcacoes;
+    if(state.mapaFiltroProjeto && state.mapaFiltroProjeto!=='all'){
+      var doProj = lista.filter(function(m){ return m.projetoId===state.mapaFiltroProjeto; });
+      if(doProj.length) lista = doProj;
+    }
+    var sel = mapaPontosParaEnquadrar(lista);
+    var pts = sel.pts;
+    if(sel.fora>0) toast(sel.fora+' ponto(s) muito longe da obra ficaram fora do enquadramento (posição duvidosa — confira na lista).', 'info');
     if(pts.length===1){
       leafletMapInstance.setView(pts[0], 17);
       mapaViewFitted = true;
@@ -5959,6 +6081,76 @@
     return { m:tot, aprox:true };
   }
   function mapaFmtM(v){ return (v>=100 ? Math.round(v) : Math.round(v*10)/10).toLocaleString('pt-BR')+' m'; }
+  // Avanço lançado nos RDOs: por serviço do projeto, soma os metros de cada
+  // RDO (PV/trecho marcado sem metros = concluído inteiro). Só leitura —
+  // não altera o status do mapa nem o Planejamento.
+  var _avancoCache = { rdos:null, n:-1, porObra:{} };
+  function avancoPorServico(obraId){
+    var rdos = state.rdos || [];
+    if(_avancoCache.rdos!==rdos || _avancoCache.n!==rdos.length){ _avancoCache = { rdos:rdos, n:rdos.length, porObra:{} }; }
+    if(_avancoCache.porObra[obraId]) return _avancoCache.porObra[obraId];
+    var out = {};
+    rdos.forEach(function(r){
+      if(r.obraId!==obraId || r.deletedAt) return;
+      (r.equipesDetalhe||[]).forEach(function(d, i){
+        (d && d.pvsExecutados||[]).forEach(function(p){
+          if(!p || !p.servicoId) return;
+          var o = out[p.servicoId] = out[p.servicoId] || { metros:0, todo:false, regs:[] };
+          var mt = (p.metros!=null && isFinite(p.metros) && Number(p.metros)>0) ? Number(p.metros) : null;
+          if(mt==null) o.todo = true; else o.metros += mt;
+          o.regs.push({ data:r.data, equipe:(r.equipesDia||[])[i]||'equipe', metros:mt, rascunho:r.status==='rascunho' });
+        });
+      });
+    });
+    Object.keys(out).forEach(function(k){ out[k].regs.sort(function(a,b){ return String(a.data).localeCompare(String(b.data)); }); });
+    _avancoCache.porObra[obraId] = out;
+    return out;
+  }
+  // metros feitos de um trecho (limitado à extensão); status "Concluído" = tudo
+  function avancoTrechoM(m, ext){
+    if(mapaStatusRede(m.status)==='concluido') return ext;
+    if(!m.planejamentoServicoId) return 0;
+    var a = avancoPorServico(m.obraId || state.mapaObraId)[m.planejamentoServicoId];
+    if(!a) return 0;
+    return a.todo ? ext : Math.min(ext, a.metros);
+  }
+  // pedaço inicial de uma linha (fração do comprimento)
+  function mapaCortarLinha(linha, frac){
+    if(!linha || linha.length<2 || frac<=0) return [];
+    if(frac>=1) return linha.slice();
+    var tot = 0, seg = [];
+    for(var i=1;i<linha.length;i++){ var d = mapaDistM(linha[i-1], linha[i]); seg.push(d); tot += d; }
+    var alvo = tot*frac, acc = 0, out = [linha[0]];
+    for(var j=1;j<linha.length;j++){
+      if(acc + seg[j-1] >= alvo){
+        var t = seg[j-1]>0 ? (alvo-acc)/seg[j-1] : 0;
+        out.push({ lat:linha[j-1].lat + (linha[j].lat-linha[j-1].lat)*t, lng:linha[j-1].lng + (linha[j].lng-linha[j-1].lng)*t });
+        return out;
+      }
+      acc += seg[j-1]; out.push(linha[j]);
+    }
+    return out;
+  }
+  function mapaAvancoFichaHtml(m){
+    var s = mapaSvcDe(m);
+    if(!s) return '';
+    var refs = mapaRefsTrecho(mapaTrechoDe(m));
+    var a = avancoPorServico(m.obraId || state.mapaObraId)[s.id];
+    var regsHtml = function(){
+      if(!a || !a.regs.length) return '<span>Nenhum RDO registrou este '+(refs.length>=2?'trecho':'ponto')+' ainda.</span>';
+      return a.regs.map(function(r){ return '<span><b>'+esc(fmtDate(r.data))+'</b> · '+esc(r.equipe)+' · '+(r.metros!=null ? esc(mapaFmtM(r.metros)) : (refs.length>=2 ? 'trecho todo' : 'concluído'))+(r.rascunho?' (RDO em rascunho)':'')+'</span>'; }).join('');
+    };
+    if(refs.length>=2 && m.geom && m.geom.length>1){
+      var ext = mapaExtensaoTrecho(m).m;
+      if(!(ext>0)) return '';
+      var feito = avancoTrechoM(m, ext), pct = Math.round(feito/ext*100);
+      return '<div class="avanco-box"><div class="avanco-topo"><span>Avanço pelos RDOs</span><span><b>'+esc(mapaFmtM(feito))+'</b> de '+esc(mapaFmtM(ext))+' · '+pct+'%</span></div>'+
+        '<div class="avanco-bar" role="img" aria-label="'+pct+'% executado"><span style="width:'+Math.min(100,pct)+'%;"></span></div>'+
+        '<div class="avanco-regs">'+regsHtml()+(mapaStatusRede(m.status)==='concluido' && !(a && (a.todo || a.metros>=ext)) ? '<span>Marcado como concluído no mapa.</span>' : '')+'</div></div>';
+    }
+    if(a && a.regs.length) return '<div class="avanco-box"><div class="avanco-topo"><span>Execução nos RDOs</span></div><div class="avanco-regs">'+regsHtml()+'</div></div>';
+    return '';
+  }
   function mapaStatusRede(st){ return st==='concluido' ? 'concluido' : (st==='parado' ? 'parado' : 'processando'); }
   // Ficha técnica curta (hover do mapa e modal).
   function mapaFichaItens(m){
@@ -5974,7 +6166,10 @@
     else if(s.profundidade!=null) out.push(['Profundidade', fmtQtd(s.profundidade)+' m']);
     var obsP = mapaObsProjeto(s.observacoes);
     if(obsP.declividade) out.push(['Declividade', obsP.declividade]);
+    if(obsP.cgi) out.push(['Cota da geratriz', obsP.cgi]);
+    if(obsP.terreno) out.push(['Cota do terreno', obsP.terreno]);
     if(s.quantidadePrevista>0 && !(m.geom && m.geom.length>1)) out.push(['Quantidade', fmtQtd(s.quantidadePrevista)+' '+(s.unidade||'')]);
+    if(obsP.conferido) out.push(['Conferência', obsP.conferido]);
     if(obsP.texto) out.push(['Obs. do projeto', obsP.texto]);
     return out;
   }
@@ -5982,12 +6177,22 @@
   // (quantidade, escopo, posição aproximada...); a declividade vira campo próprio.
   function mapaObsProjeto(obs){
     var r = { declividade:'', texto:'' };
-    var partes = String(obs||'').split(/\s+—\s+/).map(function(x){ return x.trim(); }).filter(Boolean);
+    var partes = String(obs||'').split(/\s*—\s*/).map(function(x){ return x.trim(); }).filter(Boolean);
     var resto = [];
     partes.forEach(function(p){
       var md = /declividade\s*[:=]?\s*([\d.,]+\s*(?:m\/m|%)?)/i.exec(p);
       if(md && !r.declividade){ r.declividade = md[1].trim(); p = p.replace(md[0], '').replace(/^[\s\-–,;]+|[\s\-–,;]+$/g, ''); }
+      p = p.replace(/^[\s—–-]+/, '');
       if(!p) return;
+      var mpf = /^perfil do projeto \(folha (\d+)\)/i.exec(p);
+      if(mpf){
+        var mc = /cota da geratriz ([\d.,]+)/i.exec(p), mt = /cota do terreno ([\d.,]+)/i.exec(p);
+        if(mc) r.cgi = mc[1]; if(mt) r.terreno = mt[1].replace(/\.$/, '');
+        r.conferido = 'Perfil do PDF (folha '+mpf[1]+')'; return;
+      }
+      var mcf = /^conferido no perfil do projeto \(folha (\d+)\)(?::\s*corrigido (.+?))?\.?$/i.exec(p);
+      if(mcf){ r.conferido = 'Perfil do PDF (folha '+mcf[1]+')'+(mcf[2] ? ' — a leitura da IA foi corrigida: '+mcf[2] : ''); return; }
+      if(/^(profundidade conferida no perfil|lido no desenho|extens[aã]o lida no quadro)/i.test(p)){ r.conferido = r.conferido || p; return; }
       if(/^(quantidade|posi[cç][aã]o aproximada|contratado:|[àa] parte|rua localizada|posicionado|localiza[cç][aã]o)/i.test(p)) return;
       resto.push(p);
     });
@@ -6019,14 +6224,22 @@
       var nc = geoNaoConfirmada(m) || it.derivado;
       L.polyline(latlngs, { color:'#FFFFFF', weight:11, opacity:nc?0.6:0.95, lineCap:'round', lineJoin:'round', interactive:false, className:'rede-casing' }).addTo(mapaLayerGroup);
       L.polyline(latlngs, { color:cor, weight:6, opacity:nc?0.55:1, lineCap:aparte?'butt':'round', lineJoin:'round', dashArray:aparte?'11 7':null, interactive:false, className:'rede-linha st-'+st }).addTo(mapaLayerGroup);
+      // parte já executada (metros lançados nos RDOs) pintada de verde por cima
+      var extAv = mapaExtensaoTrecho(m, it.linha), feitoAv = st==='concluido' ? 0 : avancoTrechoM(m, extAv.m);
+      if(feitoAv>0 && extAv.m>0){
+        var pedaco = mapaCortarLinha(it.linha, feitoAv/extAv.m);
+        if(pedaco.length>1) L.polyline(pedaco.map(function(p){ return [p.lat, p.lng]; }), { color:cores.concluido, weight:6, opacity:nc?0.6:1, lineCap:'round', lineJoin:'round', interactive:false, className:'rede-linha st-concluido rede-avanco' }).addTo(mapaLayerGroup);
+      }
       // Faixa larga invisível: fácil de tocar no celular.
       var hit = L.polyline(latlngs, { color:cor, weight:22, opacity:0, lineCap:'round', className:'rede-hit' }).addTo(mapaLayerGroup);
       var ext = mapaExtensaoTrecho(m, it.linha);
       hit.bindTooltip(mapaRedeTooltipHtml(m, it.derivado ? 'Linha ligando os PVs do projeto (o trecho foi gravado com 1 ponto só)' : ''), { sticky:true, direction:'top', className:'map-pin-label rede-hover' });
       hit.on('click', function(){ abrirModalMarcacao(m); });
       if(ext.m>0){
+        var txtExt = (ext.aprox?'≈':'')+mapaFmtM(ext.m);
+        if(feitoAv>0 && feitoAv<ext.m) txtExt = mapaFmtM(feitoAv).replace(' m','')+'/'+txtExt;
         L.tooltip({ permanent:true, direction:'center', className:'map-pin-label rede-ext', interactive:false, opacity:1 })
-          .setLatLng(L.latLngBounds(latlngs).getCenter()).setContent((ext.aprox?'≈':'')+mapaFmtM(ext.m)).addTo(mapaLayerGroup);
+          .setLatLng(L.latLngBounds(latlngs).getCenter()).setContent(txtExt).addTo(mapaLayerGroup);
       }
       if(m.foto && m.status!=='processando'){
         hit.on('mouseover mousemove', function(e){ showMapaFotoHover(m.foto, e.containerPoint); });
@@ -6163,7 +6376,9 @@
         var k = it.m.planejamentoServicoId ? 's'+it.m.planejamentoServicoId : 'm'+it.m.id;
         if(vistos[k]) return; vistos[k] = 1;
         var e = mapaExtensaoTrecho(it.m, it.linha);
-        r.m[st] += e.m; r.totM += e.m; r.nTrechos++; if(e.aprox) r.aprox = true;
+        var parcial = st==='concluido' ? 0 : avancoTrechoM(it.m, e.m);
+        r.m.concluido += parcial; r.m[st] += e.m - parcial;
+        r.totM += e.m; r.nTrechos++; if(e.aprox) r.aprox = true;
       } else if(mapaRefsTrecho(mapaTrechoDe(it.m)).length===1 || it.m.tipo==='pv'){
         var kp = Number(it.no.lat).toFixed(6)+','+Number(it.no.lng).toFixed(6);
         if(pvVistos[kp]){ // mesmo ponto: pior status vence
@@ -6243,6 +6458,180 @@
     if(leg) leg.innerHTML = mapaLegendaHtml();
     renderMapaRedeResumo();
   }
+  // ---------------------------------------------------------------
+  // "Ver no PDF": mostra o pedaço do projeto de onde veio o dado — o rótulo
+  // com a coordenada na planta e a coluna do PV/trecho no perfil — com o
+  // valor gravado no sistema ao lado, para conferir em segundos.
+  // ---------------------------------------------------------------
+  var PDFJS_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  var PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  var _pdfjsPromise = null, _pdfDocs = {};
+  function carregarPdfJs(){
+    if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if(_pdfjsPromise) return _pdfjsPromise;
+    _pdfjsPromise = new Promise(function(ok, falha){
+      var s = document.createElement('script');
+      s.src = PDFJS_SRC;
+      s.onload = function(){ if(!window.pdfjsLib) return falha(new Error('leitor de PDF indisponível')); window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER; ok(window.pdfjsLib); };
+      s.onerror = function(){ _pdfjsPromise = null; falha(new Error('não foi possível carregar o leitor de PDF (sem internet?)')); };
+      document.head.appendChild(s);
+    });
+    return _pdfjsPromise;
+  }
+  function pdfDoProjeto(projeto){
+    var k = projeto.arquivoPath;
+    if(_pdfDocs[k]) return _pdfDocs[k];
+    _pdfDocs[k] = carregarPdfJs().then(function(lib){
+      return Promise.resolve(supabaseClient.storage.from('projetos-obras').download(projeto.arquivoPath)).then(function(r){
+        if(!r || r.error || !r.data) throw (r && r.error) || new Error('arquivo não encontrado');
+        return r.data.arrayBuffer();
+      }).then(function(buf){ return lib.getDocument({ data:new Uint8Array(buf) }).promise; });
+    });
+    _pdfDocs[k].catch(function(){ delete _pdfDocs[k]; });
+    return _pdfDocs[k];
+  }
+  // textos da página com caixa na escala 1 (coordenadas de tela, y para baixo)
+  function pdfTextosDaPagina(page){
+    var vp = page.getViewport({ scale:1 });
+    return page.getTextContent().then(function(tc){
+      return tc.items.filter(function(it){ return it.str && it.str.trim(); }).map(function(it){
+        var t = window.pdfjsLib.Util.transform(vp.transform, it.transform);
+        var h = Math.hypot(t[2], t[3]) || 1, ax = t[0], ay = t[1], al = Math.hypot(ax, ay) || 1;
+        var w = it.width || 0;
+        var a = [ax/al*w, ay/al*w], u = [t[2]/h*h, t[3]/h*h];
+        var xs = [t[4], t[4]+a[0], t[4]+u[0], t[4]+a[0]+u[0]], ys = [t[5], t[5]+a[1], t[5]+u[1], t[5]+a[1]+u[1]];
+        var x0 = Math.min.apply(null, xs), y0 = Math.min.apply(null, ys);
+        return { s:it.str, x:x0, y:y0, w:Math.max.apply(null, xs)-x0, h:Math.max.apply(null, ys)-y0, vert:Math.abs(ay) > Math.abs(ax) };
+      });
+    });
+  }
+  function pdfUniao(caixas){
+    var x0 = Math.min.apply(null, caixas.map(function(c){ return c.x; })), y0 = Math.min.apply(null, caixas.map(function(c){ return c.y; }));
+    var x1 = Math.max.apply(null, caixas.map(function(c){ return c.x+c.w; })), y1 = Math.max.apply(null, caixas.map(function(c){ return c.y+c.h; }));
+    return { x:x0, y:y0, w:x1-x0, h:y1-y0 };
+  }
+  var _pdfNorm = function(t){ return String(t||'').toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+  // Acha o rótulo da planta (coordenada do PV) e a coluna do perfil.
+  function pdfLocalizar(textos, s){
+    var achados = { planta:null, perfil:null };
+    var refs = mapaRefsTrecho(s.trecho);
+    var refNorm = function(t){ var r = mapaRefsTrecho(t); return r.length===1 ? r[0] : null; };
+    // cabeçalho do perfil: 3+ nomes de PV na mesma altura
+    var cand = textos.filter(function(t){ return !t.vert && /^\s*(PV|PI|TL|CP)\b/i.test(t.s) && refNorm(t.s) && t.s.trim().length<=24; });
+    var melhor = [];
+    cand.forEach(function(a){
+      var linha = cand.filter(function(b){ return Math.abs((b.y+b.h/2)-(a.y+a.h/2)) < 2.5; });
+      var nomes = linha.map(function(b){ return refNorm(b.s); });
+      if(linha.length > melhor.length && nomes.length===new Set(nomes).size) melhor = linha;
+    });
+    var cab = melhor.length>=3 ? melhor : [];
+    var cabY = cab.length ? Math.min.apply(null, cab.map(function(c){ return c.y; })) : null;
+    var noCab = function(ref){ return cab.find(function(c){ return refNorm(c.s)===ref; }); };
+    if(cab.length && refs.length){
+      var cs = refs.map(noCab).filter(Boolean);
+      if(cs.length===refs.length){
+        var cx = cs.map(function(c){ return c.x + c.w/2; });
+        var xa = Math.min.apply(null, cx), xb = Math.max.apply(null, cx);
+        var hDestaque = 270;
+        achados.perfil = refs.length>=2
+          ? { box:{ x:xa-45, y:cabY-30, w:(xb-xa)+90, h:hDestaque+50 }, destaque:{ x:xa, y:cabY-4, w:xb-xa, h:hDestaque } }
+          : { box:{ x:xa-140, y:cabY-30, w:280, h:hDestaque+50 }, destaque:{ x:xa-13, y:cabY-4, w:26, h:hDestaque } };
+      }
+    }
+    // planta: rótulo com a coordenada do PV (E/N gravados na conferência)
+    var orig = (s.geoCoordOriginal||[]).filter(function(o){ return o && o.E!=null; });
+    var alvo = refs.length ? (orig.find(function(o){ return o.ref===refs[0]; }) || orig[0]) : null;
+    var foraDoPerfil = function(t){ return cabY==null || t.y < cabY-20 || t.y > cabY+320; };
+    if(alvo){
+      var dig = function(v){ return Number(v).toFixed(3).replace(/\D/g, ''); };
+      var dE = dig(alvo.E), dN = dig(alvo.N);
+      var tE = textos.find(function(t){ return foraDoPerfil(t) && t.s.replace(/\D/g, '').indexOf(dE)>-1; });
+      var tN = textos.find(function(t){ return foraDoPerfil(t) && t.s.replace(/\D/g, '').indexOf(dN)>-1; });
+      var partes = [tE, tN].filter(Boolean);
+      if(partes.length){
+        var u = pdfUniao(partes);
+        var nome = textos.find(function(t){ return foraDoPerfil(t) && refNorm(t.s)===refs[0] && Math.hypot(t.x-u.x, t.y-u.y) < 90; });
+        if(nome) u = pdfUniao([u, nome]);
+        achados.planta = { box:{ x:u.x-150, y:u.y-90, w:u.w+300, h:u.h+180 }, destaque:{ x:u.x-4, y:u.y-4, w:u.w+8, h:u.h+8 } };
+      }
+    }
+    // serviço sem PV (sondagem etc.): o próprio rótulo do serviço na planta
+    if(!achados.planta && s.trecho && !refs.length){
+      var alvoT = _pdfNorm(s.trecho);
+      for(var i=0;i<textos.length && !achados.planta;i++){
+        var juntos = [textos[i]], txt = _pdfNorm(textos[i].s);
+        for(var j=i+1; j<Math.min(textos.length, i+4) && txt.length<alvoT.length && alvoT.indexOf(txt)===0; j++){ juntos.push(textos[j]); txt += _pdfNorm(textos[j].s); }
+        if(txt===alvoT || (txt.indexOf(alvoT)===0 && !/\d/.test(txt.charAt(alvoT.length)))){
+          var ub = pdfUniao(juntos);
+          if(ub.w < 400 && ub.h < 400) achados.planta = { box:{ x:ub.x-190, y:ub.y-140, w:ub.w+380, h:ub.h+280 }, destaque:{ x:ub.x-4, y:ub.y-4, w:ub.w+8, h:ub.h+8 } };
+        }
+      }
+    }
+    return achados;
+  }
+  function pdfDesenharRecorte(page, alvo, canvas){
+    var vp1 = page.getViewport({ scale:1 });
+    var b = { x:Math.max(0, alvo.box.x), y:Math.max(0, alvo.box.y) };
+    b.w = Math.min(vp1.width - b.x, alvo.box.w); b.h = Math.min(vp1.height - b.y, alvo.box.h);
+    var esc2 = Math.max(1.5, Math.min(4, 1100 / Math.max(b.w, 1)));
+    var vp = page.getViewport({ scale:esc2 });
+    canvas.width = Math.round(b.w*esc2); canvas.height = Math.round(b.h*esc2);
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    return page.render({ canvasContext:ctx, viewport:vp, transform:[1, 0, 0, 1, -b.x*esc2, -b.y*esc2] }).promise.then(function(){
+      var d = alvo.destaque;
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,196,0,.18)'; ctx.strokeStyle = '#E0A100'; ctx.lineWidth = 3;
+      ctx.fillRect((d.x-b.x)*esc2, (d.y-b.y)*esc2, d.w*esc2, d.h*esc2);
+      ctx.strokeRect((d.x-b.x)*esc2, (d.y-b.y)*esc2, d.w*esc2, d.h*esc2);
+      ctx.restore();
+    });
+  }
+  function abrirRecortePdf(m, s, projeto){
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div');
+    wrap.className = 'overlay pdf-recorte-overlay';
+    var pagina = s.paginaProjeto || ((s.geoCoordOriginal||[]).find(function(o){ return o && o.pagina; })||{}).pagina || 1;
+    var itens = mapaFichaItens(m);
+    wrap.innerHTML = '<div class="modal">'+
+      '<h3>'+esc(s.trecho || s.servicoNome || 'Serviço')+' <span style="font-weight:500;color:var(--muted);font-size:14px;">· no projeto ('+esc(projeto.codigo||projeto.nome)+', folha '+pagina+')</span></h3>'+
+      '<div id="pdfRecorteCorpo"><div class="pdf-recorte-status">Abrindo o PDF do projeto…</div></div>'+
+      (itens.length ? '<div class="field ficha-tec" style="margin:4px 0 12px;"><label>Gravado no sistema</label><dl class="ficha-grid">'+itens.map(function(kv){ return '<dt>'+esc(kv[0])+'</dt><dd>'+esc(kv[1])+'</dd>'; }).join('')+'</dl></div>' : '')+
+      '<div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">'+
+        '<button type="button" class="btn ghost" data-pdfact="inteiro">Abrir PDF inteiro</button>'+
+        '<button type="button" class="btn primary" data-pdfact="fechar">Fechar</button>'+
+      '</div></div>';
+    root.appendChild(wrap);
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap){ wrap.remove(); return; }
+      var a = e.target.getAttribute && e.target.getAttribute('data-pdfact');
+      if(a==='fechar'){ wrap.remove(); return; }
+      if(a==='inteiro'){ var w = window.open('', '_blank'); abrirArquivoProjeto(projeto.arquivoPath, w); return; }
+      if(e.target.classList && e.target.classList.contains('pdf-recorte-canvas')){ e.target.parentNode.classList.toggle('zoom'); }
+    });
+    var corpo = wrap.querySelector('#pdfRecorteCorpo');
+    var status = function(t){ corpo.innerHTML = '<div class="pdf-recorte-status">'+esc(t)+'</div>'; };
+    pdfDoProjeto(projeto).then(function(doc){
+      if(pagina > doc.numPages) pagina = 1;
+      return doc.getPage(pagina);
+    }).then(function(page){
+      status('Procurando '+(s.trecho||'o serviço')+' na folha '+pagina+'…');
+      return pdfTextosDaPagina(page).then(function(textos){
+        if(!textos.length){ status('Esta folha não tem texto pesquisável (desenho escaneado ou texto vetorizado). Use “Abrir PDF inteiro”.'); return; }
+        var ach = pdfLocalizar(textos, s);
+        var secoes = [];
+        if(ach.planta) secoes.push({ titulo:'Planta — rótulo '+(mapaRefsTrecho(s.trecho).length ? 'com a coordenada' : 'no desenho'), alvo:ach.planta });
+        if(ach.perfil) secoes.push({ titulo:'Perfil — coluna '+(mapaRefsTrecho(s.trecho).length>=2 ? 'do trecho' : 'do PV'), alvo:ach.perfil });
+        if(!secoes.length){ status('Não encontrei '+(s.trecho||'este serviço')+' escrito na folha '+pagina+'. Use “Abrir PDF inteiro”.'); return; }
+        corpo.innerHTML = secoes.map(function(sc, i){ return '<div class="pdf-recorte-sec"><h4>'+esc(sc.titulo)+'</h4><div class="pdf-recorte-wrap"><canvas class="pdf-recorte-canvas" id="pdfRecorte'+i+'" title="Clique para ampliar"></canvas></div></div>'; }).join('');
+        var seq = Promise.resolve();
+        secoes.forEach(function(sc, i){ seq = seq.then(function(){ return pdfDesenharRecorte(page, sc.alvo, wrap.querySelector('#pdfRecorte'+i)); }); });
+        return seq;
+      });
+    }).catch(function(err){
+      status('Não foi possível abrir o PDF: '+((err && err.message) || err));
+    });
+  }
   // Ficha técnica no modal da marcação.
   function mapaFichaTecnicaHtml(m){
     var itens = mapaFichaItens(m);
@@ -6281,10 +6670,14 @@
       '</div>';
       var icon = L.divIcon({ className:'', html:circleHtml, iconSize:[26,26], iconAnchor:[13,13] });
       var marker = L.marker([g.lat, g.lng], { icon: icon }).addTo(mapaLayerGroup);
-      var principal = esc(g.nomeLocal || g.rua || '(sem endereço)');
+      var trechoUnico = g.items.length===1 ? mapaTrechoDe(g.items[0]) : '';
+      var principal = esc(trechoUnico && !mapaRefsTrecho(trechoUnico).length ? (trechoUnico+(g.rua?' · '+g.rua:'')) : (g.nomeLocal || g.rua || '(sem endereço)'));
       var numeroTxt = g.numeroServico ? (' <span class="num">Nº '+esc(g.numeroServico)+'</span>') : '';
       var qtdTxt = g.items.length>1 ? (' <span class="num">('+g.items.length+' serviços)</span>') : '';
-      var geoTxt = g.geoBadge ? (' <span class="num">'+esc(g.geoBadge)+' '+esc(g.geoRuim ? 'sem posição confiável' : ((GEO_STATUS_INFO[(g.items.find(geoNaoConfirmada)||{}).geoStatus]||{}).label||''))+'</span>') : '';
+      var itNc = g.items.find(geoNaoConfirmada) || {};
+      var metNc = itNc.geoMetodo || ((mapaSvcDe(itNc)||{}).geoMetodo) || '';
+      var geoLbl = metNc==='proximo_pv' ? 'junto ao PV (aproximada)' : (metNc==='tracado_rua' ? 'pelos PVs da rua (aproximada)' : ((GEO_STATUS_INFO[itNc.geoStatus]||{}).label||''));
+      var geoTxt = g.geoBadge ? (' <span class="num">'+esc(g.geoBadge)+' '+esc(g.geoRuim ? 'sem posição confiável' : geoLbl)+'</span>') : '';
       marker.bindTooltip('<b>○ '+g.numero+' — '+principal+'</b>'+numeroTxt+qtdTxt+geoTxt, { permanent:true, direction:'top', offset:[0,-16], className:'map-pin-label', interactive:false });
       marker.on('click', function(){ abrirModalMarcacao(g.items[0]); });
       var itemComFoto = g.items.find(function(x){ return x.foto && x.status!=='processando'; });
@@ -6582,6 +6975,7 @@
         '<div class="hint" style="margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+
           '<span>'+esc(projetoOrigem.codigo||projetoOrigem.nome)+'</span>'+
           '<button type="button" class="btn ghost sm" data-act="verprojeto">Ver projeto</button>'+
+          (svcAtual && /\.pdf$/i.test(String(projetoOrigem.arquivoPath||'')) ? '<button type="button" class="btn ghost sm" data-act="verpdf">Ver no PDF</button>' : '')+
         '</div>'+
       '</div>') : '';
     var camposIdentificacao = canGestao ?
@@ -6593,7 +6987,7 @@
     wrap.innerHTML =
       '<div class="modal">'+
         '<h3>'+(isEdit && mapaRotulo(m) ? esc(mapaRotulo(m))+' <span style="font-weight:500;color:var(--muted);font-size:14px;">· '+(canGestao ? 'editar' : 'atualizar')+'</span>' : (isEdit ? (canGestao ? 'Editar marcação' : 'Atualizar marcação') : (m.tipo==='pv' ? 'Novo PV' : 'Novo ramal')))+'</h3>'+
-        (isEdit ? mapaFichaTecnicaHtml(m) : '')+
+        (isEdit ? mapaFichaTecnicaHtml(m) + mapaAvancoFichaHtml(m) : '')+
         '<div class="field" style="margin-bottom:12px;"><label>Status</label>'+
           '<div class="seg seg-status" id="marcStatusSeg" role="group" aria-label="Status">'+
             '<button type="button" data-st="parado" style="--dot:var(--map-vermelho);">Pendente</button>'+
@@ -6651,6 +7045,7 @@
       var act = e.target.getAttribute('data-act');
       if(act==='cancel'){ wrap.remove(); return; }
       if(act==='verprojeto'){ if(!projetoOrigem) return; wrap.remove(); abrirPlanejamentoObraPorId(obraIdAtual); return; }
+      if(act==='verpdf'){ if(!projetoOrigem || !svcAtual) return; abrirRecortePdf(m, svcAtual, projetoOrigem); return; }
       if(act==='del'){ if(!canGestao) return; wrap.remove(); excluirMarcacao(m.id); return; }
       if(act==='geoconfirmar'){ if(!canGestao) return; wrap.remove(); confirmarPosicaoEmCampo(m); return; }
       if(act==='fotoremove'){
@@ -7841,13 +8236,13 @@
     var entrada = { status:'carregando', itens:[], erro:'' };
     entrada.promise = Promise.resolve(supabaseClient.rpc('rdo_servicos_projeto', { p_obra_id: obraId })).then(function(res){
       if(res && !res.error) return res.data||[];
-      return Promise.resolve(supabaseClient.from('planejamento_servicos').select('id, codigo, servico_nome, trecho, endereco').eq('obra_id', obraId).is('deleted_at', null)).then(function(r2){
+      return Promise.resolve(supabaseClient.from('planejamento_servicos').select('id, codigo, servico_nome, trecho, endereco, comprimento').eq('obra_id', obraId).is('deleted_at', null)).then(function(r2){
         if(r2 && r2.error) throw r2.error;
         return (r2 && r2.data) || [];
       });
     }).then(function(lista){
       entrada.itens = (lista||[]).filter(function(s){ return s && s.id && RDO_REF_PONTO_RE.test(String(s.trecho||'')); }).map(function(s){
-        return { servicoId:s.id, codigo:s.codigo||'', servico:s.servico_nome||'', trecho:s.trecho||'', rua:s.endereco||'' };
+        return { servicoId:s.id, codigo:s.codigo||'', servico:s.servico_nome||'', trecho:s.trecho||'', rua:s.endereco||'', comprimento:(s.comprimento!=null && isFinite(s.comprimento)) ? Number(s.comprimento) : null };
       });
       entrada.itens.sort(function(a,b){ return (a.rua||'').localeCompare(b.rua||'') || String(a.codigo).localeCompare(String(b.codigo), undefined, {numeric:true}); });
       entrada.status = 'ok';
@@ -7872,10 +8267,21 @@
     (state.rdos||[]).forEach(function(r){
       if(r.obraId!==obraId || r.deletedAt || (rdoId && r.id===rdoId)) return;
       (r.equipesDetalhe||[]).forEach(function(d, i){
-        (d && d.pvsExecutados||[]).forEach(function(p){ (m[p.servicoId] = m[p.servicoId] || []).push(fmtDate(r.data)+' · '+((r.equipesDia||[])[i]||'equipe')); });
+        (d && d.pvsExecutados||[]).forEach(function(p){ (m[p.servicoId] = m[p.servicoId] || []).push(fmtDate(r.data)+' · '+((r.equipesDia||[])[i]||'equipe')+(p.metros!=null && Number(p.metros)>0 ? ' · '+String(p.metros).replace('.', ',')+' m' : '')); });
       });
     });
     return m;
+  }
+  // Metros deste trecho já lançados em OUTROS RDOs da obra (para mostrar o que falta)
+  function rdoMetrosEmOutrosRdos(obraId, rdoId, servicoId){
+    var o = { metros:0, todo:false };
+    (state.rdos||[]).forEach(function(r){
+      if(r.obraId!==obraId || r.deletedAt || (rdoId && r.id===rdoId)) return;
+      (r.equipesDetalhe||[]).forEach(function(d){ (d && d.pvsExecutados||[]).forEach(function(p){
+        if(p && p.servicoId===servicoId){ if(p.metros!=null && Number(p.metros)>0) o.metros += Number(p.metros); else o.todo = true; }
+      }); });
+    });
+    return o;
   }
   function rdoTirarPv(rdo, servicoId){
     if(rdo.pvsSemEquipe) delete rdo.pvsSemEquipe[servicoId];
@@ -7887,7 +8293,7 @@
     syncEquipesDetalhe(rdo);
     var d = rdo.equipesDetalhe[idx];
     if(!d) return;
-    d.pvsExecutados = (d.pvsExecutados||[]).concat([{ servicoId:item.servicoId, codigo:item.codigo, servico:item.servico, trecho:item.trecho, rua:item.rua }]);
+    d.pvsExecutados = (d.pvsExecutados||[]).concat([{ servicoId:item.servicoId, codigo:item.codigo, servico:item.servico, trecho:item.trecho, rua:item.rua, metros:(item.metros!=null ? item.metros : null) }]);
   }
   function renderRdoPvsProjeto(rdo){
     var box = document.getElementById('rdoPvsProjetoBox');
@@ -7925,6 +8331,13 @@
               (m.idx<0 ? '<option value="-1" selected>Equipe que concluiu…</option>' : '')+
               equipes.map(function(nome, i){ return '<option value="'+i+'"'+(m.idx===i?' selected':'')+'>'+esc(nome)+'</option>'; }).join('')+
              '</select>') : '')+
+        (m && mapaRefsTrecho(it.trecho).length>=2 ? (function(){
+          var outrosM = rdoMetrosEmOutrosRdos(obraId, rdo.id, it.servicoId);
+          return '<div class="rdo-pv-metros"><label for="pvm_'+esc(it.servicoId)+'" style="margin:0;">Executado hoje</label>'+
+            '<input type="number" inputmode="decimal" step="0.01" min="0" id="pvm_'+esc(it.servicoId)+'" data-pvm="'+esc(it.servicoId)+'" value="'+(m.item.metros!=null ? esc(String(m.item.metros)) : '')+'" placeholder="trecho todo"> m'+
+            (it.comprimento ? ' <span>de '+esc(mapaFmtM(it.comprimento))+(outrosM.metros>0 || outrosM.todo ? ' · antes: '+(outrosM.todo ? 'trecho todo' : esc(mapaFmtM(outrosM.metros))) : '')+'</span>' : '')+
+            '<span>— vazio = trecho inteiro concluído</span></div>';
+        })() : '')+
       '</div>';
     });
     box.innerHTML = html;
@@ -7942,8 +8355,19 @@
     box.querySelectorAll('[data-pveq]').forEach(function(sel){
       sel.addEventListener('change', function(){
         var id = sel.getAttribute('data-pveq'), it = porId[id];
-        if(it) rdoPorPvNaEquipe(rdo, it, parseInt(sel.value, 10));
+        var atual = rdoPvsMarcados(rdo)[id];
+        if(it) rdoPorPvNaEquipe(rdo, Object.assign({}, it, { metros: atual && atual.item ? atual.item.metros : null }), parseInt(sel.value, 10));
         renderRdoPvsProjeto(rdo);
+      });
+    });
+    box.querySelectorAll('[data-pvm]').forEach(function(inp){
+      inp.addEventListener('change', function(){
+        var id = inp.getAttribute('data-pvm');
+        var v = String(inp.value||'').replace(',', '.').trim();
+        var n = v==='' ? null : Number(v);
+        if(n!=null && !(isFinite(n) && n>=0)){ toast('Informe os metros executados (ex.: 12,5).','error'); return; }
+        var reg = rdoPvsMarcados(rdo)[id];
+        if(reg && reg.item) reg.item.metros = (n===0 ? null : n);
       });
     });
   }
