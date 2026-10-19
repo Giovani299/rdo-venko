@@ -372,6 +372,43 @@
   .rdo-resumo-serv .falta{color:#C6433F;font-weight:700;}
   .rr-total{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding-top:9px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;}
   .rr-total b{font-size:17px;letter-spacing:0;color:var(--venko-yellow-deep);font-variant-numeric:tabular-nums;}
+  .rdo-pv-serv{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 0 26px;font-size:12px;color:var(--muted);}
+  .rdo-pv-serv label{margin:0;font-size:12px;color:var(--ink,#14130F);font-weight:600;text-transform:none;letter-spacing:0;}
+  .rdo-pv-serv select{flex:1 1 220px;min-width:0;max-width:100%;padding:5px 6px;font-size:12.5px;}
+  .rdo-pv-serv select.pv-serv-vazio{border:2px solid var(--venko-yellow-deep);}
+  .rdo-pv-serv-dica{flex:1 1 100%;font-size:11.5px;}
+  .med-resumo{margin:10px 0 0;}
+  .med-aviso{margin:0 0 8px;padding:7px 10px;border-radius:6px;background:rgba(240,190,40,.14);color:#6b5000;font-size:12.5px;}
+  .med-tab{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:6px;}
+  .med-tab table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .med-tab th{position:sticky;top:0;background:var(--paper);text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--line);}
+  .med-tab td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top;}
+  .med-tab .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .med-tab tfoot td{position:sticky;bottom:0;background:var(--paper);font-weight:800;font-size:14px;border-bottom:none;}
+  .med-sub{font-size:11px;color:var(--muted);}
+  /* v35: planilha completa no RDO + equipe obrigatória */
+  .serv-item{padding:8px 10px;border-bottom:1px solid var(--line);background:var(--surface);}
+  .serv-item.marcado{background:rgba(240,190,40,.07);}
+  .serv-nome{display:flex;align-items:flex-start;gap:10px;margin:0;cursor:pointer;font-size:13.5px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--ink,#14130F);}
+  .serv-nome input{width:16px;height:16px;flex:none;margin-top:2px;}
+  .serv-nome .hint{font-weight:400;}
+  .serv-linha{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 0 26px;}
+  .serv-linha select,.serv-linha input{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:6px 7px;font-size:13px;}
+  .serv-linha select[data-sveq]{flex:1 1 140px;min-width:0;}
+  .serv-linha select[data-sveq].sem-eq{border:2px solid #C6433F;background:rgba(198,67,63,.06);}
+  .serv-linha select[data-svtipo]{flex:0 1 120px;}
+  .serv-linha .conc-qtd{flex:1 1 130px;}
+  .serv-linha input.qtd-falta{border:2px solid #C6433F;background:rgba(198,67,63,.06);}
+  .serv-rm{border:none;background:none;color:var(--muted);font-size:16px;cursor:pointer;padding:2px 6px;}
+  .link-btn{border:none;background:none;color:var(--venko-yellow-deep);font-weight:700;font-size:12.5px;cursor:pointer;padding:4px 0;margin:4px 0 0 26px;}
+  .serv-alerta{margin:0 0 10px;padding:9px 12px;border-radius:6px;border-left:4px solid #C6433F;background:rgba(198,67,63,.07);color:#7a2522;font-size:13px;font-weight:600;}
+  .sp-linha{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;padding:8px 10px;border:1px dashed var(--line);border-radius:6px;font-size:13px;}
+  .sp-linha label{margin:0;font-size:13px;text-transform:none;letter-spacing:0;font-weight:600;color:var(--ink,#14130F);display:flex;align-items:center;gap:8px;}
+  .sp-linha input[type=text]{flex:1 1 240px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--paper);}
+  .eq-serv-resumo{margin:12px 0 0;padding:8px 10px;border-radius:6px;background:var(--surface);border:1px solid var(--line);font-size:12.5px;}
+  .admin-aviso{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 10px;padding:10px 12px;border:1px solid var(--line);border-left:4px solid var(--venko-yellow-deep);border-radius:var(--radius);background:var(--surface);font-size:13px;line-height:1.45;}
+  .admin-aviso > div{flex:1 1 280px;}
+  .tag-obrig{display:inline-block;vertical-align:middle;margin-left:6px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#a33;background:rgba(198,67,63,.09);border-radius:4px;padding:2px 6px;}
   .tag-pend{font-size:10.5px;font-weight:700;color:#8a6a00;background:rgba(240,190,40,.18);border-radius:4px;padding:1px 5px;}
   .checklist-custom{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
   .checklist-custom-row{display:flex;gap:8px;align-items:center;}
@@ -803,10 +840,11 @@
         <button class="btn primary" data-goto="novo">+ Nova RDO</button>
       </div>
       <div id="dbBanner"></div>
+      <div id="adminAvisosBox"></div>
       <div class="kpi-row" id="kpiRow"></div>
       <div class="filters" id="filterBar"></div>
       <div style="display:flex;justify-content:flex-end;margin:-6px 0 12px;">
-        <button class="btn ghost sm" id="btnExportCdm" type="button" style="display:none">⬇ Exportar CDM</button>
+        <button class="btn ghost sm" id="btnExportCdm" type="button" style="display:none">⬇ Medição (Excel / CDM)</button>
       </div>
       <div class="table-wrap">
         <table class="rdo-list">
@@ -1457,9 +1495,13 @@
     return supabaseClient.auth.getSession().then(function(sessRes){
       var hasSession = !!(sessRes && sessRes.data && sessRes.data.session);
       if(!hasSession) return {ok:false, reason:'auth'};
-      var op = item.isEdit
-        ? supabaseClient.from('rdos').update(item.payload).eq('id', item.rdoId)
-        : supabaseClient.from('rdos').insert(Object.assign({exemplo:false}, item.payload));
+      var op = rdoSubirFotosPayload(item.payload.obra_id, item.payload.fotos||[]).then(function(fotos){
+        item.payload.fotos = fotos;
+        if(item.payload.status==='enviado') item.payload.status = 'aprovado';
+        return item.isEdit
+          ? supabaseClient.from('rdos').update(item.payload).eq('id', item.rdoId)
+          : supabaseClient.from('rdos').insert(Object.assign({exemplo:false}, item.payload));
+      });
       return op.then(function(res){
         if(res.error){
           if(looksAuthError(res.error)) return {ok:false, reason:'auth'};
@@ -4199,7 +4241,7 @@
     var mkey = todayISO().slice(0,7);
     var obrasAtivas = state.obras.filter(function(o){ return o.status==='ativa'; }).length;
     var rdosMes = state.rdos.filter(function(r){ return monthKey(r.data)===mkey; }).length;
-    var pendentes = state.rdos.filter(function(r){ return r.status==='enviado'; }).length;
+    var pendentes = state.rdos.filter(function(r){ return (r.status==='enviado' || r.status==='aprovado') && monthKey(r.data)===mkey; }).length;
     var diasComPendencia = 0;
     state.rdos.filter(function(r){ return monthKey(r.data)===mkey; }).forEach(function(r){
       var temPendencia = (r.ocorrencias||[]).some(function(o){ return o.tipo==='Pendência'; });
@@ -4208,8 +4250,78 @@
     document.getElementById('kpiRow').innerHTML =
       kpiTile(obrasAtivas,'Obras ativas','accent') +
       kpiTile(rdosMes,'RDOs este mês','') +
-      kpiTile(pendentes,'RDOs enviadas','pend') +
+      kpiTile(pendentes,'RDOs aprovadas (mês)','pend') +
       kpiTile(diasComPendencia,'Dias com pendência (mês)','warn');
+    renderAdminAvisos();
+  }
+  function ehAdmin(){ return !!(state.currentUser && state.currentUser.is_admin); }
+  function backupUltimo(){ try{ return Number(localStorage.getItem('vkBackupUltimo')||0); }catch(e){ return 0; } }
+  function renderAdminAvisos(){
+    var box = document.getElementById('adminAvisosBox');
+    if(!box) return;
+    var u = state.currentUser;
+    if(!(u && u.is_admin)){ box.innerHTML = ''; return; }
+    var partes = [];
+    var antigos = rdosComFotoAntiga();
+    if(antigos.length){
+      var nF = antigos.reduce(function(s, r){ return s + (r.fotos||[]).filter(fotoEhBase64).length; }, 0);
+      partes.push('<div class="admin-aviso"><div><b>'+nF+' foto(s) antigas gravadas dentro de '+antigos.length+' RDO(s).</b> Elas deixam o sistema pesado para abrir. Mova para o armazenamento — as fotos continuam iguais nos RDOs e nos PDFs.</div>'+
+        '<button type="button" class="btn primary sm" id="btnMigrarFotos">Mover fotos agora</button></div>');
+    }
+    var dias = backupUltimo() ? Math.floor((Date.now()-backupUltimo())/86400000) : null;
+    if(dias===null || dias>=7){
+      partes.push('<div class="admin-aviso"><div><b>Backup:</b> '+(dias===null ? 'nenhum backup baixado neste computador ainda.' : 'o último foi há '+dias+' dia(s).')+' Baixe uma cópia de todos os dados (recomendado toda semana).</div>'+
+        '<button type="button" class="btn ghost sm" data-backup="1">⬇ Baixar backup</button></div>');
+    }
+    box.innerHTML = partes.join('');
+    var bm = document.getElementById('btnMigrarFotos');
+    if(bm) bm.addEventListener('click', function(){
+      if(!navigator.onLine){ toast('Precisa de internet para mover as fotos.','error'); return; }
+      bm.disabled = true;
+      var aviso = bm.parentNode.querySelector('div');
+      migrarFotosAntigas(function(f, t, ok, fal){ aviso.innerHTML = '<b>Movendo fotos…</b> RDO '+f+' de '+t+' · '+ok+' foto(s) movida(s)'+(fal ? ' · '+fal+' com falha' : '')+'. Não feche esta página.'; })
+        .then(function(res){
+          toast(res.fotos+' foto(s) movida(s) para o armazenamento'+(res.falhas ? ' · '+res.falhas+' não subiram (continuam dentro do RDO; tente de novo).' : '.'), res.falhas ? 'error' : 'ok');
+          renderAdminAvisos();
+        });
+    });
+    box.querySelectorAll('[data-backup]').forEach(function(b){ b.addEventListener('click', function(){ baixarBackup(b); }); });
+  }
+  // Admin: baixa um arquivo .json com todas as tabelas do sistema.
+  var BACKUP_TABELAS = ['obras','clientes','rdos','equipes','colaboradores','departamentos','equipamentos','produtos_catalogo','obra_servicos_contratados','tabelas_preco','planejamento_servicos','planejamento_historico','mapa_marcacoes','mapa_fila_ia','projetos_obra','financeiro_itens','profiles'];
+  function baixarBackup(btn){
+    if(!navigator.onLine){ toast('Precisa de internet para baixar o backup.','error'); return; }
+    if(btn) btn.disabled = true;
+    toast('Gerando backup…','ok');
+    var dados = { gerado_em: new Date().toISOString(), por: (state.currentUser && state.currentUser.nome) || '', tabelas: {} };
+    var erros = [];
+    var seq = Promise.resolve();
+    BACKUP_TABELAS.forEach(function(t){
+      seq = seq.then(function(){
+        var todos = [];
+        function pagina(de){
+          return Promise.resolve(supabaseClient.from(t).select('*').range(de, de+999)).then(function(r){
+            if(r.error){ erros.push(t+': '+r.error.message); return; }
+            todos = todos.concat(r.data||[]);
+            if((r.data||[]).length===1000) return pagina(de+1000);
+          });
+        }
+        return pagina(0).then(function(){ dados.tabelas[t] = todos; });
+      });
+    });
+    seq.then(function(){
+      var blob = new Blob([JSON.stringify(dados)], {type:'application/json'});
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'backup_rdo_venko_'+todayISO()+'.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); }, 5000);
+      try{ localStorage.setItem('vkBackupUltimo', String(Date.now())); }catch(e){}
+      toast('Backup baixado ('+Math.round(blob.size/1024)+' KB)'+(erros.length ? ' — sem: '+erros.join('; ') : '')+'. As fotos ficam no armazenamento e não entram no arquivo.', erros.length ? 'error' : 'ok');
+      renderAdminAvisos();
+    }).catch(function(err){
+      toast('Erro ao gerar backup: '+((err && err.message) || err),'error');
+    }).then(function(){ if(btn) btn.disabled = false; });
   }
   function kpiTile(n,label,extra){
     return '<div class="kpi '+extra+'"><div class="n">'+n+'</div><div class="l">'+esc(label)+'</div></div>';
@@ -7404,7 +7516,7 @@
           '<div class="meta">Usado em '+usoCount+' RDO(s)</div>'+
         '</div>'+
         '<div class="obra-actions">'+
-          '<button class="btn danger sm" data-del-eq="'+eq.id+'">Excluir</button>'+
+          (ehAdmin() ? '<button class="btn danger sm" data-del-eq="'+eq.id+'">Excluir</button>' : '')+
         '</div>'+
       '</div>';
     }).join('');
@@ -7512,7 +7624,7 @@
         '</div>'+
         '<div class="obra-actions">'+
           '<button class="btn ghost sm" data-toggle-colab="'+c.id+'">'+(c.ativo?'Marcar inativo':'Reativar')+'</button>'+
-          '<button class="btn danger sm" data-del-colab="'+c.id+'">Excluir</button>'+
+          (ehAdmin() ? '<button class="btn danger sm" data-del-colab="'+c.id+'">Excluir</button>' : '')+
         '</div>'+
       '</div>';
     }).join('');
@@ -7571,7 +7683,7 @@
         '<div class="obra-actions">'+
           '<span class="chip '+(eqp.ativa?'approved':'draft')+'">'+(eqp.ativa?'Ativa':'Inativa')+'</span>'+
           '<button class="btn ghost sm" data-toggle-eqp="'+eqp.id+'">'+(eqp.ativa?'Marcar inativa':'Reativar')+'</button>'+
-          '<button class="btn danger sm" data-del-eqp="'+eqp.id+'">Excluir</button>'+
+          (ehAdmin() ? '<button class="btn danger sm" data-del-eqp="'+eqp.id+'">Excluir</button>' : '')+
         '</div>'+
       '</div>';
     }).join('');
@@ -7840,14 +7952,103 @@
     });
   }
   function totalPhotosKB(){
-    return Math.round(state.photos.reduce(function(sum,p){ return sum + p.dataUrl.length*0.75; },0)/1024);
+    return Math.round(state.photos.reduce(function(sum,p){ var d = p.dataUrl||''; return sum + (/^data:/.test(d) ? d.length*0.75 : 0); },0)/1024);
+  }
+  // ---------------------------------------------------------------
+  // Fotos do RDO no armazenamento (bucket privado "rdo-fotos"). No RDO fica
+  // só {path, legenda}; para mostrar, o sistema pede um link assinado
+  // (válido por 6 h). Fotos antigas ({url:"data:..."}) continuam funcionando.
+  // Sem internet, a foto fica dentro do RDO salvo no aparelho e sobe junto
+  // quando ele for enviado — nenhuma foto se perde.
+  // ---------------------------------------------------------------
+  var FOTOS_BUCKET = 'rdo-fotos';
+  var fotoUrlCache = {};   // path -> {url, exp}
+  function fotoEhBase64(f){ var u = (f && typeof f==='object') ? (f.url||f.dataUrl||'') : String(f||''); return /^data:image\//.test(u); }
+  function fotoSrc(f){
+    if(!f) return '';
+    if(typeof f==='string') return f;
+    if(f.dataUrl) return f.dataUrl;
+    if(f.path){ var c = fotoUrlCache[f.path]; return c ? c.url : ''; }
+    return f.url || '';
+  }
+  function rdoGarantirFotos(lista){
+    var agora = Date.now();
+    var faltam = [];
+    (lista||[]).forEach(function(f){
+      if(f && typeof f==='object' && f.path && !f.dataUrl){
+        var c = fotoUrlCache[f.path];
+        if((!c || c.exp < agora + 60000) && faltam.indexOf(f.path)===-1) faltam.push(f.path);
+      }
+    });
+    if(!faltam.length || !supabaseClient) return Promise.resolve(0);
+    var lotes = [];
+    for(var i=0; i<faltam.length; i+=100) lotes.push(faltam.slice(i, i+100));
+    return Promise.all(lotes.map(function(l){
+      return Promise.resolve(supabaseClient.storage.from(FOTOS_BUCKET).createSignedUrls(l, 6*3600)).then(function(r){
+        ((r && r.data) || []).forEach(function(x){ if(x && x.signedUrl && x.path) fotoUrlCache[x.path] = { url:x.signedUrl, exp: Date.now() + 6*3600*1000 }; });
+      }).catch(function(err){ console.warn('[fotos] link assinado:', err && err.message); });
+    })).then(function(){ return faltam.length; });
+  }
+  function dataUrlParaBlob(du){
+    var partes = String(du).split(',');
+    var mime = ((partes[0]||'').match(/data:([^;]+)/)||[])[1] || 'image/jpeg';
+    var bin = atob(partes[1]||''), arr = new Uint8Array(bin.length);
+    for(var i=0; i<bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], {type:mime});
+  }
+  function fotoNovoNome(){
+    try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
+    return Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
+  }
+  // Sobe as fotos que ainda estão dentro do RDO (data:...) e devolve a lista
+  // no formato novo. Se uma foto não subir, ela fica dentro do RDO (não se perde).
+  function rdoSubirFotosPayload(obraId, fotos){
+    return Promise.all((fotos||[]).map(function(f){
+      var leg = (f && typeof f==='object') ? String(f.legenda||'').trim() : '';
+      if(f && typeof f==='object' && f.path) return { path:f.path, legenda:leg };
+      var du = (f && typeof f==='object') ? (f.url||f.dataUrl||'') : String(f||'');
+      if(!/^data:image\//.test(du) || !supabaseClient) return { url:du, legenda:leg };
+      var ext = /^data:image\/png/.test(du) ? 'png' : (/^data:image\/webp/.test(du) ? 'webp' : 'jpg');
+      var path = (obraId||'sem-obra')+'/'+fotoNovoNome()+'.'+ext;
+      var blob = dataUrlParaBlob(du);
+      return Promise.resolve(supabaseClient.storage.from(FOTOS_BUCKET).upload(path, blob, { contentType: blob.type, cacheControl:'31536000', upsert:false }))
+        .then(function(r){
+          if(r && r.error) throw r.error;
+          fotoUrlCache[path] = { url:du, exp: Date.now() + 6*3600*1000 };
+          return { path:path, legenda:leg };
+        })
+        .catch(function(err){ console.warn('[fotos] ficou dentro do RDO:', err && err.message); return { url:du, legenda:leg }; });
+    }));
+  }
+  // Admin: move as fotos antigas (gravadas dentro dos RDOs) para o armazenamento.
+  function rdosComFotoAntiga(){
+    return (state.rdos||[]).filter(function(r){ return !r.exemplo && !r.deletedAt && (r.fotos||[]).some(fotoEhBase64); });
+  }
+  function migrarFotosAntigas(onProg){
+    var alvo = rdosComFotoAntiga();
+    var feitos = 0, fotosOk = 0, falhas = 0;
+    var seq = Promise.resolve();
+    alvo.forEach(function(r){
+      seq = seq.then(function(){
+        var antes = (r.fotos||[]).filter(fotoEhBase64).length;
+        return rdoSubirFotosPayload(r.obraId, r.fotos).then(function(novas){
+          var restam = novas.filter(fotoEhBase64).length;
+          if(restam===antes) { falhas += antes; return; }
+          return Promise.resolve(supabaseClient.from('rdos').update({ fotos: novas }).eq('id', r.id)).then(function(res){
+            if(res && res.error){ falhas += antes; console.warn('[fotos] RDO '+r.id+':', res.error.message); return; }
+            r.fotos = novas; fotosOk += (antes - restam); falhas += restam;
+          });
+        }).then(function(){ feitos++; if(onProg) onProg(feitos, alvo.length, fotosOk, falhas); });
+      });
+    });
+    return seq.then(function(){ return { rdos: alvo.length, fotos: fotosOk, falhas: falhas }; });
   }
   function renderPhotoUI(){
     var grid = document.getElementById('photoGrid');
     var note = document.getElementById('photoNote');
     if(!grid) return;
     grid.innerHTML = state.photos.map(function(p,i){
-      return '<div class="photo-thumb"><img src="'+p.dataUrl+'"><button type="button" data-rmphoto="'+i+'">✕</button>'+
+      return '<div class="photo-thumb"><img src="'+esc(fotoSrc(p))+'"><button type="button" data-rmphoto="'+i+'">✕</button>'+
         '<input type="text" class="photo-caption" data-caption="'+i+'" value="'+esc(p.legenda||'')+'" placeholder="Legenda (opcional)" maxlength="140">'+
       '</div>';
     }).join('');
@@ -7918,7 +8119,9 @@
   }
   function renderEquipeChecklist(selectedNames, rdo){
     var ativas = state.equipes.filter(function(e){ return e.ativa; });
-    if(!ativas.length) return '<p class="empty-hint">Nenhuma equipe cadastrada ainda — cadastre em "Equipes".</p>';
+    // equipe já marcada neste RDO que foi desativada/excluída continua aparecendo (dá para desmarcar)
+    (selectedNames||[]).forEach(function(n){ if(n && !ativas.some(function(e){ return e.nome===n; })) ativas.push({ nome:n, ativa:true, _fora:true }); });
+    if(!ativas.length) return '<p class="serv-alerta">Não há nenhuma equipe cadastrada no sistema. O RDO precisa de pelo menos uma equipe — peça ao administrador para cadastrar em "Equipes".</p>';
     return '<div class="checklist-wrap" id="rdoEquipesWrap">' + ativas.map(function(e){
       var idx = (selectedNames||[]).indexOf(e.nome), checked = idx!==-1;
       var qtd = checked && rdo ? equipeQtdPessoas(rdo, idx, e.nome) : '';
@@ -8052,7 +8255,8 @@
       if(!box) return;
       // não tira o cursor de quem está digitando: tenta de novo daqui a pouco
       var ae = document.activeElement;
-      if(ae && box.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)){
+      var boxSv = document.getElementById('rdoServicosBox');
+      if(ae && (box.contains(ae) || (boxSv && boxSv.contains(ae))) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)){
         clearTimeout(rdoRefreshTimer); rdoRefreshTimer = setTimeout(rdoAtualizarServicosAbertos, 1500); return;
       }
       refreshEquipesDetalheUI(rdoFormAtual);
@@ -8171,9 +8375,7 @@
         '</div>'+
         '<div class="hint" style="margin:8px 0 4px;">Integrantes: '+(integrantes.length ? integrantes.map(function(c){return esc(c.nome)+' — '+esc(c.funcao);}).join(', ') : 'Nenhum colaborador ativo nesta equipe.')+'</div>'+
         '<div class="field full" style="margin-top:8px;"><label>Atividades do dia</label><textarea data-eqativ="'+i+'" placeholder="O que a equipe fez hoje...">'+esc(d.atividades||'')+'</textarea></div>'+
-        '<h3 style="font-size:13px;font-weight:700;margin:14px 0 4px;">Serviços realizados hoje'+(tabNome ? ' — tabela '+esc(tabNome) : '')+'</h3>'+
-        '<p class="hint" style="margin:0 0 8px;">Marque o serviço que esta equipe fez hoje, a situação e a <b>quantidade feita hoje</b> (obrigatória — sem ela o RDO não é salvo).</p>'+
-        equipeConcluidosChecklistHtml(i, d, servOpts) +
+        '<div class="eq-serv-resumo" data-eqservres="'+i+'">'+rdoEquipeServResumoHtml(d)+'</div>'+
         '<div class="grid2" style="margin-top:12px;">'+
           '<div><h3 style="font-size:13px;font-weight:700;margin:0 0 4px;">Resumo — atividades</h3>'+
             dynTable('resat'+i, [{key:'texto',label:'Atividade',width:'100%'}], strListRows(d.resumoAtividades)) +
@@ -8183,7 +8385,192 @@
           '</div>'+
         '</div>'+
       '</div>';
-    }).join('') + '<div id="rdoResumoServicos" class="rdo-resumo-serv">'+rdoResumoServicosFormHtml(rdo)+'</div>';
+    }).join('');
+  }
+  function rdoEquipeServResumoHtml(d){
+    var cs = (d && d.concluidos || []).filter(function(c){ return c && c.catalogoItemId; });
+    if(!cs.length) return '<b>Serviços desta equipe:</b> nenhum ainda — marque na planilha (item 4).';
+    return '<b>Serviços desta equipe:</b> '+cs.map(function(c){ var it = catalogoItemById(c.catalogoItemId); return esc(it ? ((it.itemNumero ? it.itemNumero+' ' : '')+it.descricao) : 'serviço')+' — '+(Number(c.quantidade)>0 ? esc(fmtQtd(c.quantidade)+(it && it.unidade ? ' '+it.unidade : '')) : '<span style="color:#C6433F;font-weight:700;">sem quantidade</span>'); }).join(' · ');
+  }
+  // ---------------------------------------------------------------
+  // v35 — Planilha completa no RDO. Cada serviço marcado vira uma linha
+  // (equipe, situação, quantidade). Guardado em equipes_detalhe[i].concluidos
+  // (como sempre); linha ainda sem equipe fica em rdo.servicosSemEquipe e
+  // impede salvar até escolher a equipe.
+  // ---------------------------------------------------------------
+  function rdoServLinhasDoRdo(rdo){
+    var out = [];
+    (rdo.equipesDia||[]).forEach(function(n, i){
+      var d = (rdo.equipesDetalhe||[])[i];
+      (d && d.concluidos || []).forEach(function(c){
+        if(c && c.catalogoItemId) out.push({ itemId:c.catalogoItemId, eq:i, tipo:c.tipo||CONCLUIDO_TIPO_OPTS[0], quantidade:(c.quantidade==null || c.quantidade==='') ? null : Number(c.quantidade), qtdAuto:!!c.qtdAuto });
+      });
+    });
+    (rdo.servicosSemEquipe||[]).forEach(function(c){
+      if(c && c.itemId) out.push({ itemId:c.itemId, eq:-1, tipo:c.tipo||CONCLUIDO_TIPO_OPTS[0], quantidade:(c.quantidade==null || c.quantidade==='') ? null : Number(c.quantidade), qtdAuto:false, orfa:!!c.orfa });
+    });
+    return out;
+  }
+  function rdoServAplicar(rdo, linhas){
+    syncEquipesDetalhe(rdo);
+    var nEq = (rdo.equipesDia||[]).length;
+    rdo.equipesDetalhe.forEach(function(d, i){
+      d.concluidos = linhas.filter(function(l){ return l.eq===i; }).map(function(l){
+        var o = { catalogoItemId:l.itemId, tipo:l.tipo, quantidade:l.quantidade };
+        if(l.qtdAuto) o.qtdAuto = true;
+        return o;
+      });
+    });
+    rdo.servicosSemEquipe = linhas.filter(function(l){ return l.eq<0 || l.eq>=nEq; }).map(function(l){ return { itemId:l.itemId, tipo:l.tipo, quantidade:l.quantidade, orfa:!!l.orfa }; });
+  }
+  function renderRdoServicosPlanilha(rdo){
+    var box = document.getElementById('rdoServicosBox');
+    if(!box) return;
+    var obraId = (document.getElementById('rdoObra') && document.getElementById('rdoObra').value) || rdo.obraId || '';
+    var buscaAnt = box._busca || '';
+    var listaAnt = box.querySelector('.serv-lista'); var scrollAnt = listaAnt ? listaAnt.scrollTop : 0;
+    if(!obraId){ box.innerHTML = '<p class="empty-hint">Selecione a obra (item 1) para ver a planilha de serviços.</p>'; box._linhas = []; return; }
+    var equipes = rdo.equipesDia||[];
+    if(equipes.length===1 && (rdo.servicosSemEquipe||[]).some(function(c){ return !c.orfa; })){
+      // marcado antes de escolher a equipe e só há uma: é dela. (Serviço de equipe desmarcada NÃO muda de equipe sozinho.)
+      var ls0 = rdoServLinhasDoRdo(rdo); ls0.forEach(function(l){ if(l.eq<0 && !l.orfa) l.eq = 0; }); rdoServAplicar(rdo, ls0);
+    }
+    var linhas = rdoServLinhasDoRdo(rdo);
+    box._linhas = linhas;
+    var opts = rdoServicosTabelaOptions(obraId).slice();
+    linhas.forEach(function(l){
+      if(!opts.some(function(o){ return o.value===l.itemId; })){
+        var it = catalogoItemById(l.itemId);
+        opts.push({ value:l.itemId, label: it ? ((it.itemNumero?it.itemNumero+' — ':'')+it.descricao+' ('+it.unidade+')') : 'Serviço fora da tabela atual', unidade: it ? (it.unidade||'') : '', categoria:'Fora da tabela atual', contratado:false, info:'' });
+      }
+    });
+    var canValor = financeiroCanAccess();
+    var html = '';
+    if(!equipes.length) html += '<p class="serv-alerta">'+(state.equipes.some(function(e){ return e.ativa; }) ? 'Selecione no item 3 a equipe que trabalhou hoje — cada serviço precisa da equipe que fez.' : 'Não há equipe cadastrada no sistema. Peça ao administrador para cadastrar em "Equipes" — sem equipe o RDO não é salvo.')+'</p>';
+    var sp = rdo.semProducao;
+    html += '<div class="sp-linha"><label><input type="checkbox" id="rdoSemProducao"'+(sp?' checked':'')+'> Dia sem produção (chuva, obra parada…)</label>'+
+      (sp ? '<input type="text" id="rdoSemProducaoMotivo" maxlength="200" placeholder="Motivo (obrigatório)" value="'+esc(sp.motivo||'')+'">' : '')+'</div>';
+    if(!opts.length){
+      html += '<p class="serv-alerta">'+(state.obraServicosEstado==='carregando' ? 'Carregando a planilha de serviços…' : 'Esta obra não tem planilha de serviços (tabela de preços) definida. Peça ao administrador para escolher a tabela da obra em "Obras".')+'</p>';
+      box.innerHTML = html; rdoServWire(rdo, box); return;
+    }
+    var temContr = opts.some(function(o){ return o.contratado; }), temResto = opts.some(function(o){ return !o.contratado; });
+    var porItem = {}; linhas.forEach(function(l, k){ (porItem[l.itemId] = porItem[l.itemId] || []).push(k); });
+    var eqOpts = function(sel){
+      return '<option value=""'+(sel<0?' selected':'')+'>'+(equipes.length ? 'Equipe que fez…' : 'Selecione a equipe no item 3')+'</option>'+
+        equipes.map(function(n, i){ return '<option value="'+i+'"'+(sel===i?' selected':'')+'>'+esc(n)+'</option>'; }).join('');
+    };
+    var grupo = null;
+    var itens = opts.map(function(o){
+      var g = o.contratado && temResto ? 'Contratados nesta obra' : (o.categoria || 'Serviços');
+      var cab = '';
+      if(g!==grupo){ grupo = g; cab = '<div class="serv-grupo'+(o.contratado && temResto ? ' contr' : '')+'">'+esc(g)+'</div>'; }
+      var ks = porItem[o.value] || [];
+      var marcado = ks.length>0;
+      var linhasHtml = ks.map(function(k){
+        var l = linhas[k];
+        return '<div class="serv-linha">'+
+          '<select data-sveq="'+k+'"'+(l.eq<0?' class="sem-eq"':'')+' aria-label="Equipe que fez">'+eqOpts(l.eq)+'</select>'+
+          '<select data-svtipo="'+k+'" aria-label="Situação">'+CONCLUIDO_TIPO_OPTS.map(function(t){ return '<option'+(t===l.tipo?' selected':'')+'>'+esc(t)+'</option>'; }).join('')+'</select>'+
+          '<span class="conc-qtd"><input type="number" step="any" min="0" inputmode="decimal" data-svqtd="'+k+'" value="'+(l.quantidade!=null ? esc(String(l.quantidade)) : '')+'" placeholder="Qtd. hoje" aria-label="Quantidade feita hoje">'+(o.unidade ? '<span class="conc-un">'+esc(o.unidade)+'</span>' : '')+(canValor ? '<span class="conc-val" data-svval="'+k+'"></span>' : '')+'</span>'+
+          (ks.length>1 ? '<button type="button" class="serv-rm" data-svrm="'+k+'" title="Remover esta linha">✕</button>' : '')+
+        '</div>';
+      }).join('');
+      return cab+'<div class="serv-item'+(marcado?' marcado':'')+'" data-busca="'+esc(rdoNorm(o.label+' '+(o.categoria||'')))+'">'+
+        '<label class="serv-nome"><input type="checkbox" data-svchk="'+esc(o.value)+'"'+(marcado?' checked':'')+'><span>'+esc(o.label)+(o.info?'<br><span class="hint" style="margin:0;font-size:11px;">'+esc(o.info)+'</span>':'')+'</span></label>'+
+        linhasHtml+
+        (marcado && equipes.length>1 ? '<button type="button" class="link-btn" data-svadd="'+esc(o.value)+'">+ outra equipe fez este serviço</button>' : '')+
+      '</div>';
+    }).join('');
+    html += '<input type="search" class="serv-busca" id="rdoServBusca" placeholder="Buscar serviço na planilha ('+opts.length+' itens)…" aria-label="Buscar serviço na planilha" value="'+esc(buscaAnt)+'">'+
+      '<div class="checklist-wrap serv-lista" id="rdoServLista">'+itens+'<div class="serv-nada">Nenhum serviço da planilha com esse nome.</div></div>'+
+      '<div id="rdoResumoServicos" class="rdo-resumo-serv">'+rdoResumoServicosFormHtml(rdo)+'</div>';
+    box.innerHTML = html;
+    var lista = box.querySelector('.serv-lista'); if(lista) lista.scrollTop = scrollAnt;
+    if(buscaAnt) rdoServFiltrar(box, buscaAnt);
+    rdoServWire(rdo, box);
+    atualizarRdoResumoServicos(rdo);
+  }
+  function rdoServFiltrar(box, q){
+    var wrap = box.querySelector('.serv-lista');
+    if(!wrap) return;
+    var termos = rdoNorm(q).split(/\s+/).filter(Boolean);
+    var vis = 0, cab = null, cabVis = false;
+    Array.prototype.forEach.call(wrap.children, function(el){
+      if(el.classList.contains('serv-grupo')){ if(cab) cab.style.display = cabVis ? '' : 'none'; cab = el; cabVis = false; return; }
+      if(!el.classList.contains('serv-item')) return;
+      var chk = el.querySelector('[data-svchk]');
+      var txt = el.getAttribute('data-busca')||'';
+      var ok = !termos.length || (chk && chk.checked) || termos.every(function(t){ return txt.indexOf(t)!==-1; });
+      el.style.display = ok ? '' : 'none';
+      if(ok){ vis++; cabVis = true; }
+    });
+    if(cab) cab.style.display = cabVis ? '' : 'none';
+    var nada = wrap.querySelector('.serv-nada'); if(nada) nada.style.display = vis ? 'none' : 'block';
+  }
+  function rdoServWire(rdo, box){
+    var linhas = box._linhas || [];
+    var aplicar = function(){ rdoServAplicar(rdo, linhas); atualizarRdoResumoServicos(rdo); };
+    var rerender = function(foco){
+      rdoServAplicar(rdo, linhas);
+      renderRdoServicosPlanilha(rdo);
+      if(foco){ var el = box.querySelector(foco); if(el) try{ el.focus(); }catch(e){} }
+    };
+    var sp = box.querySelector('#rdoSemProducao');
+    if(sp) sp.addEventListener('change', function(){
+      rdo.semProducao = sp.checked ? { motivo:(rdo.semProducao && rdo.semProducao.motivo) || '' } : null;
+      renderRdoServicosPlanilha(rdo);
+      if(sp.checked){ var m = box.querySelector('#rdoSemProducaoMotivo'); if(m) m.focus(); }
+    });
+    var mot = box.querySelector('#rdoSemProducaoMotivo');
+    if(mot) mot.addEventListener('input', function(){ if(rdo.semProducao) rdo.semProducao.motivo = mot.value; });
+    var busca = box.querySelector('#rdoServBusca');
+    if(busca) busca.addEventListener('input', function(){ box._busca = busca.value; rdoServFiltrar(box, busca.value); });
+    box.querySelectorAll('[data-svchk]').forEach(function(chk){
+      chk.addEventListener('change', function(){
+        var id = chk.getAttribute('data-svchk');
+        if(chk.checked){
+          linhas.push({ itemId:id, eq:(rdo.equipesDia||[]).length===1 ? 0 : -1, tipo:CONCLUIDO_TIPO_OPTS[0], quantidade:null, qtdAuto:false });
+          var k = linhas.length-1;
+          rdoServAplicar(rdo, linhas);
+          renderRdoServicosPlanilha(rdo);
+          var nk = -1; (box._linhas||[]).forEach(function(l, i){ if(l.itemId===id) nk = i; });
+          var alvo = nk>=0 ? box.querySelector(((box._linhas[nk].eq<0 && (rdo.equipesDia||[]).length) ? '[data-sveq="' : '[data-svqtd="')+nk+'"]') : null;
+          if(alvo) try{ alvo.focus(); }catch(e){}
+        } else {
+          for(var i=linhas.length-1; i>=0; i--) if(linhas[i].itemId===id) linhas.splice(i, 1);
+          rerender();
+        }
+      });
+    });
+    box.querySelectorAll('[data-sveq]').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        var k = +sel.getAttribute('data-sveq');
+        if(linhas[k]){ linhas[k].eq = sel.value==='' ? -1 : parseInt(sel.value, 10); linhas[k].orfa = false; }
+        rerender();
+      });
+    });
+    box.querySelectorAll('[data-svtipo]').forEach(function(sel){
+      sel.addEventListener('change', function(){ var k = +sel.getAttribute('data-svtipo'); if(linhas[k]) linhas[k].tipo = sel.value; aplicar(); });
+    });
+    box.querySelectorAll('[data-svqtd]').forEach(function(inp){
+      inp.addEventListener('input', function(){
+        var k = +inp.getAttribute('data-svqtd');
+        inp.classList.remove('qtd-falta');
+        if(linhas[k]){ var v = String(inp.value||'').replace(',', '.').trim(); linhas[k].quantidade = v==='' ? null : Number(v); linhas[k].qtdAuto = false; }
+        aplicar();
+      });
+    });
+    box.querySelectorAll('[data-svadd]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-svadd');
+        linhas.push({ itemId:id, eq:-1, tipo:CONCLUIDO_TIPO_OPTS[0], quantidade:null, qtdAuto:false });
+        rerender();
+      });
+    });
+    box.querySelectorAll('[data-svrm]').forEach(function(b){
+      b.addEventListener('click', function(){ var k = +b.getAttribute('data-svrm'); linhas.splice(k, 1); rerender(); });
+    });
   }
   // Linhas de serviço do RDO (todas as equipes): serviço, quantidade, valor unitário e total.
   function rdoServicosLinhas(equipesDia, equipesDetalhe){
@@ -8220,6 +8607,17 @@
   function atualizarRdoResumoServicos(rdo){
     var el = document.getElementById('rdoResumoServicos');
     if(el) el.innerHTML = rdoResumoServicosFormHtml(rdo);
+    var sbox = document.getElementById('rdoServicosBox');
+    if(sbox && sbox._linhas){
+      sbox._linhas.forEach(function(l, k){
+        var s = sbox.querySelector('[data-svval="'+k+'"]');
+        if(!s) return;
+        var it = catalogoItemById(l.itemId), vu = it ? (Number(it.custoUnitario)||0) : 0;
+        s.textContent = (l.quantidade>0 && vu) ? '= '+fmtMoeda(Math.round(l.quantidade*vu*100)/100) : '';
+      });
+    }
+    document.querySelectorAll('[data-eqservres]').forEach(function(x){ var i = +x.getAttribute('data-eqservres'); x.innerHTML = rdoEquipeServResumoHtml((rdo.equipesDetalhe||[])[i]); });
+    if(financeiroCanAccess()) document.querySelectorAll('[data-eqvalorbadge]').forEach(function(b){ var i = +b.getAttribute('data-eqvalorbadge'); b.textContent = fmtMoeda(computeEquipeValor((rdo.equipesDetalhe||[])[i]||{})); });
     var box = document.getElementById('equipesDetalheContainer');
     if(!box) return;
     box.querySelectorAll('[data-eqconclval]').forEach(function(s){ s.textContent = ''; });
@@ -8230,13 +8628,16 @@
   }
   function rebuildEquipeConcluidos(i, rdo, container){
     var rows = [];
+    var antes = {}; ((rdo.equipesDetalhe[i]||{}).concluidos||[]).forEach(function(c){ if(c && c.catalogoItemId) antes[c.catalogoItemId] = c; });
     container.querySelectorAll('[data-eqconclchk="'+i+'"]').forEach(function(chk){
       if(!chk.checked) return;
       var itemId = chk.getAttribute('data-item');
       var sel = container.querySelector('[data-eqconcltipo="'+i+'"][data-item="'+itemId+'"]');
       var qtdInp = container.querySelector('[data-eqconclqtd="'+i+'"][data-item="'+itemId+'"]');
       var qtdVal = (qtdInp && qtdInp.value!=='') ? Number(qtdInp.value) : null;
-      rows.push({ catalogoItemId: itemId, tipo: sel ? sel.value : CONCLUIDO_TIPO_OPTS[0], quantidade: qtdVal });
+      var ant = antes[itemId];
+      var auto = !!(ant && ant.qtdAuto && (ant.quantidade==null ? qtdVal==null : Number(ant.quantidade)===qtdVal));
+      rows.push(auto ? { catalogoItemId: itemId, tipo: sel ? sel.value : CONCLUIDO_TIPO_OPTS[0], quantidade: qtdVal, qtdAuto: true } : { catalogoItemId: itemId, tipo: sel ? sel.value : CONCLUIDO_TIPO_OPTS[0], quantidade: qtdVal });
     });
     rdo.equipesDetalhe[i].concluidos = rows;
   }
@@ -8303,6 +8704,7 @@
     box.innerHTML = equipesDetalheHtml(rdo);
     wireEquipesDetalhe(rdo);
     renderRdoPvsProjeto(rdo);
+    renderRdoServicosPlanilha(rdo);
   }
   function numeroEquipeCompute(rdo){
     return (rdo.equipesDia||[]).map(function(nome, i){
@@ -8338,6 +8740,7 @@
           var qInp = qtdWrap && qtdWrap.querySelector('input'); if(qInp) qInp.value = dNovo ? dNovo.qtdPessoas : '';
         } else {
           var idx = rdo.equipesDia.indexOf(nome);
+          if(idx!==-1 && rdo.equipesDetalhe && rdo.equipesDetalhe[idx]){ rdo.servicosSemEquipe = (rdo.servicosSemEquipe||[]).concat((rdo.equipesDetalhe[idx].concluidos||[]).filter(function(c){ return c && c.catalogoItemId; }).map(function(c){ return { itemId:c.catalogoItemId, tipo:c.tipo, quantidade:c.quantidade, orfa:true }; })); }
           if(idx!==-1){ if(rdo.equipesDetalhe && rdo.equipesDetalhe[idx] && (rdo.equipesDetalhe[idx].pvsExecutados||[]).length){ rdo.pvsSemEquipe = rdo.pvsSemEquipe || {}; rdo.equipesDetalhe[idx].pvsExecutados.forEach(function(p){ rdo.pvsSemEquipe[p.servicoId] = p; }); } rdo.equipesDia.splice(idx,1); if(rdo.equipesDetalhe) rdo.equipesDetalhe.splice(idx,1); }
         }
         autofillMaoDeObraFromEquipes(rdo);
@@ -8361,13 +8764,13 @@
     var entrada = { status:'carregando', itens:[], erro:'' };
     entrada.promise = Promise.resolve(supabaseClient.rpc('rdo_servicos_projeto', { p_obra_id: obraId })).then(function(res){
       if(res && !res.error) return res.data||[];
-      return Promise.resolve(supabaseClient.from('planejamento_servicos').select('id, codigo, servico_nome, trecho, endereco, comprimento').eq('obra_id', obraId).is('deleted_at', null)).then(function(r2){
+      return Promise.resolve(supabaseClient.from('planejamento_servicos').select('id, codigo, servico_nome, trecho, endereco, comprimento, catalogo_item_id').eq('obra_id', obraId).is('deleted_at', null)).then(function(r2){
         if(r2 && r2.error) throw r2.error;
         return (r2 && r2.data) || [];
       });
     }).then(function(lista){
       entrada.itens = (lista||[]).filter(function(s){ return s && s.id && RDO_REF_PONTO_RE.test(String(s.trecho||'')); }).map(function(s){
-        return { servicoId:s.id, codigo:s.codigo||'', servico:s.servico_nome||'', trecho:s.trecho||'', rua:s.endereco||'', comprimento:(s.comprimento!=null && isFinite(s.comprimento)) ? Number(s.comprimento) : null };
+        return { servicoId:s.id, codigo:s.codigo||'', servico:s.servico_nome||'', trecho:s.trecho||'', rua:s.endereco||'', comprimento:(s.comprimento!=null && isFinite(s.comprimento)) ? Number(s.comprimento) : null, catalogoItemId:s.catalogo_item_id||null };
       });
       entrada.itens.sort(function(a,b){ return (a.rua||'').localeCompare(b.rua||'') || String(a.codigo).localeCompare(String(b.codigo), undefined, {numeric:true}); });
       entrada.status = 'ok';
@@ -8418,7 +8821,49 @@
     syncEquipesDetalhe(rdo);
     var d = rdo.equipesDetalhe[idx];
     if(!d) return;
-    d.pvsExecutados = (d.pvsExecutados||[]).concat([{ servicoId:item.servicoId, codigo:item.codigo, servico:item.servico, trecho:item.trecho, rua:item.rua, metros:(item.metros!=null ? item.metros : null) }]);
+    d.pvsExecutados = (d.pvsExecutados||[]).concat([{ servicoId:item.servicoId, codigo:item.codigo, servico:item.servico, trecho:item.trecho, rua:item.rua, metros:(item.metros!=null ? item.metros : null), catalogoItemId:item.catalogoItemId||null }]);
+  }
+  // Quantidade que o PV/trecho marcado sugere para o serviço ligado a ele:
+  // unidade "un" -> 1 por PV; metro num trecho -> metros de hoje (ou o trecho todo).
+  // Fora disso não sugere (a pessoa preenche).
+  function rdoQtdSugeridaPv(p, obraId){
+    var it = catalogoItemById(p.catalogoItemId);
+    if(!it) return null;
+    var un = rdoNorm(it.unidade).replace(/[^a-z]/g, '');
+    if(/^(un|und|unid|unidade|pc|pca|peca)$/.test(un)) return 1;
+    if(un==='m' && mapaRefsTrecho(p.trecho).length>=2){
+      if(p.metros!=null && Number(p.metros)>0) return Number(p.metros);
+      var c = rdoServProjCache[obraId] && (rdoServProjCache[obraId].itens||[]).find(function(x){ return x.servicoId===p.servicoId; });
+      return c && c.comprimento ? Number(c.comprimento) : null;
+    }
+    return null;
+  }
+  // Mantém em cada equipe os serviços ligados aos PVs/trechos marcados. Só mexe
+  // na quantidade enquanto ela é a sugerida (qtdAuto); se a pessoa digitar outra, vale a dela.
+  function rdoSincronizarServicosDosPvs(rdo){
+    var obraId = (document.getElementById('rdoObra') && document.getElementById('rdoObra').value) || rdo.obraId || '';
+    (rdo.equipesDetalhe||[]).forEach(function(d){
+      if(!d) return;
+      var sug = {};
+      (d.pvsExecutados||[]).forEach(function(p){
+        if(!p || !p.catalogoItemId) return;
+        var s = sug[p.catalogoItemId] = sug[p.catalogoItemId] || { q:0, ok:true };
+        var q = rdoQtdSugeridaPv(p, obraId);
+        if(q==null) s.ok = false; else s.q += q;
+      });
+      var lista = (d.concluidos||[]).filter(function(c){ return !(c && c.qtdAuto && !sug[c.catalogoItemId]); });
+      Object.keys(sug).forEach(function(id){
+        var c = lista.find(function(x){ return x.catalogoItemId===id; });
+        if(!c){ c = { catalogoItemId:id, tipo:CONCLUIDO_TIPO_OPTS[0], quantidade:null, qtdAuto:true }; lista.push(c); }
+        if(c.qtdAuto) c.quantidade = sug[id].ok ? Math.round(sug[id].q*100)/100 : null;
+      });
+      d.concluidos = lista;
+    });
+  }
+  function rdoPvsMudou(rdo){
+    rdoSincronizarServicosDosPvs(rdo);
+    if(document.getElementById('equipesDetalheContainer')) refreshEquipesDetalheUI(rdo);
+    else renderRdoPvsProjeto(rdo);
   }
   function renderRdoPvsProjeto(rdo){
     var box = document.getElementById('rdoPvsProjetoBox');
@@ -8439,6 +8884,18 @@
     if(!itens.length){ box.innerHTML = '<p class="hint" style="margin:0;">Esta obra ainda não tem PVs/trechos vindos de projeto.</p>'; return; }
     var equipes = rdo.equipesDia||[];
     var outros = rdoPvsEmOutrosRdos(obraId, rdo.id);
+    var servTab = rdoServicosTabelaOptions(obraId);
+    var servTabIds = {}; servTab.forEach(function(o){ servTabIds[o.value] = true; });
+    var servTabOpts = function(sel){
+      var g = null;
+      return servTab.map(function(o){
+        var cat = o.contratado ? 'Contratados nesta obra' : (o.categoria||'Serviços');
+        var h = (cat!==g ? (g!==null ? '</optgroup>' : '')+'<optgroup label="'+esc(cat)+'">' : '');
+        g = cat;
+        return h+'<option value="'+esc(o.value)+'"'+(o.value===sel?' selected':'')+'>'+esc(o.label)+'</option>';
+      }).join('')+(g!==null ? '</optgroup>' : '');
+    };
+    var it2un = function(id){ var c = catalogoItemById(id); return c ? (c.unidade||'') : ''; };
     var ruaAtual = null, html = '';
     if(!equipes.length) html += '<p class="hint" style="margin:0 0 8px;color:#a33;">Selecione as equipes em campo (acima) para poder marcar quem concluiu cada PV.</p>';
     itens.forEach(function(it){
@@ -8463,6 +8920,13 @@
             (it.comprimento ? ' <span>de '+esc(mapaFmtM(it.comprimento))+(outrosM.metros>0 || outrosM.todo ? ' · antes: '+(outrosM.todo ? 'trecho todo' : esc(mapaFmtM(outrosM.metros))) : '')+'</span>' : '')+
             '<span>— vazio = trecho inteiro concluído</span></div>';
         })() : '')+
+        (m && m.idx>=0 && servTab.length ? (function(){
+          var sel = m.item.catalogoItemId || '';
+          var q = sel ? rdoQtdSugeridaPv(m.item, obraId) : null;
+          return '<div class="rdo-pv-serv"><label for="pvs_'+esc(it.servicoId)+'">Serviço da tabela feito aqui</label>'+
+            '<select id="pvs_'+esc(it.servicoId)+'" data-pvserv="'+esc(it.servicoId)+'"'+(sel?'':' class="pv-serv-vazio"')+'><option value="">— escolha o serviço —</option>'+servTabOpts(sel)+'</select>'+
+            '<span class="rdo-pv-serv-dica">'+(sel ? (q!=null ? 'Quantidade sugerida: '+esc(fmtQtd(q))+(it2un(sel) ? ' '+esc(it2un(sel)) : '')+'. Entra em "Serviços realizados hoje" da equipe — confira lá.' : 'Entra em "Serviços realizados hoje" da equipe — preencha a quantidade lá.') : 'Escolha o serviço para ele entrar no RDO com a quantidade.')+'</span></div>';
+        })() : '')+
       '</div>';
     });
     box.innerHTML = html;
@@ -8471,18 +8935,20 @@
       cb.addEventListener('change', function(){
         var id = cb.getAttribute('data-pvchk'), it = porId[id];
         if(!it) return;
-        if(cb.checked) rdoPorPvNaEquipe(rdo, it, equipes.length===1 ? 0 : -1);
+        if(cb.checked) rdoPorPvNaEquipe(rdo, Object.assign({}, it, { catalogoItemId: (it.catalogoItemId && servTabIds[it.catalogoItemId]) ? it.catalogoItemId : null }), equipes.length===1 ? 0 : -1);
         else rdoTirarPv(rdo, id);
-        renderRdoPvsProjeto(rdo);
-        if(cb.checked && equipes.length>1){ var s = box.querySelector('[data-pveq="'+id+'"]'); if(s) s.focus(); }
+        rdoPvsMudou(rdo);
+        var bx = document.getElementById('rdoPvsProjetoBox');
+        if(cb.checked && equipes.length>1){ var s = bx && bx.querySelector('[data-pveq="'+id+'"]'); if(s) s.focus(); }
+        else if(cb.checked){ var s2 = bx && bx.querySelector('[data-pvserv="'+id+'"].pv-serv-vazio'); if(s2) s2.focus(); }
       });
     });
     box.querySelectorAll('[data-pveq]').forEach(function(sel){
       sel.addEventListener('change', function(){
         var id = sel.getAttribute('data-pveq'), it = porId[id];
         var atual = rdoPvsMarcados(rdo)[id];
-        if(it) rdoPorPvNaEquipe(rdo, Object.assign({}, it, { metros: atual && atual.item ? atual.item.metros : null }), parseInt(sel.value, 10));
-        renderRdoPvsProjeto(rdo);
+        if(it) rdoPorPvNaEquipe(rdo, Object.assign({}, it, { metros: atual && atual.item ? atual.item.metros : null, catalogoItemId: atual && atual.item && atual.item.catalogoItemId ? atual.item.catalogoItemId : ((it.catalogoItemId && servTabIds[it.catalogoItemId]) ? it.catalogoItemId : null) }), parseInt(sel.value, 10));
+        rdoPvsMudou(rdo);
       });
     });
     box.querySelectorAll('[data-pvm]').forEach(function(inp){
@@ -8493,6 +8959,14 @@
         if(n!=null && !(isFinite(n) && n>=0)){ toast('Informe os metros executados (ex.: 12,5).','error'); return; }
         var reg = rdoPvsMarcados(rdo)[id];
         if(reg && reg.item) reg.item.metros = (n===0 ? null : n);
+        if(reg && reg.item && reg.item.catalogoItemId) rdoPvsMudou(rdo);
+      });
+    });
+    box.querySelectorAll('[data-pvserv]').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        var reg = rdoPvsMarcados(rdo)[sel.getAttribute('data-pvserv')];
+        if(reg && reg.item) reg.item.catalogoItemId = sel.value || null;
+        rdoPvsMudou(rdo);
       });
     });
   }
@@ -8501,12 +8975,19 @@
     var editing = !!rdoOrNull;
     var rdo = rdoOrNull ? JSON.parse(JSON.stringify(rdoOrNull)) : blankRdo();
     rdoFormAtual = rdo;
+    (function(){
+      var sp = (rdo.ocorrencias||[]).filter(function(o){ return o && o.tipo==='Sem produção'; });
+      rdo.semProducao = sp.length ? { motivo: sp[0].texto||'' } : null;
+      rdo.ocorrencias = (rdo.ocorrencias||[]).filter(function(o){ return !(o && o.tipo==='Sem produção'); });
+      rdo.servicosSemEquipe = [];
+    })();
     var isLockedEdit = editing && rdo.status !== 'rascunho';
     // Capturado uma vez ao abrir o formulário: se não-nulo, esta edição é de uma RDO ainda
     // pendente (nunca chegou a ser enviada de verdade), então salvar aqui atualiza a fila local
     // (ou tenta enviar, se a pessoa confirmar) em vez de fazer update num id que não existe.
     var pendingEditItem = state.editingPendingItem;
-    state.photos = editing ? (rdo.fotos||[]).map(function(u){ return (typeof u==='string') ? {dataUrl:u, legenda:''} : {dataUrl:(u&&u.url)||'', legenda:(u&&u.legenda)||''}; }) : [];
+    state.photos = editing ? (rdo.fotos||[]).map(function(u){ return (typeof u==='string') ? {dataUrl:u, legenda:''} : {dataUrl:(u&&u.url)||'', path:(u&&u.path)||'', legenda:(u&&u.legenda)||''}; }) : [];
+    if(editing) rdoGarantirFotos(state.photos).then(function(n){ if(n) renderPhotoUI(); });
     state.videos = editing ? (rdo.videos||[]).map(function(v){ return (typeof v==='string') ? {url:v,name:''} : v; }) : [];
     document.getElementById('novoTitle').textContent = pendingEditItem ? 'Editar RDO pendente — '+fmtDate(rdo.data) : (editing ? 'Editar RDO — '+fmtDate(rdo.data) : 'Nova RDO');
 
@@ -8531,14 +9012,20 @@
         '</div>'+
       '</div>'+
 
-      '<div class="card">'+
-        '<h2><span class="idx">3</span>Equipes em campo</h2>'+
-        '<p class="hint">Selecione as equipes que atuaram na obra hoje — a mão de obra abaixo é preenchida automaticamente a partir dos colaboradores de cada equipe (pode ajustar se faltou alguém).</p>'+
+      '<div class="card" id="rdoEquipesCard">'+
+        '<h2><span class="idx">3</span>Equipes em campo <span class="tag-obrig">obrigatório</span></h2>'+
+        '<p class="hint">Selecione as equipes que atuaram na obra hoje (pelo menos uma) — a mão de obra abaixo é preenchida automaticamente a partir dos colaboradores de cada equipe (pode ajustar se faltou alguém).</p>'+
         renderEquipeChecklist(rdo.equipesDia, rdo) +
       '</div>'+
 
+      '<div class="card" id="rdoServicosCard">'+
+        '<h2><span class="idx">4</span>Serviços realizados hoje — planilha da obra <span class="tag-obrig">obrigatório</span></h2>'+
+        '<p class="hint">A planilha completa da obra. Marque cada serviço feito hoje, a equipe que fez, a situação e a quantidade.</p>'+
+        '<div id="rdoServicosBox"></div>'+
+      '</div>'+
+
       '<div class="card">'+
-        '<h2><span class="idx">4</span>Mão de obra</h2>'+
+        '<h2><span class="idx">5</span>Mão de obra</h2>'+
         '<p class="hint">Marque os colaboradores presentes na obra hoje — preenchido automaticamente ao selecionar as equipes acima (pode ajustar se faltou alguém, ou adicionar avulso).</p>'+
         '<div id="moContainer">'+maoDeObraChecklistHtml(rdo.maoDeObra, moNomesFor(rdo.equipesDia))+'</div>'+
         '<div class="grid3" style="margin-top:16px;">'+
@@ -8549,8 +9036,8 @@
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">5</span>Atividades por equipe</h2>'+
-        '<p class="hint">Para cada equipe em campo: frente de trabalho, status, o que foi feito, itens concluídos/pendentes e o resumo que entra no quadro de produção do relatório.</p>'+
+        '<h2><span class="idx">6</span>Atividades por equipe</h2>'+
+        '<p class="hint">Para cada equipe em campo: frente de trabalho, status, o que foi feito e o resumo que entra no quadro de produção do relatório. Os serviços com quantidade ficam na planilha (item 4).</p>'+
         '<div id="equipesDetalheContainer">'+equipesDetalheHtml(rdo)+'</div>'+
         '<h3 style="font-size:13px;font-weight:700;margin:18px 0 4px;">PVs e trechos do projeto executados hoje</h3>'+
         '<p class="hint" style="margin:0 0 8px;">Marque os PVs e trechos concluídos hoje e escolha a equipe que fez cada um. Isto fica só registrado neste RDO — não altera o Mapa nem o Planejamento.</p>'+
@@ -8558,19 +9045,19 @@
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">6</span>Equipamentos</h2>'+
+        '<h2><span class="idx">7</span>Equipamentos</h2>'+
         '<p class="hint">Marque os equipamentos cadastrados que foram usados hoje.</p>'+
         checklistTable('eq', state.equipamentos.map(function(x){return x.nome;}), 'nome', [{key:'qtd',type:'number',placeholder:'Qtd.'},{key:'horas',type:'number',placeholder:'Horas trabalhadas'}], rdo.equipamentos, 'Outro equipamento') +
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">7</span>Ocorrências</h2>'+
+        '<h2><span class="idx">8</span>Ocorrências</h2>'+
         '<p class="hint">Classifique cada registro como Pendência, Ocorrência ou Resolvido e descreva a ação/encaminhamento.</p>'+
         dynTable('oc', [{key:'tipo',label:'Tipo',type:'select',options:OCC_TIPOS,width:'18%'},{key:'texto',label:'Descrição',width:'42%'},{key:'acao',label:'Ação/Encaminhamento',width:'40%'}], rdo.ocorrencias) +
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">8</span>Fotos</h2>'+
+        '<h2><span class="idx">9</span>Fotos</h2>'+
         '<div class="photo-input-row">'+
           '<input type="file" id="rdoFotos" accept="image/*" multiple>'+
         '</div>'+
@@ -8579,7 +9066,7 @@
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">9</span>Vídeos</h2>'+
+        '<h2><span class="idx">10</span>Vídeos</h2>'+
         '<p class="hint">Anexe vídeos curtos da obra (até '+VIDEO_MAX_MB+'MB cada).</p>'+
         '<div class="video-input-row">'+
           '<input type="file" id="rdoVideos" accept="video/*" multiple>'+
@@ -8589,7 +9076,7 @@
       '</div>'+
 
       '<div class="card">'+
-        '<h2><span class="idx">10</span>Responsável</h2>'+
+        '<h2><span class="idx">11</span>Responsável</h2>'+
         '<div class="grid2">'+
           '<div class="field"><label>Preenchido por</label><input type="text" id="rdoResponsavel" value="'+esc(rdo.responsavel||'')+'" required></div>'+
         '</div>'+
@@ -8621,13 +9108,14 @@
     document.getElementById('rdoGestaoEng').addEventListener('input', function(){ rdo.gestao = rdo.gestao||{}; rdo.gestao.eng = this.value; var t=document.getElementById('rdoGestaoTotal'); if(t) t.value = (parseFloat(rdo.gestao.adm)||0)+(parseFloat(rdo.gestao.eng)||0); });
     wireEquipesDetalhe(rdo);
     renderRdoPvsProjeto(rdo);
+    renderRdoServicosPlanilha(rdo);
     wireChecklistTable('eq', 'nome', [{key:'qtd',type:'number'},{key:'horas',type:'number'}], function(v){ rdo.equipamentos=v; }, 'Outro equipamento');
     wireDynTable('oc', [{key:'tipo',type:'select',options:OCC_TIPOS},{key:'texto'},{key:'acao'}], function(){ return rdo.ocorrencias; }, function(v){ rdo.ocorrencias=v; });
 
     renderPhotoUI();
     document.getElementById('rdoFotos').addEventListener('change', function(e){
       var files = Array.prototype.slice.call(e.target.files||[]);
-      Promise.all(files.map(function(f){ return resizeImageFile(f, 900, 0.55).then(function(du){ return {dataUrl:du}; }); }))
+      Promise.all(files.map(function(f){ return resizeImageFile(f, 1280, 0.7).then(function(du){ return {dataUrl:du}; }); }))
         .then(function(newPhotos){
           state.photos = state.photos.concat(newPhotos);
           renderPhotoUI();
@@ -8709,25 +9197,43 @@
       if(!obraId){ toast('Selecione a obra.','error'); return; }
       var pvsSemEquipe = Object.keys(rdo.pvsSemEquipe||{}).map(function(k){ return rdo.pvsSemEquipe[k]; });
       if(pvsSemEquipe.length){ toast('Escolha a equipe que concluiu: '+pvsSemEquipe.map(function(p){ return p.trecho||p.codigo; }).join(', ')+'.','error'); var bx = document.getElementById('rdoPvsProjetoBox'); if(bx) bx.scrollIntoView({behavior:'smooth', block:'center'}); return; }
-      // Serviço marcado (Concluído ou Pendente) exige a quantidade feita no dia.
-      var faltaQtd = null;
-      (rdo.equipesDia||[]).some(function(nomeEq, i){
-        var d = (rdo.equipesDetalhe||[])[i];
-        return (d && d.concluidos || []).some(function(c){
-          if(!c || !c.catalogoItemId) return false;
-          var q = c.quantidade;
-          if(q!=null && q!=='' && isFinite(Number(q)) && Number(q)>0) return false;
-          var inp = document.querySelector('[data-eqconclqtd="'+i+'"][data-item="'+c.catalogoItemId+'"]');
-          if(!inp) return false;   // serviço que saiu do contrato e não aparece na tela
-          faltaQtd = { equipe:nomeEq, item:catalogoItemById(c.catalogoItemId), inp:inp, tipo:c.tipo };
-          return true;
-        });
+      // Regras do RDO (valem também no banco): equipe obrigatória, todo serviço
+      // com equipe e quantidade; para enviar, pelo menos um serviço da planilha
+      // ou "Dia sem produção" com o motivo.
+      var falhaRdo = function(msg, el){
+        toast(msg, 'error');
+        if(el){ try{ el.scrollIntoView({behavior:'smooth', block:'center'}); }catch(e){} setTimeout(function(){ try{ el.focus({preventScroll:true}); }catch(e){} }, 350); }
+      };
+      var servBoxV = document.getElementById('rdoServicosBox');
+      var linhasV = rdoServLinhasDoRdo(rdo);
+      var semProdV = !!rdo.semProducao;
+      if(!(rdo.equipesDia||[]).length && !semProdV){
+        falhaRdo(state.equipes.some(function(e){ return e.ativa; })
+          ? 'Selecione a equipe que trabalhou hoje (item 3 — Equipes em campo). Sem equipe o RDO não é salvo.'
+          : 'Não há equipe cadastrada no sistema. Peça ao administrador para cadastrar em "Equipes" — sem equipe o RDO não é salvo.', document.getElementById('rdoEquipesCard'));
+        return;
+      }
+      if(semProdV && !String(rdo.semProducao.motivo||'').trim()){ falhaRdo('Escreva o motivo do dia sem produção (item 4).', document.getElementById('rdoSemProducaoMotivo')); return; }
+      if(semProdV && linhasV.length){ falhaRdo('Você marcou "Dia sem produção" e também lançou serviços. Desmarque um dos dois (item 4).', document.getElementById('rdoSemProducao')); return; }
+      var kSemEq = -1, kSemQtd = -1;
+      linhasV.forEach(function(l, k){
+        if(kSemEq<0 && (l.eq<0 || l.eq>=(rdo.equipesDia||[]).length)) kSemEq = k;
+        if(kSemQtd<0 && !(l.quantidade!=null && isFinite(l.quantidade) && l.quantidade>0)) kSemQtd = k;
       });
-      if(faltaQtd){
-        toast('Informe a quantidade feita hoje em “'+(faltaQtd.item ? faltaQtd.item.descricao : 'serviço')+'” ('+faltaQtd.equipe+'). Sem a quantidade o RDO não é salvo.','error');
-        faltaQtd.inp.classList.add('qtd-falta');
-        try{ faltaQtd.inp.scrollIntoView({behavior:'smooth', block:'center'}); }catch(e){}
-        setTimeout(function(){ try{ faltaQtd.inp.focus({preventScroll:true}); }catch(e){} }, 350);
+      if(kSemEq>=0){
+        var itE = catalogoItemById(linhasV[kSemEq].itemId);
+        falhaRdo('Escolha a equipe que fez “'+(itE ? itE.descricao : 'serviço')+'” na planilha (item 4).', servBoxV && servBoxV.querySelector('[data-sveq="'+kSemEq+'"]'));
+        return;
+      }
+      if(kSemQtd>=0){
+        var itQ = catalogoItemById(linhasV[kSemQtd].itemId);
+        var inpQ = servBoxV && servBoxV.querySelector('[data-svqtd="'+kSemQtd+'"]');
+        if(inpQ) inpQ.classList.add('qtd-falta');
+        falhaRdo('Informe a quantidade feita hoje em “'+(itQ ? itQ.descricao : 'serviço')+'” ('+((rdo.equipesDia||[])[linhasV[kSemQtd].eq]||'')+'). Sem a quantidade o RDO não é salvo.', inpQ);
+        return;
+      }
+      if(wantsSend && !semProdV && !linhasV.length){
+        falhaRdo('Marque na planilha (item 4) os serviços feitos hoje, com a quantidade — ou marque "Dia sem produção" e o motivo.', document.getElementById('rdoServicosCard'));
         return;
       }
       var obra = state.obras.find(function(o){ return o.id===obraId; });
@@ -8756,7 +9262,7 @@
             qtdPessoas: (d.qtdPessoas===''||d.qtdPessoas==null) ? null : Math.max(0, Math.round(Number(d.qtdPessoas)||0)),
             pvsExecutados: (d.pvsExecutados||[]).filter(function(p){ return p && p.servicoId; }).map(function(p){
               var mt = (p.metros!=null && p.metros!=='' && isFinite(Number(p.metros)) && Number(p.metros)>0) ? Number(p.metros) : null;
-              return { servicoId: p.servicoId, codigo: p.codigo||'', servico: p.servico||'', trecho: p.trecho||'', rua: p.rua||'', metros: mt };
+              return { servicoId: p.servicoId, codigo: p.codigo||'', servico: p.servico||'', trecho: p.trecho||'', rua: p.rua||'', metros: mt, catalogoItemId: p.catalogoItemId||null };
             })
           };
         }),
@@ -8764,14 +9270,18 @@
         gestao: rdo.gestao||{},
         numero_equipe: numeroEquipeCompute(rdo),
         equipamentos: rdo.equipamentos.filter(function(r){ return r.nome; }),
-        ocorrencias: rdo.ocorrencias.filter(function(r){ return r.texto; }),
-        fotos: state.photos.map(function(p){ return {url: p.dataUrl, legenda: (p.legenda||'').trim()}; }),
+        ocorrencias: rdo.ocorrencias.filter(function(r){ return r.texto; }).concat(rdo.semProducao ? [{ tipo:'Sem produção', texto:String(rdo.semProducao.motivo||'').trim(), acao:'' }] : []),
+        fotos: state.photos.map(function(p){ return p.path ? {path: p.path, legenda: (p.legenda||'').trim()} : {url: p.dataUrl, legenda: (p.legenda||'').trim()}; }),
         videos: state.videos.map(function(v){ return {url:v.url, name:v.name||''}; }),
         responsavel: responsavel,
-        status: isLockedEdit ? rdo.status : (wantsSend ? 'enviado' : 'rascunho'),
+        status: isLockedEdit ? (rdo.status==='enviado' ? 'aprovado' : rdo.status) : (wantsSend ? 'aprovado' : 'rascunho'),
         updated_at: new Date().toISOString()
       };
-      var approxKB = Math.round(JSON.stringify(payload).length/1024);
+      if(payload.status==='aprovado' && !(rdo.aprovacao && rdo.aprovacao.status==='aprovado')){
+        payload.aprovacao = { status:'aprovado', automatico:true, nome:'Aprovação automática no envio', timestamp: Date.now() };
+      }
+      // as fotos novas vão para o armazenamento; o limite vale para o resto do RDO
+      var approxKB = Math.round(JSON.stringify(Object.assign({}, payload, { fotos: payload.fotos.filter(function(f){ return !fotoEhBase64(f); }) })).length/1024);
       if(approxKB > 8000){
         toast('Este RDO está muito grande ('+approxKB+' KB) — remova uma ou mais fotos e tente novamente.','error');
         return;
@@ -8799,9 +9309,14 @@
 
       var effIsEdit = pendingEditItem ? pendingEditItem.isEdit : editing;
       var effId = pendingEditItem ? pendingEditItem.rdoId : (editing ? rdo.id : null);
-      var promise = effIsEdit
-        ? supabaseClient.from('rdos').update(payload).eq('id', effId).select().single()
-        : supabaseClient.from('rdos').insert(Object.assign({exemplo:false}, payload)).select().single();
+      var nFotosNovas = payload.fotos.filter(fotoEhBase64).length;
+      if(nFotosNovas) toast('Enviando '+nFotosNovas+' foto(s)…','ok');
+      var promise = rdoSubirFotosPayload(obraId, payload.fotos).then(function(fotos){
+        payload.fotos = fotos;
+        return effIsEdit
+          ? supabaseClient.from('rdos').update(payload).eq('id', effId).select().single()
+          : supabaseClient.from('rdos').insert(Object.assign({exemplo:false}, payload)).select().single();
+      });
 
       promise.then(function(res){
         if(res.error){
@@ -8811,7 +9326,7 @@
           if(looksOffline(res.error) || looksAuthError(res.error)){ return queueOfflineRdo(); }
           toast('Erro ao salvar: '+res.error.message,'error'); return;
         }
-        toast(isLockedEdit ? 'Alterações salvas.' : (wantsSend ? 'RDO enviada.' : 'Rascunho salvo.'), 'ok');
+        toast(isLockedEdit ? 'Alterações salvas.' : (wantsSend ? 'RDO enviada e aprovada.' : 'Rascunho salvo.'), 'ok');
         var newId = res.data ? res.data.id : effId;
         if(effIsEdit && effId) marcarRdoEditado(effId);
         state.editId = null; state.photos = []; state.videos = [];
@@ -8946,7 +9461,11 @@
       (function(){ var h = rdoAcessosHtml(id); return '<div class="card" id="rdoAcessosCard"'+(h?'':' style="display:none;"')+'>'+h+'</div>'; })();
 
     document.querySelectorAll('#detailGallery img').forEach(function(img){
-      img.addEventListener('click', function(){ openLightbox(img.src); });
+      img.addEventListener('click', function(){ if(img.src) openLightbox(img.src); });
+    });
+    rdoGarantirFotos(r.fotos).then(function(n){
+      if(!n) return;
+      document.querySelectorAll('#detailGallery img[data-foto-path]').forEach(function(img){ var u = fotoSrc({path:img.getAttribute('data-foto-path')}); if(u) img.src = u; });
     });
     var editBtn = document.getElementById('btnEditRdo');
     if(editBtn) editBtn.addEventListener('click', function(){ state.editId=r.id; state.editingPendingItem=null; goto('novo'); renderRdoForm(r); });
@@ -9201,10 +9720,10 @@
       rdoCard(rdoCardHead('Ocorrências', oc.length) + (oc.length ? oc.map(function(x){ return rdoOccurrenceRowHtml(x.tipo, x.texto, x.acao); }).join('') : rdoEmptyMsg())) +
 
       (fotos.length ? rdoCard(rdoCardHead('Fotos', fotos.length) + '<div class="gallery" id="detailGallery" style="display:flex;flex-wrap:wrap;padding:8px;">'+fotos.map(function(f){
-        var fUrl = (typeof f==='string') ? f : ((f&&f.url)||'');
+        var fUrl = fotoSrc(f);
         var fLeg = (typeof f==='string') ? '' : ((f&&f.legenda)||'');
         return '<div style="display:inline-block;vertical-align:top;margin:4px;max-width:104px;">'+
-          '<img src="'+fUrl+'" style="width:104px;height:80px;object-fit:cover;border:1px solid '+RDO_BORDER+';border-radius:6px;display:block;'+(opts.print?'':'cursor:pointer;')+'">'+
+          '<img src="'+esc(fUrl)+'"'+((f && f.path) ? ' data-foto-path="'+esc(f.path)+'"' : '')+' style="width:104px;height:80px;object-fit:cover;border:1px solid '+RDO_BORDER+';border-radius:6px;display:block;'+(opts.print?'':'cursor:pointer;')+'">'+
           (fLeg?('<div style="font-size:10px;color:'+RDO_MUTED+';margin-top:2px;max-width:104px;word-wrap:break-word;text-align:center;">'+esc(fLeg)+'</div>'):'')+
         '</div>';
       }).join('')+'</div>') : '') +
@@ -9305,6 +9824,9 @@
   }
 
   function exportRdoPdf(r){
+    rdoGarantirFotos(r.fotos).then(function(){ exportRdoPdfAgora(r); });
+  }
+  function exportRdoPdfAgora(r){
     if(!window.jspdf || !window.jspdf.jsPDF){
       toast('Gerador de PDF indisponível neste momento.','error');
       return;
@@ -10093,7 +10615,7 @@
     function pausa(){ return new Promise(function(res){ setTimeout(res, 30); }); }
     var jsPDF = window.jspdf.jsPDF;
     var doc = new jsPDF({ unit:'pt', format:'a4', orientation:'landscape', compress:true });
-    var chain = cdmCarregarInativos().then(cdmPrepararLogo).then(function(){
+    var chain = rdoGarantirFotos([].concat.apply([], rdos.map(function(r){ return r.fotos||[]; }))).then(cdmCarregarInativos).then(cdmPrepararLogo).then(function(){
       prog.textContent = 'Montando capa e planilha de medição…';
       return cdmDesenharCapa(doc, obra, de, ate).catch(function(err){
         console.warn('CDM: capa oficial indisponível, usando capa simples', err);
@@ -10123,6 +10645,59 @@
     });
   }
 
+  // Soma os lançamentos por item da tabela (mesmo item e preço = uma linha).
+  function medicaoAgrupar(linhas){
+    var mapa = {}, ordem = [];
+    linhas.forEach(function(l){
+      var k = l.codigo+'|'+l.atividade+'|'+l.preco;
+      if(!mapa[k]){ mapa[k] = { codigo:l.codigo, atividade:l.atividade, unidade:l.unidade, preco:l.preco, qtd:0, cents:0, n:0 }; ordem.push(k); }
+      mapa[k].qtd += Number(l.qtd)||0; mapa[k].cents += Math.round((Number(l.qtd)||0)*(Number(l.preco)||0)*100); mapa[k].n++;
+    });
+    return ordem.map(function(k){ return mapa[k]; }).sort(function(a,b){ return String(a.codigo).localeCompare(String(b.codigo), undefined, {numeric:true}) || String(a.atividade).localeCompare(String(b.atividade)); });
+  }
+  function medicaoResumoHtml(rdos, linhas){
+    var grupos = medicaoAgrupar(linhas);
+    var total = grupos.reduce(function(s, g){ return s + g.cents; }, 0);
+    var rasc = rdos.filter(function(r){ return r.status==='rascunho'; }).length;
+    var semServ = rdos.filter(function(r){ return !(r.equipesDetalhe||[]).some(function(d){ return (d && d.concluidos||[]).some(function(c){ return c && c.catalogoItemId; }); }); }).length;
+    var semQtd = linhas.filter(function(l){ return !(Number(l.qtd)>0); }).length;
+    var avisos = [];
+    if(rasc) avisos.push(rasc+' RDO(s) do período ainda em rascunho (entram na medição)');
+    if(semServ) avisos.push(semServ+' RDO(s) sem nenhum serviço da tabela lançado');
+    if(semQtd) avisos.push(semQtd+' lançamento(s) sem quantidade');
+    if(!grupos.length) return (avisos.length ? '<p class="med-aviso">'+esc(avisos.join(' · '))+'</p>' : '')+'<p class="hint" style="margin:8px 0 0;">Nenhum serviço da tabela lançado nos RDOs deste período.</p>';
+    return (avisos.length ? '<p class="med-aviso">'+esc(avisos.join(' · '))+'</p>' : '')+
+      '<div class="med-tab"><table><thead><tr><th>Item</th><th>Serviço</th><th class="n">Qtd.</th><th class="n">Preço unit.</th><th class="n">Total</th></tr></thead><tbody>'+
+      grupos.map(function(g){
+        return '<tr><td>'+esc(g.codigo||'—')+'</td><td>'+esc(g.atividade)+'<div class="med-sub">'+g.n+' lançamento(s)</div></td>'+
+          '<td class="n">'+esc(fmtQtd(g.qtd)+(g.unidade ? ' '+g.unidade : ''))+'</td><td class="n">'+esc(fmtMoeda(g.preco))+'</td><td class="n"><b>'+esc(fmtMoeda(g.cents/100))+'</b></td></tr>';
+      }).join('')+
+      '</tbody><tfoot><tr><td colspan="4">Total da medição</td><td class="n">'+esc(fmtMoeda(total/100))+'</td></tr></tfoot></table></div>';
+  }
+  function medicaoBaixarExcel(obra, de, ate, rdos, linhas){
+    if(typeof XLSX==='undefined'){ toast('Não foi possível carregar o gerador de Excel. Verifique sua conexão e tente novamente.','error'); return; }
+    var grupos = medicaoAgrupar(linhas);
+    var total = grupos.reduce(function(s, g){ return s + g.cents; }, 0)/100;
+    var r1 = [
+      ['Medição — '+(obra.nome||'')],
+      ['Período: '+fmtDate(de)+' a '+fmtDate(ate)+' · '+rdos.length+' RDO(s) · gerado em '+new Date().toLocaleDateString('pt-BR')],
+      [],
+      ['Item','Serviço','Unid.','Quantidade','Preço unitário (R$)','Total (R$)','Lançamentos']
+    ];
+    grupos.forEach(function(g){ r1.push([g.codigo, g.atividade, g.unidade, Math.round(g.qtd*1000)/1000, g.preco, g.cents/100, g.n]); });
+    r1.push([]); r1.push(['','TOTAL DA MEDIÇÃO','','','',total,'']);
+    var ws1 = XLSX.utils.aoa_to_sheet(r1);
+    ws1['!cols'] = [{wch:8},{wch:60},{wch:7},{wch:12},{wch:18},{wch:16},{wch:12}];
+    var r2 = [['Data','Mês','Equipe','Item','Serviço','Unid.','Quantidade','Preço unitário (R$)','Total (R$)','Trecho','Local','Situação','Observação']];
+    linhas.forEach(function(l){ r2.push([fmtDate(l.data), l.medicao, l.equipe, l.codigo, l.atividade, l.unidade, Number(l.qtd)||0, l.preco, l.fat, l.trecho, l.local, l.status, l.obs]); });
+    var ws2 = XLSX.utils.aoa_to_sheet(r2);
+    ws2['!cols'] = [{wch:11},{wch:10},{wch:8},{wch:8},{wch:55},{wch:7},{wch:11},{wch:16},{wch:14},{wch:18},{wch:30},{wch:13},{wch:30}];
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws1, 'Resumo');
+    XLSX.utils.book_append_sheet(wb, ws2, 'Lançamentos');
+    XLSX.writeFile(wb, 'Medicao_'+String(obra.nome||'obra').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+de+'_a_'+ate+'.xlsx');
+    toast('Medição baixada em Excel.','ok');
+  }
   function openCdmModal(){
     if(!cdmCanAccess()) return;
     var f = state.filters || {};
@@ -10145,9 +10720,9 @@
     var wrap = document.createElement('div');
     wrap.className = 'overlay';
     wrap.innerHTML =
-      '<div class="modal" style="max-width:460px;">'+
-        '<h3>Exportar Caderno de Medição (CDM)</h3>'+
-        '<p>Gera um PDF com a capa, a planilha de medição e as RDOs da obra no período escolhido.</p>'+
+      '<div class="modal" style="max-width:760px;width:calc(100vw - 32px);">'+
+        '<h3>Medição da obra</h3>'+
+        '<p>Escolha a obra e o período: aparece o resumo dos serviços lançados nos RDOs (quantidade × preço). Baixe em Excel ou gere o Caderno de Medição (PDF com capa, planilha e RDOs).</p>'+
         '<div class="field"><label>Obra</label><select id="cdmObra">'+
           '<option value="">Selecione…</option>'+
           state.obras.map(function(o){ return '<option value="'+esc(o.id)+'"'+(o.id===obraId?' selected':'')+'>'+esc(o.nome)+'</option>'; }).join('')+
@@ -10157,22 +10732,28 @@
           '<div class="field"><label>Até</label><div class="date-wrap"><input type="date" id="cdmAte" value="'+esc(ate)+'"><span class="date-ph" data-for="cdmAte">dd/mm/aaaa</span></div></div>'+
         '</div>'+
         '<p class="hint" id="cdmInfo" style="margin:10px 0 0;"></p>'+
-        '<div class="row" style="margin-top:14px;">'+
-          '<button class="btn ghost" data-act="cancel" type="button">Cancelar</button>'+
-          '<button class="btn primary" data-act="ok" type="button" id="cdmGerar">Gerar CDM</button>'+
+        '<div id="cdmResumo" class="med-resumo"></div>'+
+        '<div class="row" style="margin-top:14px;flex-wrap:wrap;gap:8px;">'+
+          '<button class="btn ghost" data-act="cancel" type="button">Fechar</button>'+
+          '<button class="btn ghost" data-act="xlsx" type="button" id="cdmExcel">⬇ Excel</button>'+
+          '<button class="btn primary" data-act="ok" type="button" id="cdmGerar">Gerar CDM (PDF)</button>'+
         '</div>'+
       '</div>';
     root.appendChild(wrap);
     wireDatePlaceholder('cdmDe'); wireDatePlaceholder('cdmAte');
     var selObra = wrap.querySelector('#cdmObra'), inDe = wrap.querySelector('#cdmDe'), inAte = wrap.querySelector('#cdmAte');
-    var info = wrap.querySelector('#cdmInfo'), btn = wrap.querySelector('#cdmGerar');
+    var info = wrap.querySelector('#cdmInfo'), btn = wrap.querySelector('#cdmGerar'), btnX = wrap.querySelector('#cdmExcel'), resumoEl = wrap.querySelector('#cdmResumo');
+    var inativosOk = false;
+    cdmCarregarInativos().then(function(){ inativosOk = true; atualiza(); }, function(){ inativosOk = true; atualiza(); });
     function atualiza(){
       var ok = selObra.value && inDe.value && inAte.value && inDe.value<=inAte.value;
-      var n = ok ? cdmRdosDoPeriodo(selObra.value, inDe.value, inAte.value).length : 0;
+      var rdosP = ok ? cdmRdosDoPeriodo(selObra.value, inDe.value, inAte.value) : [];
+      var n = rdosP.length;
       if(!selObra.value || !inDe.value || !inAte.value) info.textContent = 'Escolha a obra e o período.';
       else if(inDe.value>inAte.value) info.textContent = 'A data inicial deve ser anterior à data final.';
       else info.textContent = n ? (n+' RDO'+(n>1?'s':'')+' no período.') : 'Nenhuma RDO desta obra no período.';
-      btn.disabled = !n;
+      btn.disabled = !n; btnX.disabled = !n;
+      resumoEl.innerHTML = n ? medicaoResumoHtml(rdosP, cdmLinhasPlanilha(rdosP)) : '';
     }
     ['change','input'].forEach(function(ev){ [selObra,inDe,inAte].forEach(function(el){ el.addEventListener(ev, atualiza); }); });
     atualiza();
@@ -10180,6 +10761,11 @@
       if(e.target===wrap){ wrap.remove(); return; }
       var act = e.target.getAttribute && e.target.getAttribute('data-act');
       if(act==='cancel'){ wrap.remove(); }
+      if(act==='xlsx' && !btnX.disabled){
+        var obraX = state.obras.find(function(o){ return o.id===selObra.value; }) || {nome:''};
+        var rdosX = cdmRdosDoPeriodo(selObra.value, inDe.value, inAte.value);
+        medicaoBaixarExcel(obraX, inDe.value, inAte.value, rdosX, cdmLinhasPlanilha(rdosX));
+      }
       if(act==='ok' && !btn.disabled){
         var o = selObra.value, d1 = inDe.value, d2 = inAte.value;
         wrap.remove();
