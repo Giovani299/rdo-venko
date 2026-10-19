@@ -428,6 +428,8 @@
   .colab-txt{display:flex;flex-direction:column;min-width:0;}
   .colab-nome{font-weight:700;font-size:13.5px;line-height:1.25;}
   .colab-fn{font-size:11.5px;color:var(--muted);}
+  .rdo-pv-bloco{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 14px;background:var(--paper);}
+  .rdo-pv-bloco #rdoPvsProjetoBox{max-height:420px;overflow:auto;}
   .colab-obra-sel{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:6px 8px;font:inherit;font-size:13px;max-width:220px;}
   .colab-cont{margin:10px 0 0;font-size:13px;color:var(--muted);}
   .eq-serv-resumo{margin:12px 0 0;padding:8px 10px;border-radius:6px;background:var(--surface);border:1px solid var(--line);font-size:12.5px;}
@@ -8999,7 +9001,7 @@
           '<span><b>'+esc(it.trecho||it.codigo)+'</b> <span style="color:var(--muted);">— '+esc(it.servico)+(it.codigo?' · '+esc(it.codigo):'')+'</span>'+
           (jaFeito ? '<br><span class="hint" style="margin:0;font-size:11px;">Já marcado em: '+esc(jaFeito.join('; '))+'</span>' : '')+'</span>'+
         '</label>'+
-        (m ? ('<select data-pveq="'+esc(it.servicoId)+'"'+(m.idx<0?' style="border-color:#C6433F;"':'')+'>'+
+        (m && equipes.length>1 ? ('<select data-pveq="'+esc(it.servicoId)+'"'+(m.idx<0?' style="border-color:#C6433F;"':'')+'>'+
               (m.idx<0 ? '<option value="-1" selected>Equipe que concluiu…</option>' : '')+
               equipes.map(function(nome, i){ return '<option value="'+i+'"'+(m.idx===i?' selected':'')+'>'+esc(nome)+'</option>'; }).join('')+
              '</select>') : '')+
@@ -9015,7 +9017,7 @@
           var q = sel ? rdoQtdSugeridaPv(m.item, obraId) : null;
           return '<div class="rdo-pv-serv"><label for="pvs_'+esc(it.servicoId)+'">Serviço da tabela feito aqui</label>'+
             '<select id="pvs_'+esc(it.servicoId)+'" data-pvserv="'+esc(it.servicoId)+'"'+(sel?'':' class="pv-serv-vazio"')+'><option value="">— escolha o serviço —</option>'+servTabOpts(sel)+'</select>'+
-            '<span class="rdo-pv-serv-dica">'+(sel ? (q!=null ? 'Quantidade sugerida: '+esc(fmtQtd(q))+(it2un(sel) ? ' '+esc(it2un(sel)) : '')+'. Entra em "Serviços realizados hoje" da equipe — confira lá.' : 'Entra em "Serviços realizados hoje" da equipe — preencha a quantidade lá.') : 'Escolha o serviço para ele entrar no RDO com a quantidade.')+'</span></div>';
+            '<span class="rdo-pv-serv-dica">'+(sel ? (q!=null ? 'Quantidade sugerida: '+esc(fmtQtd(q))+(it2un(sel) ? ' '+esc(it2un(sel)) : '')+'. Entra na planilha abaixo — confira lá.' : 'Entra na planilha abaixo — preencha a quantidade lá.') : 'Escolha o serviço para ele entrar no RDO com a quantidade.')+'</span></div>';
         })() : '')+
       '</div>';
     });
@@ -9134,6 +9136,11 @@
       '<div class="card" id="rdoServicosCard">'+
         '<h2><span class="idx">4</span>Serviços do dia — planilha da obra <span class="tag-obrig">obrigatório</span></h2>'+
         '<p class="hint">Ache o serviço e digite a quantidade feita hoje. Se nenhum serviço foi feito, marque "Nenhum serviço atribuído" e explique o motivo.</p>'+
+        '<div class="rdo-pv-bloco">'+
+          '<h3 style="font-size:13px;font-weight:700;margin:4px 0 4px;">PVs e trechos do mapeamento executados hoje</h3>'+
+          '<p class="hint" style="margin:0 0 8px;">Marque o PV ou trecho feito hoje e o serviço da tabela: a quantidade entra sozinha na planilha abaixo (confira). Não altera o Mapa nem o Planejamento.</p>'+
+          '<div id="rdoPvsProjetoBox"></div>'+
+        '</div>'+
         '<div id="rdoServicosBox"></div>'+
       '</div>'+
 
@@ -9832,7 +9839,13 @@
 
       rdoCard(rdoCardHead('Gestão') + rdoTileGridHtml(gestaoTiles,3)) +
 
-      (grupoUnico ? ((equipesDetalhe[0]||{}).atividades ? rdoCard(rdoCardHead('Atividades do dia / local') + '<div style="padding:10px 14px;white-space:pre-wrap;">'+esc(equipesDetalhe[0].atividades)+'</div>') : '') : rdoCard(rdoCardHead('Atividades por equipe', equipesDia.length) + (equipesDia.length ? equipesDia.map(function(nome,i){ return rdoEquipeDetalheRowHtml(nome, i, equipesDetalhe[i]||{}, numEq[i]||{}); }).join('') : rdoEmptyMsg()))) +
+      (grupoUnico ? (function(){
+        var d0 = equipesDetalhe[0]||{}, pvs = (d0.pvsExecutados||[]).filter(function(p){ return p && (p.trecho||p.codigo); });
+        if(!d0.atividades && !pvs.length) return '';
+        return rdoCard(rdoCardHead('Atividades do dia / local') +
+          (d0.atividades ? '<div style="padding:10px 14px;white-space:pre-wrap;">'+esc(d0.atividades)+'</div>' : '') +
+          (pvs.length ? '<div style="padding:'+(d0.atividades?'0':'10px')+' 14px 10px;"><b>PVs/trechos do mapeamento executados:</b> '+pvs.map(function(p){ var mt = (p.metros!=null && Number(p.metros)>0) ? Number(p.metros) : null; return esc(p.trecho||p.codigo)+(mt!=null ? ' — '+esc(mapaFmtM(mt)) : (mapaRefsTrecho(p.trecho).length>=2 ? ' — trecho todo' : ''))+(p.servico?' <span style="color:'+RDO_MUTED+';">('+esc(p.servico)+')</span>':''); }).join(' · ')+'</div>' : ''));
+      })() : rdoCard(rdoCardHead('Atividades por equipe', equipesDia.length) + (equipesDia.length ? equipesDia.map(function(nome,i){ return rdoEquipeDetalheRowHtml(nome, i, equipesDetalhe[i]||{}, numEq[i]||{}); }).join('') : rdoEmptyMsg()))) +
 
       rdoServicosExecutadosCardHtml(equipesDia, equipesDetalhe, r.ocorrencias||[]) +
 
