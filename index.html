@@ -3500,6 +3500,31 @@
       '</table>'+
     '</div>';
   }
+  // v42 — rua de cada serviço com coordenada = Google Maps no ponto (função analisar-projeto, ação ruas_google)
+  function atualizarRuasGoogle(obraId, btn){
+    confirmModal({ title:'Atualizar ruas pelo Google Maps', msg:'Para cada serviço desta obra que tem coordenada, a rua, o bairro, a cidade e o CEP passam a ser os do Google Maps naquele ponto. O nome que estava no projeto fica nas observações (e, se for outra rua, com aviso para conferir). Continuar?', okLabel:'Atualizar ruas' }).then(function(ok){
+      if(!ok) return;
+      var txt = btn ? btn.textContent : '';
+      if(btn){ btn.disabled = true; btn.textContent = 'Consultando o Google Maps…'; }
+      Promise.resolve(supabaseClient.functions.invoke('analisar-projeto', { body:{ acao:'ruas_google', obraId: obraId } })).then(function(res){
+        if(btn){ btn.disabled = false; btn.textContent = txt; }
+        var d = res && res.data;
+        if(!d || !d.ok){ toast('Não foi possível atualizar as ruas: '+((d && d.error) || (res && res.error && res.error.message) || 'erro desconhecido')+'.', 'error'); return; }
+        toast(d.total+' serviço(s) com coordenada: '+d.atualizados+' atualizado(s), '+d.iguais+' já batiam com o Google'+
+          (d.divergentes ? ', '+d.divergentes+' com nome diferente do projeto (aviso nas observações)' : '')+
+          (d.semResultado ? ', '+d.semResultado+' sem resposta do Google' : '')+(d.falhas ? ', '+d.falhas+' com erro ao gravar' : '')+'.', d.falhas ? 'error' : 'ok');
+        try{ loadPlanejamentoServicos(obraId); }catch(e){}
+        try{ loadMapaMarcacoes(obraId); }catch(e){}
+      }, function(err){
+        if(btn){ btn.disabled = false; btn.textContent = txt; }
+        toast('Não foi possível atualizar as ruas: '+((err && err.message) || err)+'.', 'error');
+      });
+    });
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target && e.target.closest && e.target.closest('#btnRuasGoogle');
+    if(b && !b.disabled) atualizarRuasGoogle(b.getAttribute('data-obra'), b);
+  });
   function renderPlanejamentoObra(){
     var root = document.getElementById('planejamentoObraContent');
     if(!root) return;
@@ -3520,6 +3545,7 @@
     root.innerHTML =
       '<div class="page-head">'+
         '<div><h1>'+esc(obra.nome)+'</h1><p>Matriz de serviços e planejamento desta obra. O acompanhamento previsto × realizado será calculado automaticamente a partir do RDO numa próxima etapa.</p></div>'+
+        '<button type="button" class="btn ghost" id="btnRuasGoogle" data-obra="'+esc(obra.id)+'" title="Rua, bairro, cidade e CEP de cada serviço com coordenada passam a ser os do Google Maps naquele ponto">Atualizar ruas pelo Google Maps</button>'+
       '</div>'+
       projetosCardHtml()+
       '<div class="kpi-row">'+
@@ -5898,6 +5924,15 @@
   }
 
   function reverseGeocodeMarcacao(lat, lng){
+    var viaOsm = function(){ return reverseGeocodeMarcacaoOsm(lat, lng); };
+    if(!supabaseClient || !supabaseClient.functions) return viaOsm();
+    return Promise.resolve(supabaseClient.functions.invoke('analisar-projeto', { body:{ acao:'endereco_ponto', lat:lat, lng:lng } })).then(function(res){
+      var e = res && res.data && res.data.ok && res.data.endereco;
+      if(e && e.rua) return { rua: e.rua, numero: e.numero || '', fonte:'google' };
+      return viaOsm();
+    }, viaOsm);
+  }
+  function reverseGeocodeMarcacaoOsm(lat, lng){
     return fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat='+lat+'&lon='+lng+'&zoom=18&addressdetails=1')
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(data){
