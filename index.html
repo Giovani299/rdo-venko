@@ -630,6 +630,10 @@
   .pdf-recorte-status{font-size:13px;color:var(--muted);padding:18px 0;}
   .user-obras-lista{display:flex;flex-direction:column;gap:4px;margin:6px 0 0 4px;}
   #userObrasBox .checkline label{text-transform:none;letter-spacing:0;font-size:14px;font-weight:500;color:var(--ink,#14130F);}
+  .geo-rua-alerta{color:#C6433F;font-weight:700;}
+  .geo-conf h4{font-size:13px;margin:12px 0 4px;}
+  .geo-conf ul{margin:0;padding-left:18px;font-size:12.5px;max-height:180px;overflow:auto;}
+  .geo-conf .ok{color:#2E7D4F;font-weight:700;}
   .analise-erro{margin:8px 0 0;width:100%;padding:10px 12px;border:1px solid #e3b3b3;border-left:4px solid #C6433F;border-radius:var(--radius);background:rgba(198,67,63,.06);font-size:13px;line-height:1.45;color:#7a2522;}
   .analise-erro b{display:block;margin-bottom:2px;color:#a33;}
   .rede-pv .map-geo-badge{right:-12px;top:-12px;}
@@ -1915,6 +1919,7 @@
       escopo:row.escopo||null,
       geoStatus:row.geo_status||null, geoMetodo:row.geo_metodo||null, geoCrs:row.geo_crs||null,
       geoCoordOriginal:row.geo_coord_original||null, geoDetalhe:row.geo_detalhe||'', geoEnderecoPonto:row.geo_endereco_ponto||'',
+      ruaProjeto:row.rua_projeto||'', ruaStatus:row.rua_status||null,
       createdAt:row.created_at, updatedAt:row.updated_at
     };
   }
@@ -3465,6 +3470,7 @@
     if(!s.endereco) avisos.push('⚠️ Endereço incompleto');
     if(s.valorUnitario==null) avisos.push('⚠️ Valor não informado');
     if(s.geoStatus && s.geoStatus!=='validada' && s.geoStatus!=='manual') avisos.push('⚠️ Localização: '+((GEO_STATUS_INFO[s.geoStatus]||{}).label||s.geoStatus));
+    if(ruaRevisar(s)) avisos.push('⚠️ '+RUA_STATUS_INFO[s.ruaStatus].label+(s.ruaStatus==='divergente' && s.ruaProjeto ? ' (no projeto: '+s.ruaProjeto+')' : ''));
     else if(!s.geoStatus && s.confirmado && s.latitude==null && s.longitude==null) avisos.push('⚠️ Coordenada não localizada');
     if(!avisos.length) return '';
     return '<div style="color:#C6433F;font-size:11px;margin-top:2px;">'+avisos.map(esc).join(' · ')+'</div>';
@@ -3500,6 +3506,113 @@
       '</table>'+
     '</div>';
   }
+  // v43 — Conferência das localizações de um projeto: coordenada válida, pontos repetidos
+  // ou fora do conjunto, rua x Google, e se o MAPA mostra o mesmo que está salvo no
+  // planejamento (posição e rua de cada marcação). Mostra o que está errado e permite
+  // alinhar o mapa ao planejamento.
+  function geoConferirProjeto(p, obraId){
+    var svs = (state.planejamentoServicos||[]).filter(function(s){ return s.projetoId===p.id; });
+    Promise.resolve(supabaseClient.from('mapa_marcacoes').select('*').eq('obra_id', obraId).is('deleted_at', null)).then(function(res){
+      if(res.error){ toast('Não foi possível ler o mapa: '+res.error.message, 'error'); return; }
+      var marcs = (res.data||[]).map(mapMarcacaoRow);
+      var r = geoConferenciaCalcular(svs, marcs, p.id, (state.planejamentoServicos||[]));
+      geoConferenciaModal(p, r, obraId);
+    }, function(err){ toast('Não foi possível ler o mapa: '+((err && err.message) || err), 'error'); });
+  }
+  function geoConferenciaCalcular(svs, marcs, projetoId, todosServ){
+    var porServ = {}; marcs.forEach(function(m){ if(m.planejamentoServicoId) (porServ[m.planejamentoServicoId] = porServ[m.planejamentoServicoId] || []).push(m); });
+    var existe = {}; (todosServ||[]).forEach(function(s){ existe[s.id] = 1; });
+    var g = { invalidas:[], repetidos:[], isolados:[], semMapa:[], mapaDiferente:[], ruaMapa:[], ruaGoogle:[], naoConfirmadas:[], semLocal:[], marcSemServico:[], duplasNoMapa:[] };
+    var corrigir = [];
+    var pts = [];
+    var suspeito = {};   // coordenada do planejamento suspeita: o mapa NÃO é alinhado a ela
+    var nomeDe = function(s){ return (s.codigo ? s.codigo+' — ' : '')+(s.servicoNome||'serviço')+(s.trecho ? ' ['+s.trecho+']' : ''); };
+    svs.forEach(function(s){
+      var nome = nomeDe(s);
+      if(s.latitude==null || s.longitude==null){ g.semLocal.push(nome+' — '+((GEO_STATUS_INFO[s.geoStatus]||{}).label || 'sem coordenada')); return; }
+      var la = Number(s.latitude), lo = Number(s.longitude);
+      var dg = geoDiagLatLng(la, lo);
+      if(!dg.ok){ g.invalidas.push(nome+' — '+dg.motivo+' ('+la+', '+lo+')'); return; }
+      if(s.geoStatus && s.geoStatus!=='validada' && s.geoStatus!=='manual') g.naoConfirmadas.push(nome+' — '+((GEO_STATUS_INFO[s.geoStatus]||{}).label || s.geoStatus));
+      if(ruaRevisar(s)) g.ruaGoogle.push(nome+' — '+RUA_STATUS_INFO[s.ruaStatus].label+(s.ruaProjeto ? ' (projeto: "'+s.ruaProjeto+'"; Google: "'+(s.endereco||'')+'")' : ''));
+      var ms = porServ[s.id] || [];
+      if(!ms.length) g.semMapa.push(nome);
+      else {
+        if(ms.length>1) g.duplasNoMapa.push(nome+' — '+ms.length+' marcações no mapa para o mesmo serviço');
+        var m = ms[0], geom = (m.geom||[]).filter(function(q){ return q && isFinite(q.lat) && isFinite(q.lng); });
+        if(geom.length){
+          var c = { lat: geom.reduce(function(a, q){ return a+q.lat; }, 0)/geom.length, lng: geom.reduce(function(a, q){ return a+q.lng; }, 0)/geom.length };
+          var linha = geom.length>1;
+          // traço desenhado pela geometria da RUA (sem coordenada do projeto) não tem o mesmo centro do ponto salvo
+          var compara = !linha || /coordenada_projeto/.test(String(s.geoMetodo||''));
+          var d = mapaDistM(c, { lat:la, lng:lo });
+          if(compara && d>1){ g.mapaDiferente.push(nome+' — no mapa está a '+(d<1000 ? Math.round(d)+' m' : (d/1000).toFixed(1)+' km')+' da posição salva no planejamento'); if(!linha) corrigir.push({ id:m.id, sid:s.id, geom:[{ lat:la, lng:lo }] }); }
+        }
+        if((m.rua||'')!==(s.endereco||'')){ g.ruaMapa.push(nome+' — mapa: "'+(m.rua||'—')+'" · planejamento: "'+(s.endereco||'—')+'"'); corrigir.push({ id:m.id, sid:s.id, rua:s.endereco||null }); }
+      }
+      var refs = mapaRefsTrecho(s.trecho);
+      if(refs.length===1) pts.push({ ref:refs[0], lat:la, lng:lo, nome:nome, sid:s.id });
+    });
+    for(var i=0;i<pts.length;i++) for(var j=i+1;j<pts.length;j++){
+      if(pts[i].ref!==pts[j].ref && mapaDistM(pts[i], pts[j])<0.3){ g.repetidos.push(pts[i].ref+' e '+pts[j].ref+' estão na MESMA coordenada'); suspeito[pts[i].sid] = suspeito[pts[j].sid] = 1; }
+    }
+    if(pts.length>=4){
+      var med = function(xs){ var s2 = xs.slice().sort(function(a, b){ return a-b; }); return s2[Math.floor(s2.length/2)]; };
+      var cen = { lat: med(pts.map(function(q){ return q.lat; })), lng: med(pts.map(function(q){ return q.lng; })) };
+      var ds = pts.map(function(q){ return mapaDistM(q, cen); }), tip = med(ds);
+      pts.forEach(function(q, k){ if(ds[k]>5000 && ds[k]>10*Math.max(tip, 100)){ g.isolados.push(q.nome+' — a '+(ds[k]/1000).toFixed(1)+' km dos demais pontos do projeto'); suspeito[q.sid] = 1; } });
+    }
+    marcs.forEach(function(m){ if(m.projetoId===projetoId && m.planejamentoServicoId && !existe[m.planejamentoServicoId]) g.marcSemServico.push((m.observacao || m.rua || 'marcação')+' — o serviço não existe mais no planejamento'); });
+    // junta correções da mesma marcação
+    var porId = {}; corrigir.filter(function(c){ return !(c.geom && suspeito[c.sid]); }).forEach(function(c){ var x = Object.assign({}, c); delete x.sid; porId[c.id] = Object.assign(porId[c.id] || { id:c.id }, x); });
+    return { g:g, corrigir:Object.keys(porId).map(function(k){ return porId[k]; }), total:svs.length };
+  }
+  function geoConferenciaModal(p, r, obraId){
+    var g = r.g;
+    var secoes = [
+      ['invalidas', 'Coordenadas inválidas (fora do Brasil, 0,0 ou latitude/longitude trocadas)'],
+      ['repetidos', 'PVs diferentes na mesma coordenada'],
+      ['isolados', 'Pontos isolados, longe dos demais'],
+      ['mapaDiferente', 'Mapa diferente do planejamento (posição)'],
+      ['ruaMapa', 'Mapa diferente do planejamento (rua)'],
+      ['duplasNoMapa', 'Serviço com mais de uma marcação no mapa'],
+      ['marcSemServico', 'Marcação no mapa sem serviço no planejamento'],
+      ['semMapa', 'Com coordenada, mas fora do mapa (reanalise o projeto)'],
+      ['ruaGoogle', 'Rua para conferir (Google Maps)'],
+      ['naoConfirmadas', 'Posição ainda não confirmada (aproximada, pendente ou em conflito)'],
+      ['semLocal', 'Sem localização (vão para "Revisar locais")']
+    ];
+    var nProb = secoes.reduce(function(a, s){ return a + g[s[0]].length; }, 0);
+    var html = '<div class="modal geo-conf" style="max-width:720px;width:calc(100% - 32px);max-height:85vh;overflow:auto;">'+
+      '<h3>Conferência das localizações — '+esc(p.nome||'projeto')+'</h3>'+
+      '<p>'+r.total+' serviço(s) conferido(s). '+(nProb ? '<b>'+nProb+'</b> item(ns) precisam de atenção.' : '<span class="ok">Nenhum problema encontrado: coordenadas válidas e o mapa mostra o mesmo que está salvo no planejamento.</span>')+'</p>'+
+      secoes.filter(function(s){ return g[s[0]].length; }).map(function(s){
+        return '<h4>'+esc(s[1])+' ('+g[s[0]].length+')</h4><ul>'+g[s[0]].slice(0, 60).map(function(t){ return '<li>'+esc(t)+'</li>'; }).join('')+(g[s[0]].length>60 ? '<li>… e mais '+(g[s[0]].length-60)+'</li>' : '')+'</ul>';
+      }).join('')+
+      '<div class="row" style="margin-top:14px;">'+
+        '<button class="btn ghost" data-act="fechar">Fechar</button>'+
+        ((r.corrigir.length && obrasGestaoCanAccess()) ? '<button class="btn primary" data-act="alinhar" title="Pontos com coordenada suspeita no planejamento (repetida ou isolada) não são movidos">Alinhar o mapa ao planejamento ('+r.corrigir.length+')</button>' : '')+
+      '</div></div>';
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div'); wrap.className = 'overlay'; wrap.innerHTML = html; root.appendChild(wrap);
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap || (e.target.getAttribute && e.target.getAttribute('data-act')==='fechar')){ wrap.remove(); return; }
+      if(e.target.getAttribute && e.target.getAttribute('data-act')==='alinhar'){
+        var bt = e.target; bt.disabled = true; bt.textContent = 'Alinhando…';
+        var falhas = 0;
+        Promise.all(r.corrigir.map(function(c){
+          var upd = { updated_at:new Date().toISOString() };
+          if(c.geom) upd.geom = c.geom;
+          if('rua' in c) upd.rua = c.rua;
+          return Promise.resolve(supabaseClient.from('mapa_marcacoes').update(upd).eq('id', c.id)).then(function(x){ if(x && x.error) falhas++; }, function(){ falhas++; });
+        })).then(function(){
+          wrap.remove();
+          toast(falhas ? falhas+' marcação(ões) não puderam ser alinhadas.' : r.corrigir.length+' marcação(ões) alinhadas ao planejamento.', falhas ? 'error' : 'ok');
+          try{ loadMapaMarcacoes(obraId); }catch(e2){}
+        });
+      }
+    });
+  }
   // v42 — rua de cada serviço com coordenada = Google Maps no ponto (função analisar-projeto, ação ruas_google)
   function atualizarRuasGoogle(obraId, btn){
     confirmModal({ title:'Atualizar ruas pelo Google Maps', msg:'Para cada serviço desta obra que tem coordenada, a rua, o bairro, a cidade e o CEP passam a ser os do Google Maps naquele ponto. O nome que estava no projeto fica nas observações (e, se for outra rua, com aviso para conferir). Continuar?', okLabel:'Atualizar ruas' }).then(function(ok){
@@ -3510,9 +3623,12 @@
         if(btn){ btn.disabled = false; btn.textContent = txt; }
         var d = res && res.data;
         if(!d || !d.ok){ toast('Não foi possível atualizar as ruas: '+((d && d.error) || (res && res.error && res.error.message) || 'erro desconhecido')+'.', 'error'); return; }
-        toast(d.total+' serviço(s) com coordenada: '+d.atualizados+' atualizado(s), '+d.iguais+' já batiam com o Google'+
-          (d.divergentes ? ', '+d.divergentes+' com nome diferente do projeto (aviso nas observações)' : '')+
-          (d.semResultado ? ', '+d.semResultado+' sem resposta do Google' : '')+(d.falhas ? ', '+d.falhas+' com erro ao gravar' : '')+'.', d.falhas ? 'error' : 'ok');
+        toast(d.total+' serviço(s) com coordenada: '+d.atualizados+' atualizado(s), '+d.iguais+' já estavam iguais ao Google'+
+          (d.divergentes ? ', '+d.divergentes+' com rua do projeto diferente da do Google (marcados para conferir)' : '')+
+          (d.invalidas ? ', '+d.invalidas+' com coordenada inválida ('+(d.exemplosInvalidas||[]).slice(0, 3).join('; ')+')' : '')+
+          (d.semResultado ? ', '+d.semResultado+' sem resposta do Google' : '')+(d.falhas ? ', '+d.falhas+' com erro ao gravar' : '')+
+          (d.googleErro ? '. Google Maps: '+d.googleErro : '')+
+          (d.temRuaCols===false ? '. (Rode a migration 052 para registrar a conferência da rua.)' : '')+'.', (d.falhas || d.googleFalhas) ? 'error' : 'ok');
         try{ loadPlanejamentoServicos(obraId); }catch(e){}
         try{ loadMapaMarcacoes(obraId); }catch(e){}
       }, function(err){
@@ -3888,11 +4004,16 @@
         if(!gr.crs && gr.leituras_brutas>0) partes.push('Coordenadas: sistema de referência NÃO identificado — PVs pendentes de validação');
         else partes.push('Coordenadas do projeto: '+gr.pontos_validados+' conferida(s), '+((gr.pontos_pendentes||[]).length)+' a validar, '+((gr.pontos_conflito||[]).length)+' em conflito, '+((gr.pontos_sem_coordenada||[]).length)+' sem coordenada'+(gr.crs?' ('+gr.crs+(gr.crs_origem&&/presumido/.test(gr.crs_origem)?', datum presumido':'')+')':''));
       }
+      if(gr && gr.auditoria) partes.push('Pontos suspeitos (enviados para revisão): '+(gr.auditoria.duplicados||[]).length+' com coordenada repetida, '+(gr.auditoria.longe||[]).length+' longe da obra, '+(gr.auditoria.isolados||[]).length+' isolado(s)');
+      if(gr && gr.ruas && gr.ruas.divergentes) partes.push('Ruas: '+gr.ruas.divergentes+' diferente(s) do Google Maps no ponto');
+      if(gr && gr.ruas && gr.ruas.google_falhas) partes.push('Google Maps falhou em '+gr.ruas.google_falhas+' consulta(s)'+(gr.ruas.google_erro ? ' ('+gr.ruas.google_erro+')' : ''));
       var avisoRevisar = (p.locaisParaRevisar>0) ?
         ('<button type="button" class="btn ghost sm" data-revisarlocais="'+p.id+'" style="color:#a33;border-color:#e3b3b3;">⚠ '+p.locaisParaRevisar+' local(is) precisam de revisão</button>') : '';
-      return '<div class="hint" style="margin:6px 0 0;width:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
+      return (p.erroMensagem ? '<div class="analise-erro" role="alert"><b>Atenção</b> '+esc(p.erroMensagem)+'</div>' : '')+
+        '<div class="hint" style="margin:6px 0 0;width:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
         '<span>'+esc(partes.join(' · ')||'Análise concluída.')+'</span>'+
         avisoRevisar+
+        (svsProj.length ? '<button type="button" class="btn ghost sm" data-conferirgeo="'+p.id+'">Conferir localizações</button>' : '')+
         (p.excelUrl ? '<a href="'+esc(p.excelUrl)+'" data-arqpath="'+esc(p.excelPath)+'" target="_blank" rel="noopener" class="btn ghost sm">Baixar Excel</a>' : '')+
       '</div>';
     }
@@ -3999,6 +4120,9 @@
     });
     root.querySelectorAll('[data-revisarlocais]').forEach(function(b){
       b.addEventListener('click', function(){ abrirRevisarLocais(obra.id, b.getAttribute('data-revisarlocais')); });
+    });
+    root.querySelectorAll('[data-conferirgeo]').forEach(function(b){
+      b.addEventListener('click', function(){ var pj = (state.projetos||[]).filter(function(x){ return x.id===b.getAttribute('data-conferirgeo'); })[0]; if(pj) geoConferirProjeto(pj, obra.id); });
     });
     root.querySelectorAll('[data-delprojeto]').forEach(function(b){
       b.addEventListener('click', function(){
@@ -4196,6 +4320,7 @@
         var anterior = state.planejamentoServicos.find(function(x){ return x.id===state.planejamentoEditId; });
         var editId = state.planejamentoEditId;
         if(anterior && anterior.origem==='ia') payload.revisado_manualmente = true;
+        if(anterior && anterior.ruaStatus && (payload.endereco||'')!==(anterior.endereco||'')) payload.rua_status = 'confirmada';
         supabaseClient.from('planejamento_servicos').update(payload).eq('id', editId).then(function(res){
           if(res.error){ toast('Erro ao salvar serviço: '+res.error.message,'error'); return; }
           if(anterior){
@@ -4851,6 +4976,23 @@
   };
   var GEO_LEITURA_LABEL = { ia_recorte:'leitura do recorte da folha', ia_pagina:'leitura da página', ia_releitura:'releitura dirigida', texto_rotulo:'transcrição do rótulo', texto_pdf:'texto do PDF' };
   function geoInfoStatus(st){ return GEO_STATUS_INFO[st] || null; }
+  // v43 — conferência do NOME da rua com o Google Maps no ponto (rua_status)
+  var RUA_STATUS_INFO = {
+    confere:{ label:'Rua conferida no Google Maps' },
+    google:{ label:'Rua pelo Google Maps (o projeto não dizia a rua)' },
+    confirmada:{ label:'Rua confirmada por usuário' },
+    divergente:{ label:'Rua diferente da do Google Maps no ponto' },
+    sem_google:{ label:'Rua não conferida no Google Maps' }
+  };
+  function ruaRevisar(x){ return !!x && (x.ruaStatus==='divergente' || x.ruaStatus==='sem_google'); }
+  function geoDiagLatLng(la, lo){
+    if(la==null || lo==null || !isFinite(la) || !isFinite(lo)) return { ok:false, motivo:'coordenada vazia ou não numérica' };
+    if(la===0 && lo===0) return { ok:false, motivo:'coordenada 0,0' };
+    if(Math.abs(la)>90 || Math.abs(lo)>180) return { ok:false, motivo:'fora dos limites de latitude/longitude' };
+    var noBr = function(a, b){ return a>-34 && a<6 && b>-74 && b<-34; };
+    if(!noBr(la, lo)) return { ok:false, motivo: noBr(lo, la) ? 'latitude e longitude trocadas' : 'fora do território brasileiro' };
+    return { ok:true, motivo:'' };
+  }
   function geoNaoConfirmada(m){ return !!m && ['pendente','aproximada_endereco','conflito','invalida','falha_extracao'].indexOf(m.geoStatus)>=0; }
   function geoProblema(m){ return !!m && ['conflito','invalida','falha_extracao'].indexOf(m.geoStatus)>=0; }
   function geoChipHtml(st){
@@ -4886,6 +5028,14 @@
       '<div class="geo-linha"><span class="geo-k">Sistema de referência</span><span>'+esc(m.geoCrs||'—')+'</span></div>'+
       (m.paginaProjeto!=null ? '<div class="geo-linha"><span class="geo-k">Página do projeto</span><span>'+esc(String(m.paginaProjeto))+'</span></div>' : '')+
       '<div class="geo-linha"><span class="geo-k">Lat/long no mapa</span><span style="font-variant-numeric:tabular-nums;">'+usada+'</span></div>'+
+      (function(){
+        var sv = m.planejamentoServicoId ? (state.planejamentoServicos||[]).filter(function(s){ return s.id===m.planejamentoServicoId; })[0] : null;
+        var rp = sv && sv.ruaProjeto;
+        var ri = RUA_STATUS_INFO[m.ruaStatus];
+        return '<div class="geo-linha"><span class="geo-k">Rua</span><span>'+esc(m.rua||'—')+(ri ? ' <span class="'+(ruaRevisar(m)?'geo-rua-alerta':'hint')+'" style="margin:0;">('+esc(ri.label)+')</span>' : '')+'</span></div>'+
+          (rp && rp!==m.rua ? '<div class="geo-linha"><span class="geo-k">Rua no projeto</span><span>'+esc(rp)+'</span></div>' : '')+
+          ((obrasGestaoCanAccess() && ruaRevisar(m)) ? '<button type="button" class="btn ghost sm" data-act="ruaconfirmar" style="margin:4px 0 6px;">Conferi — a rua está certa</button>' : '');
+      })()+
       (m.geoEnderecoPonto ? '<div class="geo-linha"><span class="geo-k">Endereço no ponto</span><span>'+esc(m.geoEnderecoPonto)+'</span></div>' : '')+
       tabela+
       (m.geoDetalhe ? '<div class="hint" style="margin:6px 0 0;white-space:pre-wrap;">'+esc(m.geoDetalhe)+'</div>' : '')+
@@ -4943,6 +5093,17 @@
     });
   }
 
+  function confirmarRuaMarcacao(m){
+    confirmModal({ title:'Confirmar a rua', msg:'Você conferiu que "'+(m.rua||'')+'" é a rua certa deste ponto? O aviso sai e fica registrado como rua confirmada.', okLabel:'Confirmar rua' }).then(function(ok){
+      if(!ok) return;
+      Promise.resolve(supabaseClient.from('mapa_marcacoes').update({ rua_status:'confirmada', updated_at:new Date().toISOString() }).eq('id', m.id)).then(function(res){
+        if(res.error){ toast(/rua_status/.test(res.error.message||'') ? 'O banco ainda não tem a conferência da rua (rode a migration 052).' : 'Erro ao confirmar: '+res.error.message, 'error'); return; }
+        if(m.planejamentoServicoId) Promise.resolve(supabaseClient.from('planejamento_servicos').update({ rua_status:'confirmada' }).eq('id', m.planejamentoServicoId)).then(function(){});
+        toast('Rua confirmada.', 'ok');
+        loadMapaMarcacoes(state.mapaObraId || m.obraId);
+      });
+    });
+  }
   function mapMarcacaoRow(row){
     return {
       id: row.id,
@@ -4969,6 +5130,7 @@
       geoCoordOriginal: row.geo_coord_original || null,
       geoDetalhe: row.geo_detalhe || '',
       geoEnderecoPonto: row.geo_endereco_ponto || '',
+      ruaStatus: row.rua_status || null,
       paginaProjeto: row.pagina_projeto==null ? null : row.pagina_projeto,
       createdAt: row.created_at,
       updatedAt: row.updated_at
@@ -5805,16 +5967,22 @@
     // fora do ar (firewall, bloqueador de anúncios, rede da obra), troca sozinho
     // para o OpenStreetMap, para o mapa nunca ficar cinza liso.
     var mapaInst = leafletMapInstance;
-    var baseEsri = L.tileLayer('https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 19,
-      maxNativeZoom: 16,
-      attribution: 'Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community'
-    }).addTo(mapaInst);
-    var refEsri = L.tileLayer('https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 19,
-      maxNativeZoom: 16,
-      pane: 'mapaLabelsPane'
-    }).addTo(mapaInst);
+    // v43: fundo padrão "Ruas" (Esri World Street Map: nome de todas as ruas até o zoom 19,
+    // sem esticar imagem); "Claro" é o fundo anterior; "Satélite" com nomes das vias por cima.
+    var ESRI = 'https://services.arcgisonline.com/arcgis/rest/services/';
+    var attrEsri = 'Esri, HERE, Garmin, USGS, &copy; OpenStreetMap contributors, and the GIS user community';
+    var baseEsri = L.tileLayer(ESRI+'World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, maxNativeZoom: 19, attribution: attrEsri });
+    var refEsri = L.layerGroup([baseEsri]).addTo(mapaInst);
+    var fundoClaro = L.layerGroup([
+      L.tileLayer(ESRI+'Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, maxNativeZoom: 16, attribution: attrEsri }),
+      L.tileLayer(ESRI+'Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, maxNativeZoom: 16, pane: 'mapaLabelsPane' })
+    ]);
+    var fundoSatelite = L.layerGroup([
+      L.tileLayer(ESRI+'World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, maxNativeZoom: 19, attribution: 'Esri, Maxar, Earthstar Geographics' }),
+      L.tileLayer(ESRI+'Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, maxNativeZoom: 19, pane: 'mapaLabelsPane' }),
+      L.tileLayer(ESRI+'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, maxNativeZoom: 19, pane: 'mapaLabelsPane' })
+    ]);
+    try{ L.control.layers({ 'Ruas': refEsri, 'Claro': fundoClaro, 'Satélite': fundoSatelite }, null, { position:'topright', collapsed:true }).addTo(mapaInst); }catch(e){}
     var tilesOk = false, tilesErro = 0, baseReserva = null;
     function usarBaseReserva(){
       if(baseReserva || mapaInst !== leafletMapInstance) return;
@@ -7270,6 +7438,7 @@
       if(act==='verpdf'){ if(!projetoOrigem || !svcAtual) return; abrirRecortePdf(m, svcAtual, projetoOrigem); return; }
       if(act==='del'){ if(!canGestao) return; wrap.remove(); excluirMarcacao(m.id); return; }
       if(act==='geoconfirmar'){ if(!canGestao) return; wrap.remove(); confirmarPosicaoEmCampo(m); return; }
+      if(act==='ruaconfirmar'){ if(!canGestao) return; wrap.remove(); confirmarRuaMarcacao(m); return; }
       if(act==='fotoremove'){
         marcFotoAtual = '';
         var pv = document.getElementById('marcFotoPreviewWrap');
