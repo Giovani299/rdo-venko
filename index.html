@@ -430,6 +430,26 @@
   .colab-fn{font-size:11.5px;color:var(--muted);}
   .rdo-pv-bloco{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 14px;background:var(--paper);}
   .rdo-pv-bloco #rdoPvsProjetoBox{max-height:420px;overflow:auto;}
+  .eqb{border:1.5px solid var(--line);border-radius:8px;padding:6px 10px 8px;margin:0 0 10px;background:var(--surface);}
+  .eqb.on{border-color:var(--venko-yellow-deep);}
+  .eqb-head{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;padding:6px 0;font:inherit;cursor:pointer;text-align:left;color:inherit;min-height:40px;flex-wrap:wrap;}
+  .eqb-head:focus-visible{outline:2px solid var(--venko-yellow-deep);outline-offset:2px;border-radius:6px;}
+  .eqb.on .eqb-head .colab-check{background:var(--venko-yellow-deep);border-color:var(--venko-yellow-deep);color:#fff;}
+  .eqb-tit{font-weight:800;font-size:15px;letter-spacing:.02em;}
+  .eqb-sub{font-size:12px;color:var(--muted);}
+  .eqb-cont{margin-left:auto;font-size:12.5px;color:var(--muted);}
+  .eqb .colab-grid{margin-top:6px;}
+  .sv-eqtag{flex:0 0 auto;min-width:38px;font-size:11px;font-weight:800;letter-spacing:.04em;color:var(--venko-yellow-deep);}
+  .gestao-box{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;}
+  .gestao-tit{font-size:13px;font-weight:700;margin:0 0 8px;}
+  .gestao-total{font-weight:600;color:var(--muted);}
+  .gestao-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px 16px;}
+  .gestao-lista{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 8px;min-height:24px;align-items:center;}
+  .gestao-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 4px 4px 10px;border:1.5px solid var(--venko-yellow-deep);background:rgba(240,190,40,.16);border-radius:999px;font-size:13px;font-weight:600;}
+  .gestao-chip button{border:0;background:transparent;font-size:16px;line-height:1;cursor:pointer;padding:0 6px;color:inherit;}
+  .gestao-vazio,.gestao-antigo{font-size:12.5px;color:var(--muted);}
+  .gestao-add{display:flex;gap:6px;}
+  .gestao-add input{flex:1;min-width:0;border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:7px 9px;font:inherit;font-size:14px;}
   .colab-obra-sel{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:6px 8px;font:inherit;font-size:13px;max-width:220px;}
   .colab-cont{margin:10px 0 0;font-size:13px;color:var(--muted);}
   .eq-serv-resumo{margin:12px 0 0;padding:8px 10px;border-radius:6px;background:var(--surface);border:1px solid var(--line);font-size:12.5px;}
@@ -994,7 +1014,7 @@
           <p>Cadastro das pessoas que aparecem no RDO (item 3 — Colaboradores presentes). Colaborador de uma obra só aparece no RDO dessa obra.</p>
         </div>
       </div>
-      <div class="card">
+      <div class="card" style="display:none">
         <h2><span class="idx">+</span>Departamentos</h2>
         <form id="departamentoForm">
           <div class="grid4">
@@ -1014,7 +1034,7 @@
               <input type="text" id="colaboradorFuncaoOutra" placeholder="Nome da função" style="margin-top:6px;display:none">
             </div>
             <div class="field"><label>Obra</label><select id="colaboradorObra"></select></div>
-            <div class="field"><label>Departamento</label><select id="colaboradorDepto"></select></div>
+            <div class="field" style="display:none"><label>Departamento</label><select id="colaboradorDepto"></select></div>
             <select id="colaboradorEquipe" style="display:none"></select>
           </div>
           <div class="form-actions"><button type="submit" class="btn primary">Salvar colaborador</button></div>
@@ -1740,7 +1760,7 @@
     document.querySelectorAll('.tab-btn').forEach(function(b){
       b.classList.toggle('active', b.getAttribute('data-view')===view);
     });
-    if(view==='novo' && state.editId===null){ renderRdoForm(null); }
+    if(view==='novo' && state.editId===null){ renderRdoForm(null); rdoPerguntarEquipesAnteriores(rdoFormAtual); }
     if(view==='detail' && state.detailId){ registrarAcessoRdo(state.detailId); }
     if(view==='mapa'){ state.mapaMode=null; state.mapaRamalPoints=[]; if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers(); updateMapaModeUI(); }
     renderAll();
@@ -1984,6 +2004,7 @@
       state.equipes.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
       cacheSet('equipes', state.equipes);
       renderAll();
+      try{ if(state.view==='novo' && rdoFormAtual) renderRdoColaboradores(rdoFormAtual); }catch(e){}
     });
   }
   function loadColaboradores(){
@@ -7662,7 +7683,7 @@
       var depto = state.departamentos.find(function(d){ return d.id===c.departamentoId; });
       return '<div class="obra-card" data-id="'+c.id+'">'+
         '<div class="info"><b>'+esc(c.nome)+(!c.ativo?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">inativo</span>':'')+'</b>'+
-          '<div class="meta">'+esc(c.funcao||'Sem função')+(depto ? ' · '+esc(depto.nome) : '')+'</div>'+
+          '<div class="meta">'+esc(c.funcao||'Sem função')+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
           '<select class="colab-obra-sel" data-colab-obra="'+c.id+'" aria-label="Obra de '+esc(c.nome)+'">'+colabObraOptionsHtml(c.obraId)+'</select>'+
@@ -8410,7 +8431,7 @@
     if(!(rdo.equipesDia&&rdo.equipesDia.length)){
       var obraSel = (document.getElementById('rdoObra') && document.getElementById('rdoObra').value) || rdo.obraId || '';
       var nServ = obraSel ? rdoServicosTabelaOptions(obraSel).length : 0;
-      return '<p class="empty-hint">Selecione ao menos uma equipe em campo para detalhar as atividades.'+(nServ ? ' Os <b>'+nServ+' serviço(s) da tabela</b> desta obra aparecem aqui, dentro de cada equipe marcada.' : '')+'</p>';
+      return '<p class="empty-hint">Marque no item 3 as equipes que trabalharam hoje: aqui aparecem as atividades e a produção de cada uma.</p>';
     }
     syncEquipesDetalhe(rdo);
     var obraIdNow = (document.getElementById('rdoObra') && document.getElementById('rdoObra').value) || rdo.obraId || '';
@@ -8423,14 +8444,14 @@
       var integrantes = equipeColaboradores(nome);
       return '<div class="card" style="margin:0 0 12px;background:#fbfbfa;">'+
         '<div style="font-weight:bold;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'+
-          '<span>Equipe '+(i+1)+': '+esc(nome)+(eq&&eq.encarregado?' <span class="hint" style="font-weight:normal;">— Encarregado: '+esc(eq.encarregado)+'</span>':'')+'</span>'+
+          '<span>'+esc(rdoEqLabel(nome, rdoEqCandidatas(rdo).indexOf(nome)))+(nome!==RDO_GRUPO && rdoEqLabel(nome, i)!==nome ? ' <span class="hint" style="font-weight:normal;">'+esc(nome)+'</span>' : '')+'</span>'+
           (canValor ? '<span data-eqvalorbadge="'+i+'" style="color:var(--venko-yellow-deep);font-weight:800;">'+fmtMoeda(computeEquipeValor(d))+'</span>' : '')+
         '</div>'+
         '<div class="grid2">'+
           '<div class="field"><label>Frente de trabalho</label><input type="text" data-eqfrente="'+i+'" value="'+esc(d.frente||'')+'" placeholder="Ex: Pavimento 14 · Pilares e vigas"></div>'+
           '<div class="field"><label>Status</label><select data-eqstatus="'+i+'">'+TEAM_STATUS_OPTS.map(function(o){return '<option'+(o===d.status?' selected':'')+'>'+o+'</option>';}).join('')+'</select></div>'+
         '</div>'+
-        '<div class="hint" style="margin:8px 0 4px;">Integrantes: '+(integrantes.length ? integrantes.map(function(c){return esc(c.nome)+' — '+esc(c.funcao);}).join(', ') : 'Nenhum colaborador ativo nesta equipe.')+'</div>'+
+        '<div class="hint" style="margin:8px 0 4px;" data-eqintegr="'+i+'">'+rdoEqIntegrantesTxt(rdo, nome)+'</div>'+
         '<div class="field full" style="margin-top:8px;"><label>Atividades do dia</label><textarea data-eqativ="'+i+'" placeholder="O que a equipe fez hoje...">'+esc(d.atividades||'')+'</textarea></div>'+
         '<div class="eq-serv-resumo" data-eqservres="'+i+'">'+rdoEquipeServResumoHtml(d)+'</div>'+
         '<div class="grid2" style="margin-top:12px;">'+
@@ -8444,53 +8465,301 @@
       '</div>';
     }).join('');
   }
-  // v38 — Colaboradores presentes: todos os cadastrados, tocar marca/desmarca.
+  // v40 — Gestão com nomes: ADM e ENG viram listas de nomes; a quantidade é o total de nomes.
+  function gestaoNomes(g, k){ var a = g && g[k+'Nomes']; return Array.isArray(a) ? a.filter(function(n){ return n && String(n).trim(); }) : []; }
+  function gestaoQtd(g, k){ var ns = gestaoNomes(g, k); return ns.length ? ns.length : (parseFloat(g && g[k])||0); }
+  function renderRdoGestao(rdo){
+    var g = rdo.gestao = rdo.gestao || {};
+    ['adm','eng'].forEach(function(k){
+      if(!Array.isArray(g[k+'Nomes'])) g[k+'Nomes'] = [];
+      var box = document.getElementById(k==='adm' ? 'rdoGestaoListaAdm' : 'rdoGestaoListaEng');
+      if(!box) return;
+      var ns = g[k+'Nomes'];
+      var antigo = (!ns.length && parseFloat(g[k])>0) ? '<span class="gestao-antigo">'+esc(String(g[k]))+' pessoa(s), sem nome — adicione os nomes</span>' : '';
+      box.innerHTML = ns.length ? ns.map(function(n, i){ return '<span class="gestao-chip">'+esc(n)+'<button type="button" data-gestaodel="'+k+'" data-i="'+i+'" aria-label="Tirar '+esc(n)+'">×</button></span>'; }).join('') : (antigo || '<span class="gestao-vazio">Ninguém</span>');
+      box.querySelectorAll('[data-gestaodel]').forEach(function(b){
+        b.addEventListener('click', function(){ g[k+'Nomes'].splice(+b.getAttribute('data-i'), 1); g[k] = g[k+'Nomes'].length; renderRdoGestao(rdo); });
+      });
+    });
+    var t = document.getElementById('rdoGestaoTotal');
+    if(t){ var tot = gestaoQtd(g, 'adm') + gestaoQtd(g, 'eng'); t.textContent = tot ? '· '+tot+' pessoa(s)' : ''; }
+    var dl = document.getElementById('rdoGestaoSug');
+    if(dl && !dl._ok){
+      dl._ok = true;
+      var vistos = {}, sug = [];
+      (state.rdos||[]).forEach(function(r){ ['adm','eng'].forEach(function(k){ gestaoNomes(r.gestao, k).forEach(function(n){ var c = rdoNorm(n); if(!vistos[c]){ vistos[c] = 1; sug.push(n); } }); }); });
+      sug.sort(function(a, b){ return a.localeCompare(b, 'pt-BR'); });
+      dl.innerHTML = sug.map(function(n){ return '<option value="'+esc(n)+'">'; }).join('');
+    }
+    if(!document._gestaoLigado){
+      document._gestaoLigado = true;
+      var add = function(k){
+        var r = rdoFormAtual; if(!r) return;
+        var inp = document.getElementById(k==='adm' ? 'rdoGestaoAddAdm' : 'rdoGestaoAddEng'); if(!inp) return;
+        var nome = String(inp.value||'').replace(/\s+/g, ' ').trim();
+        if(!nome) return;
+        var gg = r.gestao = r.gestao || {}; gg[k+'Nomes'] = gg[k+'Nomes'] || [];
+        if(gg[k+'Nomes'].some(function(n){ return rdoNorm(n)===rdoNorm(nome); })){ toast('“'+nome+'” já está na lista.', 'error'); return; }
+        gg[k+'Nomes'].push(nome); gg[k] = gg[k+'Nomes'].length;
+        inp.value = '';
+        renderRdoGestao(r);
+        try{ inp.focus(); }catch(e){}
+      };
+      document.addEventListener('click', function(e){ var b = e.target && e.target.closest && e.target.closest('[data-gestaoadd]'); if(b) add(b.getAttribute('data-gestaoadd')); });
+      document.addEventListener('keydown', function(e){
+        if(e.key!=='Enter' || !e.target) return;
+        if(e.target.id==='rdoGestaoAddAdm' || e.target.id==='rdoGestaoAddEng'){ e.preventDefault(); add(e.target.id==='rdoGestaoAddAdm' ? 'adm' : 'eng'); }
+      });
+    }
+  }
+  // v41 — Equipes do dia (EQ1, EQ2, EQ3…) como grupos de trabalho. Os colaboradores de
+  // cada equipe são marcados NESTE RDO (nenhum fica preso à equipe). A composição
+  // é gravada em numero_equipe[i].integrantes (fonte:'rdo'); mao_de_obra = todos os marcados.
+  function rdoEqChave(n){ return rdoNorm(String(n||'').trim()); }
+  function rdoEqLabel(nome, i){ return nome===RDO_GRUPO ? 'Sem equipe' : cdmEquipeLabel(nome, i); }
+  function rdoEqAtivas(){
+    return (state.equipes||[]).filter(function(e){ return e.ativa && e.nome; }).map(function(e){ return e.nome; })
+      .sort(function(a, b){ return String(a).localeCompare(String(b), 'pt-BR', {numeric:true}); });
+  }
+  function rdoEqCandidatas(rdo){
+    var c = rdoEqAtivas();
+    (rdo.equipesDia||[]).forEach(function(n){ if(c.indexOf(n)===-1) c.push(n); });
+    return c;
+  }
+  function rdoEqMembros(rdo, nome){
+    rdo.eqMembros = rdo.eqMembros || {};
+    if(!Array.isArray(rdo.eqMembros[nome])) rdo.eqMembros[nome] = [];
+    return rdo.eqMembros[nome];
+  }
+  function rdoAtualizarMaoDeObra(rdo){
+    var vistos = {}, out = [];
+    var add = function(m){ if(!m || !m.nome) return; var k = rdoEqChave(m.nome); if(vistos[k]) return; vistos[k] = 1; out.push({ nome:m.nome, funcao:m.funcao||'', departamento:m.departamento||'' }); };
+    (rdo.equipesDia||[]).forEach(function(n){ rdoEqMembros(rdo, n).forEach(add); });
+    (rdo.moAvulsos||[]).forEach(add);
+    rdo.maoDeObra = out;
+    syncEquipesDetalhe(rdo);
+    (rdo.equipesDia||[]).forEach(function(n, i){ var ms = rdoEqMembros(rdo, n); if(ms.length && rdo.equipesDetalhe[i]) rdo.equipesDetalhe[i].qtdPessoas = ms.length; });
+  }
+  // Liga/desliga a equipe no dia, mantendo a ordem EQ1, EQ2, EQ3… Equipe desligada:
+  // os serviços lançados nela ficam sem equipe (a planilha pede para escolher).
+  function rdoEqLigar(rdo, nome, on){
+    var cand = rdoEqCandidatas(rdo);
+    rdo._eqMexeu = rdo._eqMexeu || {}; rdo._eqMexeu[nome] = true;
+    syncEquipesDetalhe(rdo);
+    var idx = rdo.equipesDia.indexOf(nome);
+    if(on){
+      if(idx!==-1) return;
+      var pos = 0;
+      while(pos < rdo.equipesDia.length && cand.indexOf(rdo.equipesDia[pos]) < cand.indexOf(nome)) pos++;
+      rdo.equipesDia.splice(pos, 0, nome);
+      rdo.equipesDetalhe.splice(pos, 0, equipeDetalheBlank());
+      rdoEqMembros(rdo, nome);
+    } else {
+      if(idx===-1) return;
+      var d = rdo.equipesDetalhe[idx];
+      if(d){
+        rdo.servicosSemEquipe = (rdo.servicosSemEquipe||[]).concat((d.concluidos||[]).filter(function(c){ return c && c.catalogoItemId; }).map(function(c){ return { itemId:c.catalogoItemId, tipo:c.tipo, quantidade:c.quantidade, orfa:true }; }));
+        if((d.pvsExecutados||[]).length){ rdo.pvsSemEquipe = rdo.pvsSemEquipe || {}; d.pvsExecutados.forEach(function(p){ rdo.pvsSemEquipe[p.servicoId] = p; }); }
+      }
+      rdo.equipesDia.splice(idx, 1); rdo.equipesDetalhe.splice(idx, 1);
+      if(rdo.eqMembros) delete rdo.eqMembros[nome];
+    }
+    rdoAtualizarMaoDeObra(rdo);
+  }
+  function rdoColabsDaObra(obraId){
+    return (state.colaboradores||[]).filter(function(c){ return c.ativo!==false && c.nome && (!c.obraId || c.obraId===obraId); })
+      .map(function(c){ return { nome:c.nome, funcao:c.funcao||'', departamento: departamentoNome(c.departamentoId) }; })
+      .sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), 'pt-BR'); });
+  }
   function renderRdoColaboradores(rdo){
     var box = document.getElementById('rdoColabBox');
     if(!box) return;
-    var chave = function(n){ return rdoNorm(String(n||'').trim()); };
     var obraId = (document.getElementById('rdoObra') && document.getElementById('rdoObra').value) || rdo.obraId || '';
-    if(!obraId){ box.innerHTML = '<p class="empty-hint">Selecione a obra (item 1) para ver os colaboradores.</p>'; return; }
+    if(!obraId){ box.innerHTML = '<p class="empty-hint">Selecione a obra (item 1) para montar as equipes do dia.'+(rdo._carregarAnterior ? ' As equipes do último RDO dela serão carregadas.' : '')+'</p>'; return; }
+    if(rdo._carregando){ box.innerHTML = '<p class="hint" style="margin:0;">Carregando as equipes do RDO anterior desta obra…</p>'; return; }
     var ativos = (state.colaboradores||[]).filter(function(c){ return c.ativo!==false && c.nome; });
     // colaborador de outra obra (ex.: efetivo de Suzano) não pode ficar marcado nesta
-    var vale = function(nome){ var k = chave(nome); var cs = ativos.filter(function(c){ return chave(c.nome)===k; }); return !cs.length || cs.some(function(c){ return !c.obraId || c.obraId===obraId; }); };
-    var antes = (rdo.maoDeObra||[]).length;
-    rdo.maoDeObra = (rdo.maoDeObra||[]).filter(function(m){ return !(m && m.nome) || vale(m.nome); });
-    if(rdo.maoDeObra.length < antes) toast('Colaboradores de outra obra foram desmarcados.', 'info');
-    var sel = {}; (rdo.maoDeObra||[]).forEach(function(m){ if(m && m.nome) sel[chave(m.nome)] = m; });
-    var lista = ativos.filter(function(c){ return !c.obraId || c.obraId===obraId; }).map(function(c){ return { nome:c.nome, funcao:c.funcao||'', departamento: departamentoNome(c.departamentoId) }; });
-    Object.keys(sel).forEach(function(k){ if(!lista.some(function(c){ return chave(c.nome)===k; })) lista.push({ nome:sel[k].nome, funcao:sel[k].funcao||'', departamento:sel[k].departamento||'' }); });
-    lista.sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), 'pt-BR'); });
-    if(!lista.length){ box.innerHTML = '<p class="serv-alerta">Não há colaboradores cadastrados para esta obra. Peça ao administrador para cadastrar em "Colaboradores".</p>'; return; }
-    var cont = function(){ var n = (rdo.maoDeObra||[]).filter(function(m){ return m && m.nome; }).length; return n ? '<b>'+n+'</b> colaborador(es) marcado(s)' : 'Nenhum colaborador marcado ainda.'; };
-    box.innerHTML = (lista.length>12 ? '<input type="search" class="serv-busca" id="rdoColabBusca" placeholder="Buscar colaborador ('+lista.length+')…" aria-label="Buscar colaborador">' : '')+
-      '<div class="colab-grid">'+lista.map(function(c, i){
-        var on = !!sel[chave(c.nome)];
-        return '<button type="button" class="colab-chip'+(on?' on':'')+'" data-colab="'+i+'" aria-pressed="'+(on?'true':'false')+'" data-busca="'+esc(rdoNorm(c.nome+' '+c.funcao))+'">'+
-          '<span class="colab-check" aria-hidden="true">✓</span><span class="colab-txt"><span class="colab-nome">'+esc(c.nome)+'</span>'+(c.funcao ? '<span class="colab-fn">'+esc(c.funcao)+'</span>' : '')+'</span></button>';
-      }).join('')+'</div>'+
-      '<p class="colab-cont" id="rdoColabCont">'+cont()+'</p>';
-    box.querySelectorAll('[data-colab]').forEach(function(b){
+    var vale = function(nome){ var k = rdoEqChave(nome); var cs = ativos.filter(function(c){ return rdoEqChave(c.nome)===k; }); return !cs.length || cs.some(function(c){ return !c.obraId || c.obraId===obraId; }); };
+    var tirou = 0;
+    (rdo.equipesDia||[]).forEach(function(n){ var ms = rdoEqMembros(rdo, n); var ok = ms.filter(function(m){ return m && m.nome && vale(m.nome); }); tirou += ms.length - ok.length; rdo.eqMembros[n] = ok; });
+    if(rdo.moAvulsos){ var av = rdo.moAvulsos.filter(function(m){ return m && m.nome && vale(m.nome); }); tirou += rdo.moAvulsos.length - av.length; rdo.moAvulsos = av; }
+    if(tirou) toast('Colaboradores de outra obra foram desmarcados.', 'info');
+    rdoAtualizarMaoDeObra(rdo);
+    var lista = rdoColabsDaObra(obraId);
+    var cand = rdoEqCandidatas(rdo);
+    var ativas = rdoEqAtivas();
+    if(!cand.length){ box.innerHTML = '<p class="serv-alerta">Não há equipes cadastradas (EQ1, EQ2…). Peça ao administrador para cadastrar em "Equipes".</p>'; return; }
+    var emQual = {};   // colaborador -> equipes em que já está hoje
+    (rdo.equipesDia||[]).forEach(function(n){ rdoEqMembros(rdo, n).forEach(function(m){ var k = rdoEqChave(m.nome); (emQual[k] = emQual[k] || []).push(n); }); });
+    var chipsPorEq = {};
+    var buscaAnt = box._busca || '';
+    var html = (lista.length>12 ? '<input type="search" class="serv-busca" id="rdoColabBusca" placeholder="Buscar colaborador ('+lista.length+')…" aria-label="Buscar colaborador" value="'+esc(buscaAnt)+'">' : '');
+    if(!lista.length) html += '<p class="serv-alerta">Não há colaboradores cadastrados para esta obra. Peça ao administrador para cadastrar em "Colaboradores".</p>';
+    html += cand.map(function(nome, ci){
+      var idx = (rdo.equipesDia||[]).indexOf(nome), on = idx!==-1;
+      var lab = rdoEqLabel(nome, ci);
+      var sub = nome===RDO_GRUPO ? 'colaboradores deste RDO antigo' : (lab!==nome ? nome : '') + (ativas.indexOf(nome)===-1 ? ' (inativa)' : '');
+      var ms = on ? rdoEqMembros(rdo, nome) : [];
+      var chips = lista.slice();
+      ms.forEach(function(m){ if(!chips.some(function(c){ return rdoEqChave(c.nome)===rdoEqChave(m.nome); })) chips.push({ nome:m.nome, funcao:m.funcao||'', departamento:m.departamento||'' }); });
+      chipsPorEq[ci] = chips;
+      return '<div class="eqb'+(on?' on':'')+'">'+
+        '<button type="button" class="eqb-head" data-eqtoggle="'+ci+'" aria-pressed="'+(on?'true':'false')+'">'+
+          '<span class="colab-check" aria-hidden="true">✓</span><span class="eqb-tit">'+esc(lab)+'</span>'+(sub ? '<span class="eqb-sub">'+esc(sub)+'</span>' : '')+
+          '<span class="eqb-cont">'+(on ? (ms.length ? ms.length+' colaborador(es)' : 'marque os colaboradores') : 'não trabalhou hoje')+'</span>'+
+        '</button>'+
+        (on ? '<div class="colab-grid">'+chips.map(function(c, j){
+          var k = rdoEqChave(c.nome);
+          var sel = ms.some(function(m){ return rdoEqChave(m.nome)===k; });
+          var outras = (emQual[k]||[]).filter(function(n){ return n!==nome; }).map(function(n){ return rdoEqLabel(n, cand.indexOf(n)); });
+          return '<button type="button" class="colab-chip'+(sel?' on':'')+'" data-eqi="'+ci+'" data-colab="'+j+'" aria-pressed="'+(sel?'true':'false')+'" data-busca="'+esc(rdoNorm(c.nome+' '+c.funcao))+'">'+
+            '<span class="colab-check" aria-hidden="true">✓</span><span class="colab-txt"><span class="colab-nome">'+esc(c.nome)+'</span>'+(outras.length ? '<span class="colab-fn">também na '+esc(outras.join(', '))+'</span>' : '')+'</span></button>';
+        }).join('')+'</div>' : '')+
+      '</div>';
+    }).join('');
+    if((rdo.moAvulsos||[]).length) html += '<p class="hint" style="margin:6px 0 0;">Também registrados neste RDO (sem equipe): '+rdo.moAvulsos.map(function(m){ return esc(m.nome); }).join(', ')+'.</p>';
+    var nCol = (rdo.maoDeObra||[]).length, nEq = (rdo.equipesDia||[]).length;
+    html += '<p class="colab-cont" id="rdoColabCont">'+(nEq ? '<b>'+nEq+'</b> equipe(s) · <b>'+nCol+'</b> colaborador(es) no dia' : 'Nenhuma equipe marcada ainda.')+'</p>';
+    box.innerHTML = html;
+    box.querySelectorAll('[data-eqtoggle]').forEach(function(b){
       b.addEventListener('click', function(){
-        var c = lista[+b.getAttribute('data-colab')]; if(!c) return;
-        var k = chave(c.nome);
-        var tem = (rdo.maoDeObra||[]).some(function(m){ return m && chave(m.nome)===k; });
-        if(tem) rdo.maoDeObra = rdo.maoDeObra.filter(function(m){ return !(m && chave(m.nome)===k); });
-        else rdo.maoDeObra = (rdo.maoDeObra||[]).concat([{ nome:c.nome, funcao:c.funcao, departamento:c.departamento }]);
-        b.classList.toggle('on', !tem); b.setAttribute('aria-pressed', !tem ? 'true' : 'false');
-        var ct = document.getElementById('rdoColabCont'); if(ct) ct.innerHTML = cont();
+        var nome = cand[+b.getAttribute('data-eqtoggle')]; if(nome==null) return;
+        var on = (rdo.equipesDia||[]).indexOf(nome)!==-1;
+        rdoEqLigar(rdo, nome, !on);
+        refreshEquipesDetalheUI(rdo);
+        renderRdoColaboradores(rdo);
+      });
+    });
+    box.querySelectorAll('.colab-chip[data-eqi]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var nome = cand[+b.getAttribute('data-eqi')]; var c = (chipsPorEq[+b.getAttribute('data-eqi')]||[])[+b.getAttribute('data-colab')];
+        if(nome==null || !c) return;
+        var ms = rdoEqMembros(rdo, nome), k = rdoEqChave(c.nome);
+        var i = -1; ms.forEach(function(m, x){ if(rdoEqChave(m.nome)===k) i = x; });
+        if(i>=0) ms.splice(i, 1); else ms.push({ nome:c.nome, funcao:c.funcao||'', departamento:c.departamento||'' });
+        rdo._eqMexeu = rdo._eqMexeu || {}; rdo._eqMexeu[nome] = true;
+        rdoAtualizarMaoDeObra(rdo);
+        var idx = rdo.equipesDia.indexOf(nome);
+        var integr = document.querySelector('[data-eqintegr="'+idx+'"]'); if(integr) integr.innerHTML = rdoEqIntegrantesTxt(rdo, nome);
+        renderRdoColaboradores(rdo);
       });
     });
     var bs = box.querySelector('#rdoColabBusca');
-    if(bs) bs.addEventListener('input', function(){
-      var ts = rdoNorm(bs.value).split(/\s+/).filter(Boolean);
-      box.querySelectorAll('[data-colab]').forEach(function(b){ var t = b.getAttribute('data-busca')||''; b.style.display = (!ts.length || b.classList.contains('on') || ts.every(function(x){ return t.indexOf(x)!==-1; })) ? '' : 'none'; });
+    var filtra = function(v){
+      var ts = rdoNorm(v).split(/\s+/).filter(Boolean);
+      box.querySelectorAll('.colab-chip[data-eqi]').forEach(function(b){ var t = b.getAttribute('data-busca')||''; b.style.display = (!ts.length || b.classList.contains('on') || ts.every(function(x){ return t.indexOf(x)!==-1; })) ? '' : 'none'; });
+    };
+    if(bs){ bs.addEventListener('input', function(){ box._busca = bs.value; filtra(bs.value); }); if(buscaAnt) filtra(buscaAnt); }
+  }
+  function rdoEqIntegrantesTxt(rdo, nome){
+    var ms = rdoEqMembros(rdo, nome);
+    return 'Integrantes: '+(ms.length ? ms.map(function(m){ return esc(m.nome); }).join(', ') : '<span style="color:#C6433F;">marque os colaboradores desta equipe no item 3</span>');
+  }
+  // ---- "Deseja carregar as equipes do RDO anterior?" (só equipes e colaboradores; nada do dia anterior)
+  function rdoPerguntarEquipesAnteriores(rdo){
+    var root = document.getElementById('modal-root');
+    if(!root || !rdo) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'overlay';
+    wrap.innerHTML = '<div class="modal" role="dialog" aria-modal="true" aria-labelledby="rdoPergEqTit">'+
+      '<h3 id="rdoPergEqTit">Novo RDO</h3>'+
+      '<p>Deseja carregar as equipes do RDO anterior?</p>'+
+      '<p class="hint" style="margin:-4px 0 14px;">Vêm só as equipes (EQ1, EQ2…) e os colaboradores de cada uma, do último RDO da mesma obra. Data, serviços, quantidades, clima, ocorrências e observações não são copiados.</p>'+
+      '<div class="row"><button class="btn ghost" data-act="nao">Não</button><button class="btn primary" data-act="sim">Sim, carregar</button></div>'+
+    '</div>';
+    root.appendChild(wrap);
+    var fechar = function(sim){
+      wrap.remove();
+      if(rdoFormAtual!==rdo) return;
+      rdo._carregarAnterior = !!sim;
+      if(!sim) return;
+      var obraId = (document.getElementById('rdoObra')||{}).value || '';
+      if(obraId) rdoCarregarEquipesAnteriores(rdo, obraId); else renderRdoColaboradores(rdo);
+    };
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap){ fechar(false); return; }
+      var act = e.target.getAttribute && e.target.getAttribute('data-act');
+      if(act==='nao') fechar(false);
+      if(act==='sim') fechar(true);
     });
+    var bSim = wrap.querySelector('[data-act="sim"]'); if(bSim) try{ bSim.focus(); }catch(e){}
+  }
+  // Último RDO da obra (o mais recente pela data; não exemplo, não excluído). Busca no
+  // banco (vale depois de atualizar a página); sem internet usa a lista carregada.
+  function rdoUltimoDaObra(obraId, excluirId){
+    var escolhe = function(rows){
+      return (rows||[]).filter(function(r){ return r && r.id && r.id!==excluirId && !r.exemplo && !r.deleted_at; })
+        .sort(function(a, b){ return String(b.data||'').localeCompare(String(a.data||'')) || String(b.created_at||'').localeCompare(String(a.created_at||'')); })[0] || null;
+    };
+    var local = function(){
+      return escolhe((state.rdos||[]).filter(function(r){ return r.obraId===obraId; }).map(function(r){
+        return { id:r.id, data:r.data, created_at:r.createdAt, exemplo:r.exemplo, deleted_at:r.deletedAt, equipes_dia:r.equipesDia, numero_equipe:r.numeroEquipe, mao_de_obra:r.maoDeObra };
+      }));
+    };
+    if(!supabaseClient || (typeof navigator!=='undefined' && navigator.onLine===false)) return Promise.resolve(local());
+    return Promise.resolve(supabaseClient.from('rdos').select('id, data, created_at, exemplo, deleted_at, equipes_dia, numero_equipe, mao_de_obra')
+      .eq('obra_id', obraId).is('deleted_at', null).order('data', {ascending:false}).order('created_at', {ascending:false}).limit(10))
+      .then(function(res){ return (res && !res.error) ? escolhe(res.data) : local(); }, function(){ return local(); });
+  }
+  function rdoCarregarEquipesAnteriores(rdo, obraId){
+    if(rdoFormAtual!==rdo) return;
+    rdo._carregando = true; renderRdoColaboradores(rdo);
+    rdoUltimoDaObra(obraId, rdo.id).then(function(row){
+      rdo._carregando = false;
+      if(rdoFormAtual!==rdo) return;
+      var agora = (document.getElementById('rdoObra')||{}).value || '';
+      if(agora && agora!==obraId){ renderRdoColaboradores(rdo); return; }   // obra trocada enquanto carregava
+      rdo._carregadoDe = obraId;
+      rdoAplicarEquipesAnteriores(rdo, row, obraId);
+      refreshEquipesDetalheUI(rdo);
+      renderRdoColaboradores(rdo);
+    });
+  }
+  function rdoAplicarEquipesAnteriores(rdo, row, obraId){
+    if(!row){ toast('Esta obra ainda não tem RDO anterior. Marque as equipes do dia normalmente.', 'info'); return; }
+    var nomesAnt = (row.equipes_dia||[]).filter(function(n){ return n && n!==RDO_GRUPO; });
+    if(!nomesAnt.length){ toast('O RDO anterior desta obra ('+fmtDate(row.data)+') foi feito sem equipes. Marque as equipes do dia normalmente.', 'info'); return; }
+    if(rdoServLinhasDoRdo(rdo).length){ toast('Já há serviços lançados neste RDO: as equipes não foram trocadas.', 'info'); return; }
+    var ativas = rdoEqAtivas();
+    var usar = nomesAnt.filter(function(n){ return ativas.indexOf(n)!==-1; });
+    var foraEq = nomesAnt.filter(function(n){ return ativas.indexOf(n)===-1; });
+    var permitidos = rdoColabsDaObra(obraId);
+    var porChave = {}; permitidos.forEach(function(c){ porChave[rdoEqChave(c.nome)] = c; });
+    var ne = row.numero_equipe||[], todos = row.equipes_dia||[];
+    var mo = (row.mao_de_obra||[]).filter(function(m){ return m && m.nome; });
+    var fora = 0;
+    rdo.equipesDia = []; rdo.equipesDetalhe = []; rdo.eqMembros = {}; rdo.moAvulsos = []; rdo.servicosSemEquipe = [];
+    usar.forEach(function(n){
+      rdoEqLigar(rdo, n, true);
+      var reg = ne.filter(function(x){ return x && x.nomeEquipe===n; })[0] || ne[todos.indexOf(n)] || null;
+      var integ = (reg && Array.isArray(reg.integrantes)) ? reg.integrantes : [];
+      if(!(reg && reg.fonte==='rdo')){
+        // RDO antes desta versão: só vale quem estava na mão de obra do dia
+        var noDia = {}; mo.forEach(function(m){ noDia[rdoEqChave(m.nome)] = 1; });
+        integ = integ.filter(function(m){ return m && noDia[rdoEqChave(m.nome)]; });
+        if(!integ.length && nomesAnt.length===1) integ = mo;
+      }
+      var ms = rdoEqMembros(rdo, n);
+      integ.forEach(function(m){
+        var c = m && porChave[rdoEqChave(m.nome)];
+        if(!c){ if(m && m.nome) fora++; return; }
+        if(!ms.some(function(x){ return rdoEqChave(x.nome)===rdoEqChave(c.nome); })) ms.push({ nome:c.nome, funcao:c.funcao||'', departamento:c.departamento||'' });
+      });
+    });
+    rdoAtualizarMaoDeObra(rdo);
+    var resumo = (rdo.equipesDia||[]).map(function(n, i){ return rdoEqLabel(n, rdoEqCandidatas(rdo).indexOf(n))+' ('+rdoEqMembros(rdo, n).length+')'; }).join(', ');
+    toast('Equipes do RDO de '+fmtDate(row.data)+' carregadas: '+(resumo || 'nenhuma ativa')+'. Confira e ajuste antes de salvar.'+
+      (foraEq.length ? ' Equipe inativa ficou de fora: '+foraEq.join(', ')+'.' : '')+
+      (fora ? ' '+fora+' colaborador(es) que não estão mais ativos nesta obra ficaram de fora.' : ''), 'ok');
+  }
+  function rdoObraMudou(rdo){
+    var obraId = (document.getElementById('rdoObra')||{}).value || '';
+    if(rdo._carregarAnterior && obraId && rdo._carregadoDe!==obraId && !rdo.id) rdoCarregarEquipesAnteriores(rdo, obraId);
   }
   function rdoEquipeServResumoHtml(d){
     var cs = (d && d.concluidos || []).filter(function(c){ return c && c.catalogoItemId; });
-    if(!cs.length) return '<b>Serviços desta equipe:</b> nenhum ainda — marque na planilha (item 4).';
-    return '<b>Serviços desta equipe:</b> '+cs.map(function(c){ var it = catalogoItemById(c.catalogoItemId); return esc(it ? ((it.itemNumero ? it.itemNumero+' ' : '')+it.descricao) : 'serviço')+' — '+(Number(c.quantidade)>0 ? esc(fmtQtd(c.quantidade)+(it && it.unidade ? ' '+it.unidade : '')) : '<span style="color:#C6433F;font-weight:700;">sem quantidade</span>'); }).join(' · ');
+    if(!cs.length) return '<b>Produção da equipe hoje:</b> nenhum serviço ainda — lance a quantidade na planilha (item 4), na linha desta equipe.';
+    return '<b>Produção da equipe hoje:</b> '+cs.map(function(c){ var it = catalogoItemById(c.catalogoItemId); return esc(it ? ((it.itemNumero ? it.itemNumero+' ' : '')+it.descricao) : 'serviço')+' — '+(Number(c.quantidade)>0 ? esc(fmtQtd(c.quantidade)+(it && it.unidade ? ' '+it.unidade : '')) : '<span style="color:#C6433F;font-weight:700;">sem quantidade</span>'); }).join(' · ');
   }
   // ---------------------------------------------------------------
   // v35 — Planilha completa no RDO. Cada serviço marcado vira uma linha
@@ -8566,14 +8835,24 @@
       var cab = '';
       if(g!==grupo){ grupo = g; cab = '<div class="serv-grupo">'+esc(g)+'</div>'; }
       var ks = porItem[o.value] || [];
-      var slots = ks.length ? ks.map(function(k){ return rdoServSlotHtml(o, k, linhas[k], equipes, canValor); }).join('') : rdoServSlotHtml(o, -1, null, equipes, canValor);
+      var slots;
+      if(multi){
+        var usados = {};
+        slots = equipes.map(function(n, e){
+          var k = ks.filter(function(x){ return !usados[x] && linhas[x].eq===e; })[0];
+          if(k!=null) usados[k] = 1;
+          return rdoServSlotHtml(o, k!=null ? k : -1, k!=null ? linhas[k] : null, equipes, canValor, e);
+        }).join('') + ks.filter(function(x){ return !usados[x]; }).map(function(k){ var l = linhas[k]; return rdoServSlotHtml(o, k, l, equipes, canValor, (l.eq>=0 && l.eq<equipes.length) ? l.eq : null); }).join('');
+      } else {
+        slots = ks.length ? ks.map(function(k){ return rdoServSlotHtml(o, k, linhas[k], equipes, canValor); }).join('') : rdoServSlotHtml(o, -1, null, equipes, canValor);
+      }
       return cab+'<div class="serv-item'+(ks.length?' marcado':'')+'" data-svitem="'+esc(o.value)+'" data-busca="'+esc(rdoNorm(o.label+' '+(o.categoria||'')))+'">'+
         '<div class="sv-desc">'+esc(o.label)+(o.contratado ? ' <span class="sv-contr">contratado</span>' : '')+(o.info?'<div class="hint" style="margin:0;font-size:11px;">'+esc(o.info)+'</div>':'')+'</div>'+
         '<div class="sv-slots">'+slots+'</div>'+
-        (multi ? '<button type="button" class="link-btn sv-add" data-svadd="'+esc(o.value)+'">+ outra equipe</button>' : '')+
       '</div>';
     }).join('');
-    html += '<p class="hint" style="margin:0 0 8px;">Digite a <b>quantidade feita hoje</b> no serviço'+(multi ? ' e escolha a equipe que fez' : '')+'. Serviço sem quantidade não entra no RDO.</p>'+
+    if(!equipes.length) html += '<p class="serv-alerta">Marque no item 3 as equipes que trabalharam hoje: a produção é lançada por equipe.</p>';
+    html += '<p class="hint" style="margin:0 0 8px;">Digite a <b>quantidade feita hoje</b>'+(multi ? ' por cada equipe, na linha dela (EQ1, EQ2…)' : (equipes.length===1 ? ' pela '+esc(rdoEqLabel(equipes[0], rdoEqCandidatas(rdo).indexOf(equipes[0]))) : ' no serviço'))+'. Serviço sem quantidade não entra no RDO.</p>'+
       '<input type="search" class="serv-busca" id="rdoServBusca" placeholder="Buscar serviço na planilha ('+opts.length+' itens)…" aria-label="Buscar serviço na planilha" value="'+esc(buscaAnt)+'">'+
       '<div class="checklist-wrap serv-lista" id="rdoServLista">'+itens+'<div class="serv-nada">Nenhum serviço da planilha com esse nome.</div></div>'+
       '<div id="rdoResumoServicos" class="rdo-resumo-serv">'+rdoResumoServicosFormHtml(rdo)+'</div>';
@@ -8585,11 +8864,12 @@
     rdoServWire(rdo, box);
     atualizarRdoResumoServicos(rdo);
   }
-  function rdoServSlotHtml(o, k, l, equipes, canValor){
+  function rdoServSlotHtml(o, k, l, equipes, canValor, eqFixo){
     var multi = equipes.length>1;
-    var eqSel = multi ? '<select class="sv-eq'+(l && l.eq<0 ? ' sem-eq' : '')+'" aria-label="Equipe que fez"><option value="">Equipe…</option>'+
-      equipes.map(function(n, i){ return '<option value="'+i+'"'+(l && l.eq===i ? ' selected' : '')+'>'+esc(n)+'</option>'; }).join('')+'</select>' : '';
-    return '<div class="sv-slot" data-k="'+k+'">'+eqSel+
+    var fixo = eqFixo!=null && eqFixo>=0 && eqFixo<equipes.length;
+    var eqSel = fixo ? '<span class="sv-eqtag" title="'+esc(equipes[eqFixo])+'">'+esc(rdoEqLabel(equipes[eqFixo], eqFixo))+'</span>' : (multi ? '<select class="sv-eq'+(l && l.eq<0 ? ' sem-eq' : '')+'" aria-label="Equipe que fez"><option value="">Equipe…</option>'+
+      equipes.map(function(n, i){ return '<option value="'+i+'"'+(l && l.eq===i ? ' selected' : '')+'>'+esc(rdoEqLabel(n, i))+'</option>'; }).join('')+'</select>' : '');
+    return '<div class="sv-slot" data-k="'+k+'"'+(fixo ? ' data-eq="'+eqFixo+'"' : '')+'>'+eqSel+
       '<span class="conc-qtd"><input type="number" step="any" min="0" inputmode="decimal" class="sv-qtd" value="'+(l && l.quantidade!=null ? esc(String(l.quantidade)) : '')+'" placeholder="Qtd." aria-label="Quantidade feita hoje">'+(o.unidade ? '<span class="conc-un">'+esc(o.unidade)+'</span>' : '')+'</span>'+
       (canValor ? '<span class="conc-val sv-val"></span>' : '')+
       (l && l.tipo==='Pendente' ? '<span class="tag-pend">pendente</span>' : '')+
@@ -8635,7 +8915,7 @@
         var n = v==='' ? null : Number(v);
         if(n!=null && n>0){
           if(!slot._linha){
-            slot._linha = { itemId:itemId, eq: equipes.length===1 ? 0 : (sel && sel.value!=='' ? parseInt(sel.value, 10) : -1), tipo:CONCLUIDO_TIPO_OPTS[0], quantidade:n, qtdAuto:false };
+            slot._linha = { itemId:itemId, eq: slot.hasAttribute('data-eq') ? parseInt(slot.getAttribute('data-eq'), 10) : (equipes.length===1 ? 0 : (sel && sel.value!=='' ? parseInt(sel.value, 10) : -1)), tipo:CONCLUIDO_TIPO_OPTS[0], quantidade:n, qtdAuto:false };
             linhas.push(slot._linha);
           } else { slot._linha.quantidade = n; slot._linha.qtdAuto = false; }
         } else if(slot._linha){
@@ -8692,7 +8972,7 @@
       cents += l.cents;
       var qtdTxt = l.qtd!=null ? esc(fmtQtd(l.qtd)+(l.unidade ? ' '+l.unidade : '')) : '<span class="falta">falta a quantidade</span>';
       return '<div class="rr-linha"><div class="rr-nome"><b>'+esc(rdoServicoNome(l))+'</b>'+(l.tipo==='Pendente' ? ' <span class="tag-pend">pendente</span>' : '')+
-        '<div class="rr-sub">'+(l.equipe===RDO_GRUPO ? '' : esc(l.equipe)+' · ')+qtdTxt+(canValor && l.qtd!=null ? ' × '+esc(fmtMoeda(l.vu)) : '')+'</div></div>'+
+        '<div class="rr-sub">'+(l.equipe===RDO_GRUPO ? '' : esc(rdoEqLabel(l.equipe, l.idx))+' · ')+qtdTxt+(canValor && l.qtd!=null ? ' × '+esc(fmtMoeda(l.vu)) : '')+'</div></div>'+
         '<div class="rr-tot">'+(canValor ? (l.qtd!=null ? esc(fmtMoeda(l.cents/100)) : '—') : qtdTxt)+'</div></div>';
     }).join('')+'</div>';
     if(canValor) h += '<div class="rr-total"><span>Valor total do RDO</span><b>'+esc(fmtMoeda(cents/100))+'</b></div>';
@@ -8800,12 +9080,14 @@
   }
   function numeroEquipeCompute(rdo){
     return (rdo.equipesDia||[]).map(function(nome, i){
-      var eq = state.equipes.find(function(e){ return e.nome===nome; });
+      var ant = (rdo.numeroEquipe||[]).filter(function(x){ return x && x.nomeEquipe===nome; })[0] || null;
+      var integrantes = ((rdo.eqMembros && rdo.eqMembros[nome]) || []).filter(function(m){ return m && m.nome; }).map(function(m){ return {nome:m.nome, funcao:m.funcao||''}; });
       var counts = {};
-      var integrantes = equipeColaboradores(nome).map(function(c){ return {nome:c.nome, funcao:c.funcao}; });
-      integrantes.forEach(function(c){ counts[c.funcao] = (counts[c.funcao]||0) + 1; });
+      integrantes.forEach(function(c){ var f = c.funcao || 'Sem função'; counts[f] = (counts[f]||0) + 1; });
       var funcoes = Object.keys(counts).map(function(f){ return {funcao:f, qtd:counts[f]}; });
-      return { numero:(i+1), nomeEquipe:nome, encarregado: eq?(eq.encarregado||''):'', funcoes:funcoes, integrantes:integrantes };
+      // RDO antigo aberto para editar: se a composição desta equipe não foi mexida, grava como estava
+      if(ant && !ant.fonte && !(rdo._eqMexeu && rdo._eqMexeu[nome])) return Object.assign({}, ant, { numero:(i+1) });
+      return { numero:(i+1), nomeEquipe:nome, encarregado: ant ? (ant.encarregado||'') : '', funcoes:funcoes, integrantes:integrantes, fonte:'rdo' };
     });
   }
   function wireEquipeChecklist(rdo){
@@ -9003,7 +9285,7 @@
         '</label>'+
         (m && equipes.length>1 ? ('<select data-pveq="'+esc(it.servicoId)+'"'+(m.idx<0?' style="border-color:#C6433F;"':'')+'>'+
               (m.idx<0 ? '<option value="-1" selected>Equipe que concluiu…</option>' : '')+
-              equipes.map(function(nome, i){ return '<option value="'+i+'"'+(m.idx===i?' selected':'')+'>'+esc(nome)+'</option>'; }).join('')+
+              equipes.map(function(nome, i){ return '<option value="'+i+'"'+(m.idx===i?' selected':'')+'>'+esc(rdoEqLabel(nome, i))+'</option>'; }).join('')+
              '</select>') : '')+
         (m && mapaRefsTrecho(it.trecho).length>=2 ? (function(){
           var outrosM = rdoMetrosEmOutrosRdos(obraId, rdo.id, it.servicoId);
@@ -9074,21 +9356,26 @@
       rdo.ocorrencias = (rdo.ocorrencias||[]).filter(function(o){ return !ehSp(o); });
       rdo.servicosSemEquipe = [];
       rdo.maoDeObra = rdo.maoDeObra || [];
-      // v38: sem equipes no RDO — tudo num grupo único do dia (RDO antigo com equipes é juntado aqui ao editar)
-      var ens = rdo.equipesDia||[], eds = rdo.equipesDetalhe||[];
-      if(!(ens.length===1 && ens[0]===RDO_GRUPO)){
-        var g = equipeDetalheBlank(); g.pvsExecutados = [];
-        ens.forEach(function(n, i){
-          var d = eds[i] || {};
-          g.concluidos = g.concluidos.concat((d.concluidos||[]).filter(function(c){ return c && c.catalogoItemId; }));
-          g.pvsExecutados = g.pvsExecutados.concat(d.pvsExecutados||[]);
-          if(d.atividades) g.atividades = (g.atividades ? g.atividades+'\n\n' : '') + d.atividades;
-          g.resumoAtividades = g.resumoAtividades.concat(d.resumoAtividades||[]);
-          g.resumoItens = g.resumoItens.concat(d.resumoItens||[]);
-          if(!g.frente && d.frente) g.frente = d.frente;
-          if(d.status) g.status = d.status;
-        });
-        rdo.equipesDia = [RDO_GRUPO]; rdo.equipesDetalhe = [g];
+      // v41: as equipes do RDO ficam como foram gravadas (não junta mais). Composição do dia
+      // vem de numero_equipe[i].integrantes; RDO antigo sem ela usa a mão de obra do dia.
+      rdo.eqMembros = {}; rdo.moAvulsos = [];
+      var ne = rdo.numeroEquipe||[], ens = rdo.equipesDia||[];
+      var mo = (rdo.maoDeObra||[]).filter(function(m){ return m && m.nome; });
+      var noDia = {}; mo.forEach(function(m){ noDia[rdoEqChave(m.nome)] = 1; });
+      var copia = function(m){ return { nome:m.nome, funcao:m.funcao||'', departamento:m.departamento||'' }; };
+      ens.forEach(function(n, i){
+        if(n===RDO_GRUPO){ rdo.eqMembros[n] = mo.map(copia); return; }
+        var reg = ne.filter(function(x){ return x && x.nomeEquipe===n; })[0] || ne[i] || null;
+        var integ = (reg && Array.isArray(reg.integrantes)) ? reg.integrantes.filter(function(m){ return m && m.nome; }) : [];
+        if(!(reg && reg.fonte==='rdo')) integ = integ.filter(function(m){ return noDia[rdoEqChave(m.nome)]; });
+        rdo.eqMembros[n] = integ.map(copia);
+      });
+      var naEq = {}; Object.keys(rdo.eqMembros).forEach(function(k){ rdo.eqMembros[k].forEach(function(m){ naEq[rdoEqChave(m.nome)] = 1; }); });
+      var sobra = mo.filter(function(m){ return !naEq[rdoEqChave(m.nome)]; });
+      if(sobra.length){
+        var vazias = ens.filter(function(n){ return !rdo.eqMembros[n].length; });
+        if(ens.length===1 && vazias.length===1) rdo.eqMembros[vazias[0]] = sobra.map(copia);
+        else rdo.moAvulsos = sobra.map(copia);
       }
     })();
     var isLockedEdit = editing && rdo.status !== 'rascunho';
@@ -9123,13 +9410,18 @@
       '</div>'+
 
       '<div class="card" id="rdoColabCard">'+
-        '<h2><span class="idx">3</span>Colaboradores presentes <span class="tag-obrig">obrigatório</span></h2>'+
-        '<p class="hint">Toque no nome de cada colaborador que trabalhou hoje (toque de novo para desmarcar).</p>'+
+        '<h2><span class="idx">3</span>Equipes e colaboradores <span class="tag-obrig">obrigatório</span></h2>'+
+        '<p class="hint">Marque as equipes que trabalharam hoje (EQ1, EQ2, EQ3…) e, em cada uma, toque nos colaboradores (toque de novo para desmarcar). A composição vale só para este RDO.</p>'+
         '<div id="rdoColabBox"></div>'+
-        '<div class="grid3" style="margin-top:16px;">'+
-          '<div class="field"><label>Gestão — ADM</label><input type="number" min="0" step="1" id="rdoGestaoAdm" value="'+esc(rdo.gestao&&rdo.gestao.adm!=null?rdo.gestao.adm:'')+'"></div>'+
-          '<div class="field"><label>Gestão — ENG</label><input type="number" min="0" step="1" id="rdoGestaoEng" value="'+esc(rdo.gestao&&rdo.gestao.eng!=null?rdo.gestao.eng:'')+'"></div>'+
-          '<div class="field"><label>Total (Gestão)</label><input type="text" id="rdoGestaoTotal" value="'+((parseFloat(rdo.gestao&&rdo.gestao.adm)||0)+(parseFloat(rdo.gestao&&rdo.gestao.eng)||0))+'" readonly></div>'+
+        '<div class="gestao-box">'+
+          '<h3 class="gestao-tit">Gestão <span id="rdoGestaoTotal" class="gestao-total"></span></h3>'+
+          '<div class="gestao-grid">'+
+            '<div class="field"><label for="rdoGestaoAddAdm">Gestão — ADM</label><div class="gestao-lista" id="rdoGestaoListaAdm"></div>'+
+              '<div class="gestao-add"><input type="text" id="rdoGestaoAddAdm" list="rdoGestaoSug" maxlength="80" placeholder="Nome e Enter"><button type="button" class="btn ghost sm" data-gestaoadd="adm">+ Adicionar</button></div></div>'+
+            '<div class="field"><label for="rdoGestaoAddEng">Gestão — ENG</label><div class="gestao-lista" id="rdoGestaoListaEng"></div>'+
+              '<div class="gestao-add"><input type="text" id="rdoGestaoAddEng" list="rdoGestaoSug" maxlength="80" placeholder="Nome e Enter"><button type="button" class="btn ghost sm" data-gestaoadd="eng">+ Adicionar</button></div></div>'+
+          '</div>'+
+          '<datalist id="rdoGestaoSug"></datalist>'+
         '</div>'+
       '</div>'+
 
@@ -9201,7 +9493,7 @@
     populateObraSelect();
     document.getElementById('rdoObra').value = rdo.obraId||'';
     atualizarRdoPlanilhaInfo();
-    document.getElementById('rdoObra').addEventListener('change', function(){ atualizarRdoPlanilhaInfo(); refreshEquipesDetalheUI(rdo); renderRdoColaboradores(rdo); });
+    document.getElementById('rdoObra').addEventListener('change', function(){ atualizarRdoPlanilhaInfo(); refreshEquipesDetalheUI(rdo); renderRdoColaboradores(rdo); rdoObraMudou(rdo); });
 
     document.getElementById('rdoClimaManhaTempo').addEventListener('input', function(){ rdo.climaManha = rdo.climaManha||{}; rdo.climaManha.tempo = this.value; });
     document.getElementById('rdoClimaManhaCond').addEventListener('change', function(){ rdo.climaManha = rdo.climaManha||{}; rdo.climaManha.condicao = this.value; });
@@ -9210,8 +9502,7 @@
 
     wireEquipeChecklist(rdo);
     renderRdoColaboradores(rdo);
-    document.getElementById('rdoGestaoAdm').addEventListener('input', function(){ rdo.gestao = rdo.gestao||{}; rdo.gestao.adm = this.value; var t=document.getElementById('rdoGestaoTotal'); if(t) t.value = (parseFloat(rdo.gestao.adm)||0)+(parseFloat(rdo.gestao.eng)||0); });
-    document.getElementById('rdoGestaoEng').addEventListener('input', function(){ rdo.gestao = rdo.gestao||{}; rdo.gestao.eng = this.value; var t=document.getElementById('rdoGestaoTotal'); if(t) t.value = (parseFloat(rdo.gestao.adm)||0)+(parseFloat(rdo.gestao.eng)||0); });
+    renderRdoGestao(rdo);
     wireEquipesDetalhe(rdo);
     renderRdoPvsProjeto(rdo);
     renderRdoServicosPlanilha(rdo);
@@ -9313,9 +9604,16 @@
       var servBoxV = document.getElementById('rdoServicosBox');
       var linhasV = rdoServLinhasDoRdo(rdo);
       var semProdV = !!rdo.semProducao;
+      rdoAtualizarMaoDeObra(rdo);
+      var eqsV = rdo.equipesDia||[];
+      if(!eqsV.length){ falhaRdo('Marque no item 3 as equipes que trabalharam hoje (EQ1, EQ2…) e os colaboradores de cada uma.', document.getElementById('rdoColabCard')); return; }
+      if(!(rdo.moAvulsos||[]).length){
+        var eqVazia = eqsV.filter(function(n){ return !rdoEqMembros(rdo, n).length; })[0];
+        if(eqVazia){ falhaRdo('Marque os colaboradores da '+rdoEqLabel(eqVazia, rdoEqCandidatas(rdo).indexOf(eqVazia))+' (item 3) ou desmarque a equipe.', document.getElementById('rdoColabCard')); return; }
+      }
       if(!(rdo.maoDeObra||[]).some(function(m){ return m && m.nome; })){
         falhaRdo((state.colaboradores||[]).some(function(c){ return c.ativo!==false; })
-          ? 'Marque quem trabalhou hoje (item 3 — Colaboradores presentes). Sem colaborador o RDO não é salvo.'
+          ? 'Marque os colaboradores de cada equipe (item 3 — Equipes e colaboradores). Sem colaborador o RDO não é salvo.'
           : 'Não há colaboradores cadastrados. Peça ao administrador para cadastrar em "Colaboradores" — sem colaborador o RDO não é salvo.', document.getElementById('rdoColabCard'));
         return;
       }
@@ -9392,7 +9690,17 @@
           };
         }),
         mao_de_obra: rdo.maoDeObra.filter(function(r){ return r.nome; }),
-        gestao: rdo.gestao||{},
+        gestao: (function(){
+          var g = rdo.gestao || {};
+          ['adm','eng'].forEach(function(k){
+            var inp = document.getElementById(k==='adm' ? 'rdoGestaoAddAdm' : 'rdoGestaoAddEng');
+            var pend = inp ? String(inp.value||'').replace(/\s+/g, ' ').trim() : '';
+            var ns = (g[k+'Nomes']||[]).filter(function(n){ return n && String(n).trim(); });
+            if(pend && !ns.some(function(n){ return rdoNorm(n)===rdoNorm(pend); })) ns.push(pend);
+            if(ns.length){ g[k+'Nomes'] = ns; g[k] = ns.length; }
+          });
+          return g;
+        })(),
         numero_equipe: numeroEquipeCompute(rdo),
         equipamentos: rdo.equipamentos.filter(function(r){ return r.nome; }),
         ocorrencias: rdo.ocorrencias.filter(function(r){ return r.texto; }).concat(rdo.semProducao ? [{ tipo:RDO_SEM_SERVICO, texto:String(rdo.semProducao.motivo||'').trim(), acao:'' }] : []),
@@ -9740,6 +10048,46 @@
     var tot = canValor ? '<div data-pdf-row="1" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:10px 14px;font-weight:bold;"><span style="font-size:12px;letter-spacing:.3px;text-transform:uppercase;">Valor total do RDO</span><span style="font-size:17px;color:var(--venko-yellow-deep);font-variant-numeric:tabular-nums;">'+esc(fmtMoeda(cents/100))+'</span></div>' : '';
     return rdoCard(rdoCardHead('Serviços executados neste RDO', linhas.length) + cab + corpo + tot);
   }
+  // Equipes do dia com quem trabalhou em cada uma (numero_equipe[i].integrantes)
+  function rdoEquipesEmCampoHtml(equipesDia, equipesDetalhe, numEq){
+    if(!equipesDia.length) return rdoCard(rdoCardHead('Equipes em campo', 0) + rdoEmptyMsg());
+    var total = 0;
+    var corpo = equipesDia.map(function(nome, i){
+      var ne = (numEq||[]).filter(function(x){ return x && x.nomeEquipe===nome; })[0] || (numEq||[])[i] || {};
+      var integ = (ne.integrantes||[]).filter(function(m){ return m && m.nome; });
+      var q = (equipesDetalhe[i]||{}).qtdPessoas;
+      var n = integ.length || ((q!=null && q!=='') ? Number(q)||0 : 0);
+      total += n;
+      var lab = rdoEqLabel(nome, i);
+      return '<div data-pdf-row="1" style="padding:8px 14px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
+        '<b>'+esc(lab)+'</b>'+(lab!==nome && nome!==RDO_GRUPO ? ' <span style="color:'+RDO_MUTED+';">'+esc(nome)+'</span>' : '')+(n ? ' — '+n+' pessoa(s)' : '')+
+        (integ.length ? '<div style="font-size:11.5px;margin-top:2px;">'+integ.map(function(m){ return esc(m.nome)+(m.funcao ? ' <span style="color:'+RDO_MUTED+';">('+esc(m.funcao)+')</span>' : ''); }).join(', ')+'</div>' : '')+
+      '</div>';
+    }).join('');
+    return rdoCard(rdoCardHead('Equipes em campo', equipesDia.length) + corpo + (total ? '<div data-pdf-row="1" style="padding:8px 14px;font-weight:bold;">Total: '+total+' pessoa(s)</div>' : ''));
+  }
+  // "Resumo de produção das equipes" (nome original do quadro, retirado na v33): o que cada
+  // equipe produziu no dia, serviço por serviço, na unidade do serviço (não soma unidades diferentes).
+  function rdoResumoProducaoEquipesHtml(equipesDia, equipesDetalhe){
+    var eqs = (equipesDia||[]).map(function(nome, i){ return { nome:nome, i:i, d:(equipesDetalhe||[])[i]||{} }; }).filter(function(e){ return e.nome!==RDO_GRUPO; });
+    if(!eqs.length) return '';
+    var canValor = financeiroCanAccess();
+    var corpo = eqs.map(function(e){
+      var cs = (e.d.concluidos||[]).filter(function(c){ return c && c.catalogoItemId; });
+      var linhas = cs.map(function(c){
+        var it = catalogoItemById(c.catalogoItemId), q = Number(c.quantidade);
+        var nomeS = it ? ((it.itemNumero ? it.itemNumero+' — ' : '')+it.descricao) : 'Serviço fora da tabela atual';
+        var vu = it ? (Number(it.custoUnitario)||0) : 0;
+        return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:2px 0;"><span style="min-width:0;">'+esc(nomeS)+'</span>'+
+          '<span style="white-space:nowrap;font-weight:bold;font-variant-numeric:tabular-nums;">'+(q>0 ? esc(fmtQtd(q)+(it && it.unidade ? ' '+it.unidade : '')) : '<span style="color:#C6433F;">sem qtd.</span>')+(canValor && q>0 && vu ? ' <span style="color:'+RDO_MUTED+';font-weight:normal;">· '+esc(fmtMoeda(Math.round(vu*q*100)/100))+'</span>' : '')+'</span></div>';
+      }).join('');
+      return '<div data-pdf-row="1" style="padding:10px 14px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
+        '<div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:3px;"><b>'+esc(rdoEqLabel(e.nome, e.i))+'</b>'+(canValor && cs.length ? '<span style="color:var(--venko-yellow-deep);font-weight:bold;">'+esc(fmtMoeda(computeEquipeValor(e.d)))+'</span>' : '')+'</div>'+
+        (linhas || '<div style="font-size:12px;color:'+RDO_MUTED+';">Nenhum serviço lançado para esta equipe.</div>')+
+      '</div>';
+    }).join('');
+    return rdoCard(rdoCardHead('Resumo de produção das equipes', eqs.length) + corpo);
+  }
   function rdoResumoQtdEquipeRowHtml(nome, i, d){
         var qtd = computeEquipeQtdFeita(d);
       return '<div data-pdf-row="1" style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid '+RDO_LINE_SOFT+';">'+
@@ -9773,7 +10121,9 @@
     var mo = r.maoDeObra||[];
     var moTiles = moTilesFromNominal(mo);
     var gestaoData = r.gestao||{};
-    var gestaoTiles = [{label:'ADM', value:gestaoData.adm||0}, {label:'ENG', value:gestaoData.eng||0}, {label:'Total', value:(parseFloat(gestaoData.adm)||0)+(parseFloat(gestaoData.eng)||0), total:true}];
+    var gestaoTiles = [{label:'ADM', value:gestaoQtd(gestaoData,'adm')}, {label:'ENG', value:gestaoQtd(gestaoData,'eng')}, {label:'Total', value:gestaoQtd(gestaoData,'adm')+gestaoQtd(gestaoData,'eng'), total:true}];
+    var gestaoNomesHtml = (gestaoNomes(gestaoData,'adm').length || gestaoNomes(gestaoData,'eng').length)
+      ? '<div style="padding:8px 14px 12px;line-height:1.6;">'+[['ADM','adm'],['ENG','eng']].filter(function(p){ return gestaoNomes(gestaoData,p[1]).length; }).map(function(p){ return '<b>'+p[0]+':</b> '+gestaoNomes(gestaoData,p[1]).map(esc).join(', '); }).join('<br>')+'</div>' : '';
     var equipesDia = r.equipesDia||[];
     var equipesDetalhe = r.equipesDetalhe||[];
     var numEq = r.numeroEquipe||[];
@@ -9835,9 +10185,9 @@
         )
       ) +
 
-      (grupoUnico ? rdoCard(rdoCardHead('Colaboradores presentes', mo.filter(function(m){ return m && m.nome; }).length) + (mo.some(function(m){ return m && m.nome; }) ? '<div style="padding:10px 14px;line-height:1.6;">'+mo.filter(function(m){ return m && m.nome; }).map(function(m){ return '<b>'+esc(m.nome)+'</b>'+(m.funcao ? ' <span style="color:'+RDO_MUTED+';">— '+esc(m.funcao)+'</span>' : ''); }).join('<br>')+'</div>' : rdoEmptyMsg())) : rdoCard(rdoCardHead('Equipes em campo', equipesDia.length) + (equipesDia.length ? '<div style="padding:10px 14px;">'+equipesDia.map(function(nome, i){ var q = (equipesDetalhe[i]||{}).qtdPessoas; return esc(nome)+((q!=null && q!=='') ? ' — '+esc(String(q))+' pessoa(s)' : ''); }).join('<br>')+(equipesDia.some(function(n, i){ var q = (equipesDetalhe[i]||{}).qtdPessoas; return q!=null && q!==''; }) ? '<div style="margin-top:6px;font-weight:bold;">Total: '+equipesDia.reduce(function(s, n, i){ return s + (Number((equipesDetalhe[i]||{}).qtdPessoas)||0); }, 0)+' pessoa(s)</div>' : '')+'</div>' : rdoEmptyMsg()))) +
+      (grupoUnico ? rdoCard(rdoCardHead('Colaboradores presentes', mo.filter(function(m){ return m && m.nome; }).length) + (mo.some(function(m){ return m && m.nome; }) ? '<div style="padding:10px 14px;line-height:1.6;">'+mo.filter(function(m){ return m && m.nome; }).map(function(m){ return '<b>'+esc(m.nome)+'</b>'+(m.funcao ? ' <span style="color:'+RDO_MUTED+';">— '+esc(m.funcao)+'</span>' : ''); }).join('<br>')+'</div>' : rdoEmptyMsg())) : rdoEquipesEmCampoHtml(equipesDia, equipesDetalhe, numEq)) +
 
-      rdoCard(rdoCardHead('Gestão') + rdoTileGridHtml(gestaoTiles,3)) +
+      rdoCard(rdoCardHead('Gestão') + rdoTileGridHtml(gestaoTiles,3) + gestaoNomesHtml) +
 
       (grupoUnico ? (function(){
         var d0 = equipesDetalhe[0]||{}, pvs = (d0.pvsExecutados||[]).filter(function(p){ return p && (p.trecho||p.codigo); });
@@ -9847,6 +10197,7 @@
           (pvs.length ? '<div style="padding:'+(d0.atividades?'0':'10px')+' 14px 10px;"><b>PVs/trechos do mapeamento executados:</b> '+pvs.map(function(p){ var mt = (p.metros!=null && Number(p.metros)>0) ? Number(p.metros) : null; return esc(p.trecho||p.codigo)+(mt!=null ? ' — '+esc(mapaFmtM(mt)) : (mapaRefsTrecho(p.trecho).length>=2 ? ' — trecho todo' : ''))+(p.servico?' <span style="color:'+RDO_MUTED+';">('+esc(p.servico)+')</span>':''); }).join(' · ')+'</div>' : ''));
       })() : rdoCard(rdoCardHead('Atividades por equipe', equipesDia.length) + (equipesDia.length ? equipesDia.map(function(nome,i){ return rdoEquipeDetalheRowHtml(nome, i, equipesDetalhe[i]||{}, numEq[i]||{}); }).join('') : rdoEmptyMsg()))) +
 
+      rdoResumoProducaoEquipesHtml(equipesDia, equipesDetalhe) +
       rdoServicosExecutadosCardHtml(equipesDia, equipesDetalhe, r.ocorrencias||[]) +
 
       rdoCard(rdoCardHead('Equipamentos', totalEq) + (eqTiles.length ? rdoTileGridHtml(eqTiles,6) : rdoEmptyMsg())) +
