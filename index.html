@@ -3967,11 +3967,12 @@
       if(svsProj.length){
         var comPos = svsProj.filter(function(s){ return s.latitude!=null && s.longitude!=null; });
         var pelaCoord = comPos.filter(function(s){ return /coordenada_projeto/.test(String(s.geoMetodo||'')); });
+        var pelaGrade = comPos.filter(function(s){ return s.geoMetodo==='grade_folha'; });
         var nPv = svsProj.filter(function(s){ var r = mapaRefsTrecho(s.trecho); return r.length===1; }).length;
         var trechos = svsProj.filter(function(s){ return mapaRefsTrecho(s.trecho).length>=2; });
         var metros = trechos.reduce(function(a, s){ return a + (Number(s.comprimento)||0); }, 0);
         partes.push('Serviços: '+svsProj.length);
-        partes.push('No mapa: '+comPos.length+' de '+svsProj.length+(pelaCoord.length ? ' ('+pelaCoord.length+' pela coordenada do projeto)' : ''));
+        partes.push('No mapa: '+comPos.length+' de '+svsProj.length+(pelaCoord.length ? ' ('+pelaCoord.length+' pela coordenada do projeto)' : '')+(pelaGrade.length ? ' ('+pelaGrade.length+' medidos no desenho pela grade de coordenadas — aproximados)' : ''));
         if(nPv || trechos.length) partes.push('Rede: '+nPv+' PV(s) e '+trechos.length+' trecho(s)'+(metros>0 ? ' · '+mapaFmtM(metros) : ''));
         if(metros>0){
           var av = avancoPorServico(p.obraId);
@@ -4004,6 +4005,9 @@
         if(!gr.crs && gr.leituras_brutas>0) partes.push('Coordenadas: sistema de referência NÃO identificado — PVs pendentes de validação');
         else partes.push('Coordenadas do projeto: '+gr.pontos_validados+' conferida(s), '+((gr.pontos_pendentes||[]).length)+' a validar, '+((gr.pontos_conflito||[]).length)+' em conflito, '+((gr.pontos_sem_coordenada||[]).length)+' sem coordenada'+(gr.crs?' ('+gr.crs+(gr.crs_origem&&/presumido/.test(gr.crs_origem)?', datum presumido':'')+')':''));
       }
+      if(gr && gr.folha_imagem && gr.folha_imagem.folhas) gr.folha_imagem.folhas.forEach(function(f){
+        partes.push(f.erro ? 'Folha '+f.pagina+' em imagem: '+f.erro : 'Folha '+f.pagina+' em imagem (sem texto): grade '+(f.grade ? f.grade.passo_m+' m' : '')+' lida, '+f.pvs+' ponto(s) posicionado(s) pelo desenho (±'+f.precisao_m+' m)'+((f.conferencia_caixas||[]).length ? ', conferido com '+f.conferencia_caixas.length+' coordenada(s) impressa(s)' : ''));
+      });
       if(gr && gr.auditoria) partes.push('Pontos suspeitos (enviados para revisão): '+(gr.auditoria.duplicados||[]).length+' com coordenada repetida, '+(gr.auditoria.longe||[]).length+' longe da obra, '+(gr.auditoria.isolados||[]).length+' isolado(s)');
       if(gr && gr.ruas && gr.ruas.divergentes) partes.push('Ruas: '+gr.ruas.divergentes+' diferente(s) do Google Maps no ponto');
       if(gr && gr.ruas && gr.ruas.google_falhas) partes.push('Google Maps falhou em '+gr.ruas.google_falhas+' consulta(s)'+(gr.ruas.google_erro ? ' ('+gr.ruas.google_erro+')' : ''));
@@ -4961,7 +4965,7 @@
     validada:{ label:'Validada', cor:'#2E8F4E', fundo:'#E3F3E8', badge:'' },
     manual:{ label:'Posicionada manualmente', cor:'#2E6F8F', fundo:'#E2EEF4', badge:'' },
     pendente:{ label:'Pendente de validação', cor:'#8A5A00', fundo:'#FFF1CC', badge:'?' },
-    aproximada_endereco:{ label:'Aproximada por endereço', cor:'#8A5A00', fundo:'#FFF1CC', badge:'≈' },
+    aproximada_endereco:{ label:'Aproximada (conferir)', cor:'#8A5A00', fundo:'#FFF1CC', badge:'≈' },
     conflito:{ label:'Conflito de coordenadas', cor:'#A3302C', fundo:'#FBE3E2', badge:'!' },
     invalida:{ label:'Coordenada inválida', cor:'#A3302C', fundo:'#FBE3E2', badge:'!' },
     falha_extracao:{ label:'Falha na extração', cor:'#A3302C', fundo:'#FBE3E2', badge:'!' }
@@ -4972,9 +4976,10 @@
     geocodificacao_endereco:'Geocodificação pelo endereço (aproximada)',
     manual:'Clique no mapa (manual)',
     tracado_rua:'No meio dos PVs da mesma rua (aproximada)',
-    proximo_pv:'Junto ao PV onde o rótulo está desenhado (aproximada)'
+    proximo_pv:'Junto ao PV onde o rótulo está desenhado (aproximada)',
+    grade_folha:'Medida no desenho pela grade de coordenadas da folha (PDF em imagem — aproximada)'
   };
-  var GEO_LEITURA_LABEL = { ia_recorte:'leitura do recorte da folha', ia_pagina:'leitura da página', ia_releitura:'releitura dirigida', texto_rotulo:'transcrição do rótulo', texto_pdf:'texto do PDF' };
+  var GEO_LEITURA_LABEL = { ia_recorte:'leitura do recorte da folha', ia_pagina:'leitura da página', ia_releitura:'releitura dirigida', texto_rotulo:'transcrição do rótulo', texto_pdf:'texto do PDF', grade_folha:'posição medida no desenho (grade E/N da folha)' };
   function geoInfoStatus(st){ return GEO_STATUS_INFO[st] || null; }
   // v43 — conferência do NOME da rua com o Google Maps no ponto (rua_status)
   var RUA_STATUS_INFO = {
