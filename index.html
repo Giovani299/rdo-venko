@@ -3954,7 +3954,15 @@
       }).join('')+
     '</div>';
   }
+  // v45: análise que ficou "analisando" sem terminar (a função do servidor vive no máximo
+  // ~2,5 min; se ela cai no meio, o status não é atualizado)
+  function projetoAnaliseTravada(p){
+    return p.statusAnalise==='analisando' && !!p.analiseIniciadaEm && (Date.now() - new Date(p.analiseIniciadaEm).getTime() > 5*60*1000);
+  }
   function projetoDetalheHtml(p){
+    if(projetoAnaliseTravada(p)){
+      return '<div class="analise-erro" role="alert"><b>A análise parou sem terminar</b> O servidor encerrou antes do fim (última etapa: '+esc(p.mensagemStatus||'—')+'). Clique em “Analisar novamente” — o que já foi lido do desenho fica guardado e a próxima vez é mais rápida.</div>';
+    }
     if(p.statusAnalise==='analisando'){
       return '<div class="hint" style="margin:6px 0 0;width:100%;">'+
         projetoChecklistHtml(p)+
@@ -4006,7 +4014,7 @@
         else partes.push('Coordenadas do projeto: '+gr.pontos_validados+' conferida(s), '+((gr.pontos_pendentes||[]).length)+' a validar, '+((gr.pontos_conflito||[]).length)+' em conflito, '+((gr.pontos_sem_coordenada||[]).length)+' sem coordenada'+(gr.crs?' ('+gr.crs+(gr.crs_origem&&/presumido/.test(gr.crs_origem)?', datum presumido':'')+')':''));
       }
       if(gr && gr.folha_imagem && gr.folha_imagem.folhas) gr.folha_imagem.folhas.forEach(function(f){
-        partes.push(f.erro ? 'Folha '+f.pagina+' em imagem: '+f.erro : 'Folha '+f.pagina+' em imagem (sem texto): grade '+(f.grade ? f.grade.passo_m+' m' : '')+' lida, '+f.pvs+' ponto(s) posicionado(s) pelo desenho (±'+f.precisao_m+' m)'+((f.conferencia_caixas||[]).length ? ', conferido com '+f.conferencia_caixas.length+' coordenada(s) impressa(s)' : ''));
+        partes.push(f.erro ? 'Folha '+f.pagina+' em imagem: '+f.erro : 'Folha '+f.pagina+' em imagem (sem texto): grade '+(f.grade ? f.grade.passo_m+' m' : '')+' lida, '+f.pvs+' ponto(s) posicionado(s) pelo desenho ('+(f.encaixados||0)+' encaixados na tubulação ±'+f.precisao_m+' m; demais ±'+(f.precisao_solto_m||f.precisao_m)+' m)'+(f.caixas_ok ? ', '+f.caixas_ok+' coordenada(s) impressa(s) batem com a grade' : ''));
       });
       if(gr && gr.auditoria) partes.push('Pontos suspeitos (enviados para revisão): '+(gr.auditoria.duplicados||[]).length+' com coordenada repetida, '+(gr.auditoria.longe||[]).length+' longe da obra, '+(gr.auditoria.isolados||[]).length+' isolado(s)');
       if(gr && gr.ruas && gr.ruas.divergentes) partes.push('Ruas: '+gr.ruas.divergentes+' diferente(s) do Google Maps no ponto');
@@ -4036,7 +4044,7 @@
     }
     return '<div class="checklist-wrap" style="margin-top:10px;">'+state.projetos.map(function(p){
       var kb = p.tamanhoBytes ? (p.tamanhoBytes/1024/1024).toFixed(1)+' MB' : '';
-      var podeAnalisar = (p.statusAnalise==='pendente' || p.statusAnalise==='erro' || p.statusAnalise==='analisado');
+      var podeAnalisar = (p.statusAnalise==='pendente' || p.statusAnalise==='erro' || p.statusAnalise==='analisado' || projetoAnaliseTravada(p));
       var locaisKeys = {};
       (state.planejamentoServicos||[]).forEach(function(s){ if(s.projetoId===p.id && s.localKey) locaisKeys[s.localKey]=true; });
       var qtdLocais = Object.keys(locaisKeys).length;
@@ -4045,7 +4053,7 @@
         '<div><b>'+esc(p.nome)+'</b><div class="hint" style="margin:2px 0 0;">'+kb+'</div></div>'+
         '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
           projetoStatusChip(p.statusAnalise)+
-          (podeAnalisar ? '<button type="button" class="btn primary sm" data-analisar="'+p.id+'">'+(p.statusAnalise==='erro'?'Analisar novamente':(p.statusAnalise==='analisado'?'Reanalisar':'Analisar projeto'))+'</button>' : '')+
+          (podeAnalisar ? '<button type="button" class="btn primary sm" data-analisar="'+p.id+'">'+((p.statusAnalise==='erro' || projetoAnaliseTravada(p))?'Analisar novamente':(p.statusAnalise==='analisado'?'Reanalisar':'Analisar projeto'))+'</button>' : '')+
           (qtdLocais ? '<button type="button" class="btn ghost sm" data-vernomapa="'+p.id+'">Ver no mapa'+(qtdNoMapa ? ' ('+qtdNoMapa+' serviço(s))' : ' ('+qtdLocais+' local(is))')+'</button>' : '')+
           (p.arquivoUrl ? '<a href="'+esc(p.arquivoUrl)+'" data-arqpath="'+esc(p.arquivoPath)+'" target="_blank" rel="noopener" class="btn ghost sm">Abrir arquivo</a>' : '')+
           '<button type="button" class="btn danger sm" data-delprojeto="'+p.id+'">Excluir</button>'+
