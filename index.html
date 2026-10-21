@@ -386,6 +386,9 @@
   .med-tab .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
   .med-tab tfoot td{position:sticky;bottom:0;background:var(--paper);font-weight:800;font-size:14px;border-bottom:none;}
   .med-sub{font-size:11px;color:var(--muted);}
+  .med-tab tr.med-sec td{background:var(--paper);font-weight:800;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink);padding-top:10px;}
+  .med-tab tr.med-subtot td{font-weight:700;border-bottom:2px solid var(--line);}
+  .med-tab .med-neg{color:#C6433F;font-weight:700;}
   /* v35: planilha completa no RDO + equipe obrigatória */
   .serv-item{padding:8px 10px;border-bottom:1px solid var(--line);background:var(--surface);}
   .serv-item.marcado{background:rgba(240,190,40,.07);}
@@ -11037,7 +11040,7 @@
           var preco = Number(item.custoUnitario)||0;
           linhas.push({
             id: ++seq, data: r.data, medicao: (CDM_MESES[(+String(r.data).split('-')[1])-1]||''),
-            equipe: cdmEquipeLabel(nomeEq, i), codigo: item.itemNumero||'', atividade: item.descricao||'', unidade: item.unidade||'',
+            equipe: cdmEquipeLabel(nomeEq, i), catId: c.catalogoItemId, codigo: item.itemNumero||'', atividade: item.descricao||'', unidade: item.unidade||'',
             qtd: qtd, preco: preco, fat: Math.round(qtd*preco*100)/100,
             trecho: (bloco && bloco.trecho) || info.trechoGeral || '',
             local: local,
@@ -11326,6 +11329,74 @@
     doc.rect(xFat+wFat, y, M+totalW-(xFat+wFat), hSub, 'FD');
   }
 
+  // v48 — página "RESUMO DA MEDIÇÃO" do Caderno: por item, período x acumulado x contrato
+  function cdmDesenharResumo(doc, obra, de, ate, linhas){
+    var PW = 841.89, PH = 595.28, M = 24;
+    var mc = medicaoComContrato(obra.id, ate, linhas);
+    var cols = [
+      {k:'codigo', t:'Item', w:40, a:'c'}, {k:'atividade', t:'Serviço', w:250, a:'l'}, {k:'unidade', t:'Unid.', w:34, a:'c'},
+      {k:'qtd', t:'Qtd. no período', w:62, a:'r'}, {k:'preco', t:'Preço unitário', w:62, a:'r'}, {k:'fat', t:'Total no período', w:72, a:'r'},
+      {k:'acum', t:'Acumulado até '+fmtDate(ate), w:66, a:'r'}, {k:'contr', t:'Contratado', w:60, a:'r'}, {k:'saldo', t:'Saldo', w:56, a:'r'}, {k:'pct', t:'% feito', w:40, a:'r'}
+    ];
+    if(!mc.temContrato) cols = cols.slice(0, 6);
+    var totalW = cols.reduce(function(s,c){ return s + c.w; }, 0);
+    var FS = 7, LH = 8.2, HEAD_H = 24;
+    var fq = function(v){ return v==null ? '—' : Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2}); };
+    function cab(){
+      doc.setFillColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]); doc.rect(M, M, totalW, 30, 'F');
+      doc.setFillColor(255,255,255); doc.rect(M, M, 94, 30, 'F');
+      if(CDM_LOGO){ try{ doc.addImage(CDM_LOGO, 'PNG', M+8, M+15-(78/CDM_LOGO_RATIO)/2, 78, 78/CDM_LOGO_RATIO, undefined, 'FAST'); }catch(e){} }
+      doc.setFillColor(CDM_YELLOW[0],CDM_YELLOW[1],CDM_YELLOW[2]); doc.rect(M, M+30, totalW, 3, 'F');
+      doc.setTextColor(CDM_YELLOW[0],CDM_YELLOW[1],CDM_YELLOW[2]); doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
+      doc.text('RESUMO DA MEDIÇÃO', M+106, M+19.5);
+      doc.setTextColor(255,255,255); doc.setFontSize(7); doc.text('CADERNO DE MEDIÇÃO', M+totalW-8, M+18.5, {align:'right'});
+      doc.setTextColor(90,90,90); doc.setFont('helvetica','normal'); doc.setFontSize(7);
+      doc.text((obra&&obra.nome?obra.nome:'')+'  ·  Período: '+fmtDate(de)+' a '+fmtDate(ate)+(mc.temContrato ? '  ·  acumulado e saldo pela lista de serviços contratados da obra' : ''), M, M+46);
+      var y = M + 53, x = M;
+      doc.setFillColor(CDM_YELLOW[0],CDM_YELLOW[1],CDM_YELLOW[2]); doc.rect(M, y, totalW, HEAD_H, 'F');
+      doc.setTextColor(CDM_NAVY[0],CDM_NAVY[1],CDM_NAVY[2]); doc.setFont('helvetica','bold'); doc.setFontSize(6.6);
+      cols.forEach(function(c){ var ls = doc.splitTextToSize(c.t, c.w-4); var sy = y + (HEAD_H - ls.length*7)/2 + 5.4; ls.forEach(function(s, i){ doc.text(s, x + c.w/2, sy + i*7, {align:'center'}); }); x += c.w; });
+      return y + HEAD_H;
+    }
+    var y = cab();
+    function faixa(txt, valor, escuro){
+      if(y + 16 > PH - M){ doc.addPage([PW,PH],'landscape'); y = cab(); }
+      doc.setFillColor(escuro ? CDM_NAVY[0] : 238, escuro ? CDM_NAVY[1] : 238, escuro ? CDM_NAVY[2] : 232); doc.rect(M, y, totalW, 16, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(7.6);
+      if(escuro) doc.setTextColor(CDM_YELLOW[0],CDM_YELLOW[1],CDM_YELLOW[2]); else doc.setTextColor(30,30,30);
+      doc.text(txt, M+6, y+10.8);
+      if(valor!=null){ var xF = M; for(var i=0;i<cols.length;i++){ if(cols[i].k==='fat') break; xF += cols[i].w; } doc.text(fmtMoeda(valor), xF+72-3, y+10.8, {align:'right'}); }
+      y += 16;
+    }
+    function linha(g){
+      var u = g.unidade || '';
+      var v = { codigo: g.codigo||'—', atividade: g.atividade||'', unidade: u, qtd: fq(g.qtd), preco: fmtMoeda(g.preco), fat: fmtMoeda(g.cents/100),
+        acum: fq(g.acumQtd), contr: g.contratadoQtd==null ? '—' : fq(g.contratadoQtd), saldo: g.saldo==null ? '—' : fq(g.saldo), pct: g.pct==null ? '—' : g.pct+'%' };
+      doc.setFont('helvetica','normal'); doc.setFontSize(FS);
+      var cel = cols.map(function(c){ return doc.splitTextToSize(String(v[c.k]), c.w-6); });
+      var n = cel.reduce(function(m,ls){ return Math.max(m, ls.length); }, 1), rowH = Math.max(14, n*LH + 5);
+      if(y + rowH > PH - M - 18){ doc.addPage([PW,PH],'landscape'); y = cab(); doc.setFont('helvetica','normal'); doc.setFontSize(FS); }
+      var x = M;
+      cols.forEach(function(c, ci){
+        doc.setFillColor(255,255,255); doc.setDrawColor(205,205,205); doc.setLineWidth(0.3); doc.rect(x, y, c.w, rowH, 'FD');
+        if(c.k==='saldo' && g.saldo!=null && g.saldo<0) doc.setTextColor(198,67,63); else doc.setTextColor(30,30,30);
+        var ls = cel[ci], sy = y + (rowH - ls.length*LH)/2 + 5.8;
+        ls.forEach(function(s, i){ var tx = c.a==='c' ? x + c.w/2 : (c.a==='r' ? x + c.w - 3 : x + 3); doc.text(s, tx, sy + i*LH, c.a==='c' ? {align:'center'} : (c.a==='r' ? {align:'right'} : undefined)); });
+        x += c.w;
+      });
+      y += rowH;
+    }
+    var grupos = mc.grupos;
+    if(!grupos.length){ doc.setTextColor(90,90,90); doc.setFontSize(8); doc.text('Nenhum serviço da tabela lançado nas RDOs deste período.', M+4, y+14); return; }
+    var total = grupos.reduce(function(s, g){ return s + g.cents; }, 0)/100;
+    if(mc.temContrato){
+      var cc = grupos.filter(function(g){ return g.escopo==='contratado'; }), ap = grupos.filter(function(g){ return g.escopo!=='contratado'; });
+      if(cc.length){ faixa('CONTRATADO', null, false); cc.forEach(linha); faixa('Subtotal contratado', cc.reduce(function(s, g){ return s + g.cents; }, 0)/100, false); }
+      if(ap.length){ faixa('À PARTE (FORA DO CONTRATO)', null, false); ap.forEach(linha); faixa('Subtotal à parte', ap.reduce(function(s, g){ return s + g.cents; }, 0)/100, false); }
+    } else grupos.forEach(linha);
+    faixa('TOTAL DA MEDIÇÃO', total, true);
+  }
+
   // Rasteriza `target` e acrescenta as páginas A4 (retrato) ao `doc` — mesma
   // regra de paginação do PDF individual da RDO (nunca corta um cartão/linha).
   function cdmPaginarNoDoc(target, doc){
@@ -11433,8 +11504,11 @@
         cdmDesenharCapaSimples(doc, obra, de, ate);
       });
     }).then(function(){
+      var linhasCdm = cdmLinhasPlanilha(rdos);
       doc.addPage([841.89, 595.28], 'landscape');
-      cdmDesenharPlanilha(doc, cdmLinhasPlanilha(rdos), obra, de, ate);
+      try{ cdmDesenharResumo(doc, obra, de, ate, linhasCdm); doc.addPage([841.89, 595.28], 'landscape'); }
+      catch(err){ console.warn('CDM: resumo da medição não gerado', err); }
+      cdmDesenharPlanilha(doc, linhasCdm, obra, de, ate);
     });
     rdos.forEach(function(r, idx){
       chain = chain.then(function(){
@@ -11466,8 +11540,32 @@
     });
     return ordem.map(function(k){ return mapa[k]; }).sort(function(a,b){ return String(a.codigo).localeCompare(String(b.codigo), undefined, {numeric:true}) || String(a.atividade).localeCompare(String(b.atividade)); });
   }
-  function medicaoResumoHtml(rdos, linhas){
+  // v48 — Resumo da medição com o CONTRATO: por item, o que foi medido no período,
+  // o acumulado da obra até o fim do período, a quantidade contratada e o saldo.
+  function medicaoComContrato(obraId, ate, linhas){
     var grupos = medicaoAgrupar(linhas);
+    var contrato = (state.obraServicosContratados||[]).filter(function(s){ return s.obraId===obraId; });
+    var temContrato = contrato.length > 0;
+    var qtdContr = {};
+    contrato.forEach(function(s){ if(s.catalogoItemId){ qtdContr[s.catalogoItemId] = (qtdContr[s.catalogoItemId]||0) + (s.quantidade!=null ? Number(s.quantidade) : 0); if(s.quantidade==null && qtdContr[s.catalogoItemId]===0) qtdContr[s.catalogoItemId] = null; } });
+    var acum = {};
+    cdmLinhasPlanilha(cdmRdosDoPeriodo(obraId, '0000-01-01', ate)).forEach(function(l){ if(l.catId) acum[l.catId] = (acum[l.catId]||0) + (Number(l.qtd)||0); });
+    // catId de cada grupo (mesmo item e preço)
+    var catDe = {};
+    linhas.forEach(function(l){ catDe[l.codigo+'|'+l.atividade+'|'+l.preco] = l.catId; });
+    grupos.forEach(function(g){
+      g.catId = catDe[g.codigo+'|'+g.atividade+'|'+g.preco] || null;
+      g.escopo = !temContrato ? null : ((g.catId && (g.catId in qtdContr)) ? 'contratado' : 'aparte');
+      g.acumQtd = g.catId ? (acum[g.catId]||0) : g.qtd;
+      g.contratadoQtd = (g.escopo==='contratado') ? qtdContr[g.catId] : null;
+      g.saldo = (g.contratadoQtd!=null) ? Math.round((g.contratadoQtd - g.acumQtd)*1000)/1000 : null;
+      g.pct = (g.contratadoQtd>0) ? Math.round(g.acumQtd / g.contratadoQtd * 100) : null;
+    });
+    return { grupos: grupos, temContrato: temContrato };
+  }
+  function medicaoResumoHtml(rdos, linhas, obraId, ate){
+    var mc = obraId ? medicaoComContrato(obraId, ate, linhas) : { grupos: medicaoAgrupar(linhas), temContrato: false };
+    var grupos = mc.grupos;
     var total = grupos.reduce(function(s, g){ return s + g.cents; }, 0);
     var rasc = rdos.filter(function(r){ return r.status==='rascunho'; }).length;
     var semServ = rdos.filter(function(r){ return !(r.equipesDetalhe||[]).some(function(d){ return (d && d.concluidos||[]).some(function(c){ return c && c.catalogoItemId; }); }); }).length;
@@ -11477,6 +11575,28 @@
     if(semServ) avisos.push(semServ+' RDO(s) sem nenhum serviço da tabela lançado');
     if(semQtd) avisos.push(semQtd+' lançamento(s) sem quantidade');
     if(!grupos.length) return (avisos.length ? '<p class="med-aviso">'+esc(avisos.join(' · '))+'</p>' : '')+'<p class="hint" style="margin:8px 0 0;">Nenhum serviço da tabela lançado nos RDOs deste período.</p>';
+    if(mc.temContrato){
+      var linhaG = function(g){
+        var u = g.unidade ? ' '+g.unidade : '';
+        var saldoTxt = g.saldo==null ? '—' : (fmtQtd(g.saldo)+u+(g.pct!=null ? '<div class="med-sub">'+g.pct+'% feito</div>' : ''));
+        return '<tr><td>'+esc(g.codigo||'—')+'</td><td>'+esc(g.atividade)+'<div class="med-sub">'+g.n+' lançamento(s)</div></td>'+
+          '<td class="n">'+esc(fmtQtd(g.qtd)+u)+'</td><td class="n">'+esc(fmtMoeda(g.preco))+'</td><td class="n"><b>'+esc(fmtMoeda(g.cents/100))+'</b></td>'+
+          '<td class="n">'+esc(fmtQtd(g.acumQtd)+u)+'</td><td class="n">'+(g.contratadoQtd==null ? '—' : esc(fmtQtd(g.contratadoQtd)+u))+'</td><td class="n'+(g.saldo!=null && g.saldo<0 ? ' med-neg' : '')+'">'+saldoTxt+'</td></tr>';
+      };
+      var sec = function(titulo, lst){
+        if(!lst.length) return '';
+        var sub = lst.reduce(function(s, g){ return s + g.cents; }, 0);
+        return '<tr class="med-sec"><td colspan="8">'+esc(titulo)+'</td></tr>'+lst.map(linhaG).join('')+
+          '<tr class="med-subtot"><td colspan="4">Subtotal — '+esc(titulo.toLowerCase())+'</td><td class="n">'+esc(fmtMoeda(sub/100))+'</td><td colspan="3"></td></tr>';
+      };
+      var negs = grupos.filter(function(g){ return g.saldo!=null && g.saldo<0; }).length;
+      if(negs) avisos.push(negs+' item(ns) já passaram da quantidade contratada (saldo negativo)');
+      return (avisos.length ? '<p class="med-aviso">'+esc(avisos.join(' · '))+'</p>' : '')+
+        '<div class="med-tab"><table><thead><tr><th>Item</th><th>Serviço</th><th class="n">Qtd. período</th><th class="n">Preço unit.</th><th class="n">Total período</th><th class="n">Acumulado</th><th class="n">Contratado</th><th class="n">Saldo</th></tr></thead><tbody>'+
+        sec('Contratado', grupos.filter(function(g){ return g.escopo==='contratado'; }))+
+        sec('À parte (fora do contrato)', grupos.filter(function(g){ return g.escopo!=='contratado'; }))+
+        '</tbody><tfoot><tr><td colspan="4">Total da medição</td><td class="n">'+esc(fmtMoeda(total/100))+'</td><td colspan="3"></td></tr></tfoot></table></div>';
+    }
     return (avisos.length ? '<p class="med-aviso">'+esc(avisos.join(' · '))+'</p>' : '')+
       '<div class="med-tab"><table><thead><tr><th>Item</th><th>Serviço</th><th class="n">Qtd.</th><th class="n">Preço unit.</th><th class="n">Total</th></tr></thead><tbody>'+
       grupos.map(function(g){
@@ -11487,18 +11607,23 @@
   }
   function medicaoBaixarExcel(obra, de, ate, rdos, linhas){
     if(typeof XLSX==='undefined'){ toast('Não foi possível carregar o gerador de Excel. Verifique sua conexão e tente novamente.','error'); return; }
-    var grupos = medicaoAgrupar(linhas);
+    var mc = (obra && obra.id) ? medicaoComContrato(obra.id, ate, linhas) : { grupos: medicaoAgrupar(linhas), temContrato: false };
+    var grupos = mc.grupos;
     var total = grupos.reduce(function(s, g){ return s + g.cents; }, 0)/100;
     var r1 = [
       ['Medição — '+(obra.nome||'')],
       ['Período: '+fmtDate(de)+' a '+fmtDate(ate)+' · '+rdos.length+' RDO(s) · gerado em '+new Date().toLocaleDateString('pt-BR')],
       [],
-      ['Item','Serviço','Unid.','Quantidade','Preço unitário (R$)','Total (R$)','Lançamentos']
+      ['Item','Serviço','Unid.','Quantidade','Preço unitário (R$)','Total (R$)','Lançamentos'].concat(mc.temContrato ? ['Escopo','Acumulado até o fim do período','Contratado','Saldo','% executado'] : [])
     ];
-    grupos.forEach(function(g){ r1.push([g.codigo, g.atividade, g.unidade, Math.round(g.qtd*1000)/1000, g.preco, g.cents/100, g.n]); });
+    grupos.forEach(function(g){ r1.push([g.codigo, g.atividade, g.unidade, Math.round(g.qtd*1000)/1000, g.preco, g.cents/100, g.n].concat(mc.temContrato ? [g.escopo==='contratado' ? 'Contratado' : 'À parte', Math.round(g.acumQtd*1000)/1000, g.contratadoQtd, g.saldo, g.pct!=null ? g.pct/100 : null] : [])); });
     r1.push([]); r1.push(['','TOTAL DA MEDIÇÃO','','','',total,'']);
+    if(mc.temContrato){
+      var subC = grupos.filter(function(g){ return g.escopo==='contratado'; }).reduce(function(s, g){ return s + g.cents; }, 0)/100;
+      r1.push(['','Subtotal contratado','','','',subC,'']); r1.push(['','Subtotal à parte','','','',Math.round((total-subC)*100)/100,'']);
+    }
     var ws1 = XLSX.utils.aoa_to_sheet(r1);
-    ws1['!cols'] = [{wch:8},{wch:60},{wch:7},{wch:12},{wch:18},{wch:16},{wch:12}];
+    ws1['!cols'] = [{wch:8},{wch:60},{wch:7},{wch:12},{wch:18},{wch:16},{wch:12}].concat(mc.temContrato ? [{wch:12},{wch:16},{wch:12},{wch:12},{wch:11}] : []);
     var r2 = [['Data','Mês','Equipe','Item','Serviço','Unid.','Quantidade','Preço unitário (R$)','Total (R$)','Trecho','Local','Situação','Observação']];
     linhas.forEach(function(l){ r2.push([fmtDate(l.data), l.medicao, l.equipe, l.codigo, l.atividade, l.unidade, Number(l.qtd)||0, l.preco, l.fat, l.trecho, l.local, l.status, l.obs]); });
     var ws2 = XLSX.utils.aoa_to_sheet(r2);
@@ -11531,7 +11656,7 @@
     var wrap = document.createElement('div');
     wrap.className = 'overlay';
     wrap.innerHTML =
-      '<div class="modal" style="max-width:760px;width:calc(100vw - 32px);">'+
+      '<div class="modal" style="max-width:980px;width:calc(100vw - 32px);">'+
         '<h3>Medição da obra</h3>'+
         '<p>Escolha a obra e o período: aparece o resumo dos serviços lançados nos RDOs (quantidade × preço). Baixe em Excel ou gere o Caderno de Medição (PDF com capa, planilha e RDOs).</p>'+
         '<div class="field"><label>Obra</label><select id="cdmObra">'+
@@ -11564,7 +11689,7 @@
       else if(inDe.value>inAte.value) info.textContent = 'A data inicial deve ser anterior à data final.';
       else info.textContent = n ? (n+' RDO'+(n>1?'s':'')+' no período.') : 'Nenhuma RDO desta obra no período.';
       btn.disabled = !n; btnX.disabled = !n;
-      resumoEl.innerHTML = n ? medicaoResumoHtml(rdosP, cdmLinhasPlanilha(rdosP)) : '';
+      resumoEl.innerHTML = n ? medicaoResumoHtml(rdosP, cdmLinhasPlanilha(rdosP), selObra.value, inAte.value) : '';
     }
     ['change','input'].forEach(function(ev){ [selObra,inDe,inAte].forEach(function(el){ el.addEventListener(ev, atualiza); }); });
     atualiza();
