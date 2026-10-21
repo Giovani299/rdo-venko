@@ -1,0 +1,82 @@
+# Leva para a PRODUÇÃO (construtoravenko.com.br) o que foi aprovado no ambiente de teste
+# (repositório rdo-venko-teste): o site (index.html e arquivos do app) e a função analisar-projeto.
+# O config.js da produção NUNCA é trocado.
+name: Publicar em produção
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Digite PUBLICAR para confirmar (vai para a obra de verdade)'
+        required: true
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency: producao
+
+jobs:
+  publicar:
+    if: inputs.confirmar == 'PUBLICAR'
+    runs-on: ubuntu-latest
+    env:
+      PROD_REF: rbpjwhyoxyybxllshrwd
+      TESTE_REPO: https://github.com/Giovani299/rdo-venko-teste.git
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Busca a versão aprovada no teste
+        run: |
+          set -euo pipefail
+          git clone --depth 1 "$TESTE_REPO" /tmp/teste
+          echo "Versão do teste: $(git -C /tmp/teste log -1 --format='%h %s (%ci)')" | tee -a "$GITHUB_STEP_SUMMARY"
+          test -s /tmp/teste/index.html
+          grep -q "bootAuth" /tmp/teste/index.html || { echo "::error::index.html do teste parece incompleto."; exit 1; }
+          TESTE_REF=$(sed -n 's#^var SUPABASE_URL *= *"https://\([a-z0-9]\{20\}\)\.supabase\.co".*#\1#p' /tmp/teste/config.js | head -1)
+          if [ -n "$TESTE_REF" ] && grep -q "$TESTE_REF" /tmp/teste/index.html; then echo "::error::O index.html do teste tem o endereço do banco de teste dentro. Não publiquei."; exit 1; fi
+
+      - name: Copia site e função (sem mexer no config.js)
+        run: |
+          set -euo pipefail
+          for f in index.html bootstrap.html sw.js manifest.json; do
+            if [ -f "/tmp/teste/$f" ]; then cp "/tmp/teste/$f" "$f"; fi
+          done
+          if [ -f /tmp/teste/supabase/functions/analisar-projeto/index.ts ]; then
+            mkdir -p supabase/functions/analisar-projeto
+            cp -r /tmp/teste/supabase/functions/analisar-projeto/. supabase/functions/analisar-projeto/
+          fi
+          if [ ! -f supabase/config.toml ]; then
+            mkdir -p supabase
+            printf 'project_id = "rdo-venko"\n\n[functions.analisar-projeto]\nverify_jwt = true\n' > supabase/config.toml
+          fi
+          git add -A
+          git diff --cached --stat | tee -a "$GITHUB_STEP_SUMMARY"
+          if git diff --cached --quiet -- supabase/functions; then echo "FUNC_MUDOU=0" >> "$GITHUB_ENV"; else echo "FUNC_MUDOU=1" >> "$GITHUB_ENV"; fi
+          if git diff --cached --quiet; then echo "SITE_MUDOU=0" >> "$GITHUB_ENV"; else echo "SITE_MUDOU=1" >> "$GITHUB_ENV"; fi
+
+      - name: Publica a função na PRODUÇÃO
+        if: env.FUNC_MUDOU == '1'
+        run: |
+          set -euo pipefail
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::Falta o secret SUPABASE_ACCESS_TOKEN."; exit 1; }
+          npx --yes supabase@latest functions deploy analisar-projeto --project-ref "$PROD_REF" --use-api
+          echo "Função publicada na produção — sha256 $(sha256sum supabase/functions/analisar-projeto/index.ts | cut -c1-16)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Salva e publica o site
+        if: env.SITE_MUDOU == '1'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Publicar em produção: $(git -C /tmp/teste log -1 --format='%h %s')"
+          git push
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages/builds" >/dev/null \
+            && echo "Site enviado para o GitHub Pages (1–2 min para aparecer)." >> "$GITHUB_STEP_SUMMARY" \
+            || echo "::warning::Não consegui pedir a publicação do Pages; ela deve sair sozinha em alguns minutos."
+
+      - name: Nada a publicar
+        if: env.SITE_MUDOU == '0'
+        run: echo "A produção já está igual ao teste." >> "$GITHUB_STEP_SUMMARY"
