@@ -471,6 +471,11 @@
   .add-other-btn{margin-top:8px;}
 
   .photo-input-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  /* v49 — botões de foto/vídeo: o <input type=file> fica dentro do botão (label) */
+  .input-oculto{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none;}
+  label.btn{position:relative;}
+  label.btn:focus-within{outline:2px solid var(--focus);outline-offset:2px;}
+  @media (hover:hover) and (pointer:fine){ .so-celular{display:none !important;} }
   .photo-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;}
   .photo-thumb{position:relative;width:96px;border-radius:8px;overflow:hidden;border:1px solid var(--line);display:flex;flex-direction:column;}
   .photo-thumb img{width:100%;height:96px;object-fit:cover;display:block;}
@@ -7519,7 +7524,7 @@
         '</div>'+
         '<div class="field" style="margin-bottom:14px;"><label>Observação</label><textarea id="marcObs" rows="2" style="width:100%;font-family:inherit;padding:8px;border:1px solid var(--line);border-radius:7px;">'+esc(m.observacao||'')+'</textarea></div>'+
         servicosRelacionadosHtml+valorBoxHtml+
-        '<div class="field" style="margin-bottom:14px;"><label>Foto do serviço</label><div id="marcFotoPreviewWrap" style="margin-bottom:6px;">'+(m.foto?('<img src="'+m.foto+'" class="foto-clicavel" style="max-width:160px;max-height:120px;border-radius:6px;border:1px solid var(--line);display:block;cursor:zoom-in;">'):'<span class="hint" style="margin:0;">Nenhuma foto selecionada.</span>')+'</div><input type="file" accept="image/*" id="marcFotoInput">'+(m.foto?'<button type="button" class="btn ghost sm" data-act="fotoremove" style="margin-top:6px;">Remover foto</button>':'')+'</div>'+
+        '<div class="field" style="margin-bottom:14px;"><label>Foto do serviço</label><div id="marcFotoPreviewWrap" style="margin-bottom:6px;">'+(m.foto?('<img src="'+m.foto+'" class="foto-clicavel" style="max-width:160px;max-height:120px;border-radius:6px;border:1px solid var(--line);display:block;cursor:zoom-in;">'):'<span class="hint" style="margin:0;">Nenhuma foto selecionada.</span>')+'</div><div class="photo-input-row"><label class="btn primary sm so-celular"><input type="file" accept="image/*" capture="environment" id="marcFotoCam" class="input-oculto">Tirar foto agora</label><label class="btn ghost sm"><input type="file" accept="image/*" id="marcFotoInput" class="input-oculto">Escolher foto</label></div>'+(m.foto?'<button type="button" class="btn ghost sm" data-act="fotoremove" style="margin-top:6px;">Remover foto</button>':'')+'</div>'+
         '<div class="row" style="justify-content:space-between;">'+
           (isEdit && canGestao ? '<button class="btn danger" data-act="del">Excluir</button>' : '<span></span>')+
           '<div style="display:flex;gap:8px;">'+
@@ -7540,16 +7545,20 @@
     }
     if(marcStatusEl && marcValorEl) marcStatusEl.addEventListener('change', function(){ marcValorEl.innerHTML = mapaValorBoxInner(m, svcAtual, servicosRelacionados, marcStatusEl.value); });
     var marcFotoInputEl = document.getElementById('marcFotoInput');
+    var marcFotoCamEl = document.getElementById('marcFotoCam');
     if(marcFotoInputEl){
-      marcFotoInputEl.addEventListener('change', function(){
-        var f = marcFotoInputEl.files && marcFotoInputEl.files[0];
+      var aoEscolherFotoMarc = function(ev){
+        var inp = ev.target;
+        var f = inp.files && inp.files[0];
         if(!f) return;
         resizeImageFile(f, 900, 0.55).then(function(dataUrl){
           marcFotoAtual = dataUrl;
           var pv2 = document.getElementById('marcFotoPreviewWrap');
           if(pv2) pv2.innerHTML = '<img src="'+dataUrl+'" class="foto-clicavel" style="max-width:160px;max-height:120px;border-radius:6px;border:1px solid var(--line);display:block;cursor:zoom-in;">';
         });
-      });
+      };
+      marcFotoInputEl.addEventListener('change', aoEscolherFotoMarc);
+      if(marcFotoCamEl) marcFotoCamEl.addEventListener('change', aoEscolherFotoMarc);
     }
     wrap.addEventListener('click', function(e){
       if(e.target===wrap){ wrap.remove(); return; }
@@ -9783,8 +9792,10 @@
       '<div class="card">'+
         '<h2><span class="idx">8</span>Fotos</h2>'+
         '<div class="photo-input-row">'+
-          '<input type="file" id="rdoFotos" accept="image/*" multiple>'+
+          '<label class="btn primary so-celular"><input type="file" id="rdoFotosCam" accept="image/*" capture="environment" class="input-oculto">Tirar foto agora</label>'+
+          '<label class="btn ghost"><input type="file" id="rdoFotos" accept="image/*" multiple class="input-oculto">Escolher fotos</label>'+
         '</div>'+
+        '<p class="hint so-celular" style="margin:6px 0 0;">Tire quantas quiser, uma de cada vez: cada foto entra na lista abaixo.</p>'+
         '<div class="photo-grid" id="photoGrid"></div>'+
         '<div class="photo-note" id="photoNote"></div>'+
       '</div>'+
@@ -9793,7 +9804,8 @@
         '<h2><span class="idx">9</span>Vídeos</h2>'+
         '<p class="hint">Anexe vídeos curtos da obra (até '+VIDEO_MAX_MB+'MB cada).</p>'+
         '<div class="video-input-row">'+
-          '<input type="file" id="rdoVideos" accept="video/*" multiple>'+
+          '<label class="btn primary so-celular"><input type="file" id="rdoVideosCam" accept="video/*" capture="environment" class="input-oculto">Gravar vídeo agora</label>'+
+          '<label class="btn ghost"><input type="file" id="rdoVideos" accept="video/*" multiple class="input-oculto">Escolher vídeos</label>'+
         '</div>'+
         '<div class="video-grid" id="videoGrid"></div>'+
         '<div class="video-note" id="videoNote"></div>'+
@@ -9836,19 +9848,22 @@
     wireDynTable('oc', [{key:'tipo',type:'select',options:OCC_TIPOS},{key:'texto'},{key:'acao'}], function(){ return rdo.ocorrencias; }, function(v){ rdo.ocorrencias=v; });
 
     renderPhotoUI();
-    document.getElementById('rdoFotos').addEventListener('change', function(e){
+    var aoEscolherFotos = function(e){
       var files = Array.prototype.slice.call(e.target.files||[]);
       Promise.all(files.map(function(f){ return resizeImageFile(f, 1280, 0.7).then(function(du){ return {dataUrl:du}; }); }))
         .then(function(newPhotos){
           state.photos = state.photos.concat(newPhotos);
           renderPhotoUI();
+          if(e.target.id==='rdoFotosCam' && newPhotos.length) toast('Foto adicionada ('+state.photos.length+' no total).','ok');
         })
         .catch(function(){ toast('Não foi possível processar uma das imagens.','error'); });
       e.target.value = '';
-    });
+    };
+    document.getElementById('rdoFotos').addEventListener('change', aoEscolherFotos);
+    var camFotoEl = document.getElementById('rdoFotosCam'); if(camFotoEl) camFotoEl.addEventListener('change', aoEscolherFotos);
 
     renderVideoUI();
-    document.getElementById('rdoVideos').addEventListener('change', function(e){
+    var aoEscolherVideos = function(e){
       var files = Array.prototype.slice.call(e.target.files||[]);
       var maxBytes = VIDEO_MAX_MB*1024*1024;
       var tooBig = files.filter(function(f){ return f.size > maxBytes; });
@@ -9882,7 +9897,9 @@
         });
         renderVideoUI();
       });
-    });
+    };
+    document.getElementById('rdoVideos').addEventListener('change', aoEscolherVideos);
+    var camVidEl = document.getElementById('rdoVideosCam'); if(camVidEl) camVidEl.addEventListener('change', aoEscolherVideos);
 
     if(editing && !isLockedEdit){
       document.getElementById('btnDeleteRdo').addEventListener('click', function(){
