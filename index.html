@@ -4985,7 +4985,8 @@
     manual:'Clique no mapa (manual)',
     tracado_rua:'No meio dos PVs da mesma rua (aproximada)',
     proximo_pv:'Junto ao PV onde o rótulo está desenhado (aproximada)',
-    grade_folha:'Medida no desenho pela grade de coordenadas da folha (PDF em imagem — aproximada)'
+    grade_folha:'Medida no desenho pela grade de coordenadas da folha (PDF em imagem — aproximada)',
+    gps_campo:'GPS do celular, conferido em campo'
   };
   var GEO_LEITURA_LABEL = { ia_recorte:'leitura do recorte da folha', ia_pagina:'leitura da página', ia_releitura:'releitura dirigida', texto_rotulo:'transcrição do rótulo', texto_pdf:'texto do PDF', grade_folha:'posição medida no desenho (grade E/N da folha)' };
   function geoInfoStatus(st){ return GEO_STATUS_INFO[st] || null; }
@@ -5024,7 +5025,7 @@
     if(!m.geoStatus){
       return '<div class="geo-origem"><div style="font-weight:700;margin-bottom:4px;">Origem da localização</div>'+
         '<div class="hint" style="margin:0;">Origem da posição não registrada (marcação anterior à rastreabilidade). Reprocesse o projeto ou confira em campo.</div>'+
-        '<div class="geo-linha"><span class="geo-k">Lat/long no mapa</span><span>'+usada+'</span></div></div>';
+        '<div class="geo-linha"><span class="geo-k">Lat/long no mapa</span><span>'+usada+'</span></div>'+gpsCampoBotaoHtml(m)+'</div>';
     }
     var orig = Array.isArray(m.geoCoordOriginal) ? m.geoCoordOriginal : (m.geoCoordOriginal ? [m.geoCoordOriginal] : []);
     var tabela = orig.length ? ('<div class="geo-tab-wrap"><table><thead><tr><th>Ponto</th><th>Estaca</th><th>E (leste)</th><th>N (norte)</th><th>Pág.</th><th>Leitura</th><th>Situação</th></tr></thead><tbody>'+
@@ -5053,7 +5054,87 @@
       tabela+
       (m.geoDetalhe ? '<div class="hint" style="margin:6px 0 0;white-space:pre-wrap;">'+esc(m.geoDetalhe)+'</div>' : '')+
       ((obrasGestaoCanAccess() && (m.geoStatus==='pendente' || m.geoStatus==='aproximada_endereco') && p0) ? '<button type="button" class="btn ghost sm" data-act="geoconfirmar" style="margin-top:8px;">Conferi em campo — confirmar esta posição</button>' : '')+
+      gpsCampoBotaoHtml(m)+
     '</div>';
+  }
+  // v46 — GPS em campo: o encarregado (ou a gestão) parado em cima do PV grava a posição
+  // real pelo GPS do celular. Precisão pior que 25 m é recusada; a mais de 50 m do ponto
+  // atual, pede confirmação. Uma nova leitura do projeto nunca troca essa posição.
+  var GPS_PRECISAO_MAX_M = 25, GPS_DIST_AVISO_M = 50;
+  function gpsCampoPode(){
+    var u = state.currentUser;
+    return obrasGestaoCanAccess() || !!(u && /encarregad/i.test(u.cargo||''));
+  }
+  function gpsCampoBotaoHtml(m){
+    if(!m || !m.id || !gpsCampoPode()) return '';
+    if(!Array.isArray(m.geom) || m.geom.length > 1) return ''; // traço (tubulação): não é um ponto só
+    return '<button type="button" class="btn primary sm" data-act="gpsaqui" style="margin-top:8px;display:block;">Estou aqui — gravar a posição pelo GPS do celular</button>'+
+      '<div class="hint" style="margin:4px 0 0;">Fique em cima do '+esc(gpsNomePonto(m))+', em céu aberto, e toque no botão.</div>';
+  }
+  function gpsNomePonto(m){
+    var sv = m && m.planejamentoServicoId ? (state.planejamentoServicos||[]).filter(function(s){ return s.id===m.planejamentoServicoId; })[0] : null;
+    return (sv && sv.trecho) || (m && m.nomeLocal) || 'ponto';
+  }
+  function gpsLerPosicao(){
+    return new Promise(function(resolve, reject){
+      if(!navigator.geolocation){ reject(new Error('Este aparelho ou navegador não dá acesso ao GPS.')); return; }
+      var melhor = null, feito = false, watch = null, ultimoErro = null;
+      var fim = function(){
+        if(feito) return; feito = true;
+        clearTimeout(timer);
+        if(watch!=null) navigator.geolocation.clearWatch(watch);
+        if(melhor) resolve(melhor); else reject(ultimoErro || new Error('O GPS não respondeu. Confira se a localização está ligada e tente de novo em céu aberto.'));
+      };
+      // a 1ª leitura costuma ser ruim: escuta por até 15 s e fica com a mais precisa
+      var timer = setTimeout(fim, 15000);
+      watch = navigator.geolocation.watchPosition(function(pos){
+        if(!melhor || pos.coords.accuracy < melhor.coords.accuracy) melhor = pos;
+        if(melhor.coords.accuracy <= 6) fim();
+      }, function(err){
+        ultimoErro = new Error(err && err.code===1 ? 'O acesso à localização foi negado. Libere a localização para este site nas configurações do navegador e tente de novo.' : 'Não foi possível ler o GPS ('+((err && err.message) || 'sem sinal')+').');
+        if(err && err.code===1) fim();
+      }, { enableHighAccuracy:true, maximumAge:0, timeout:15000 });
+    });
+  }
+  function confirmarPosicaoPorGps(m){
+    toast('Lendo o GPS… fique parado em cima do ponto por alguns segundos.','ok');
+    gpsLerPosicao().then(function(pos){
+      var acc = Math.round(pos.coords.accuracy);
+      var novo = { lat: Math.round(pos.coords.latitude*1e7)/1e7, lng: Math.round(pos.coords.longitude*1e7)/1e7 };
+      if(acc > GPS_PRECISAO_MAX_M){ toast('GPS impreciso agora (±'+acc+' m). Vá para um lugar aberto, espere uns segundos e tente de novo — só gravamos com precisão de até '+GPS_PRECISAO_MAX_M+' m.','error'); return; }
+      var p0 = (m.geom && m.geom[0]) ? m.geom[0] : null;
+      var d = p0 ? Math.round(mapaDistM(p0, novo)) : null;
+      var nome = gpsNomePonto(m);
+      var longe = d!=null && d > GPS_DIST_AVISO_M;
+      var msg = (longe ? 'Você está a '+d+' m de onde '+nome+' está no mapa. Tem certeza que está em cima de '+nome+'? ' : '')+
+        'Posição do celular: '+novo.lat.toFixed(6)+', '+novo.lng.toFixed(6)+' (±'+acc+' m)'+(d!=null && !longe ? ', a '+d+' m do ponto atual' : '')+'. '+
+        'O ponto passa para onde você está e fica "Validado" com seu nome. Uma nova leitura do projeto não muda mais essa posição.';
+      confirmModal({ title: longe ? 'Você está longe do ponto' : 'Gravar posição pelo GPS', msg: msg, okLabel: longe ? 'Sim, estou no ponto' : 'Gravar posição' }).then(function(ok){
+        if(!ok) return;
+        var agora = new Date().toISOString();
+        var det = ('Posição gravada em campo pelo GPS do celular'+geoAgoraTxt()+' (±'+acc+' m'+(d!=null ? '; '+d+' m de onde estava' : '')+').'+(m.geoDetalhe ? ' | Antes: '+m.geoDetalhe : '')).slice(0,2000);
+        var campos = { geom:[novo], geo_status:'validada', geo_metodo:'gps_campo', geo_crs:'WGS84 (GPS do celular)', geo_detalhe:det, updated_at:agora };
+        geoUpdate('mapa_marcacoes', campos, function(q){ return q.eq('id', m.id); }).then(function(res){
+          if(res.error){ toast('Erro ao gravar a posição: '+res.error.message,'error'); return; }
+          if(!geoColsDisponiveis){ toast('Posição gravada, mas o banco ainda não tem a rastreabilidade (migration 045).','error'); }
+          var fimOk = function(rua){
+            toast('Posição gravada pelo GPS (±'+acc+' m)'+(rua ? ' — '+rua : '')+'.','ok');
+            loadMapaMarcacoes(state.mapaObraId || m.obraId);
+          };
+          // rua do ponto real (Google Maps; OpenStreetMap se o Google não responder)
+          reverseGeocodeMarcacao(novo.lat, novo.lng).then(function(r){
+            var rua = r && r.rua ? String(r.rua).split(',')[0].trim() : '';
+            var updM = rua ? { rua: rua, rua_status: (r.fonte==='google' ? 'google' : null) } : null;
+            var updS = { latitude: novo.lat, longitude: novo.lng, geo_status:'validada', geo_metodo:'gps_campo', geo_crs:'WGS84 (GPS do celular)', geo_validado_em: agora, geo_detalhe: det };
+            if(rua){ updS.endereco = rua; if(r.fonte==='google') updS.rua_status = 'google'; }
+            var tarefas = [];
+            if(updM) tarefas.push(Promise.resolve(supabaseClient.from('mapa_marcacoes').update(updM).eq('id', m.id)).then(function(x){ if(x && x.error && /rua_status/.test(x.error.message||'')) return supabaseClient.from('mapa_marcacoes').update({ rua: rua }).eq('id', m.id); return x; }));
+            if(m.planejamentoServicoId) tarefas.push(geoUpdate('planejamento_servicos', updS, function(q){ return q.eq('id', m.planejamentoServicoId); }).then(function(x){ if(x && x.error && /rua_status/.test(x.error.message||'')){ delete updS.rua_status; return geoUpdate('planejamento_servicos', updS, function(q){ return q.eq('id', m.planejamentoServicoId); }); } return x; }));
+            Promise.all(tarefas).then(function(){ fimOk(rua); }, function(){ fimOk(rua); });
+          }, function(){ fimOk(''); });
+        });
+      });
+    }, function(err){ toast((err && err.message) || 'Não foi possível ler o GPS.','error'); });
   }
   // Gravação com as colunas geo_*: se o banco ainda não tem a migration 045
   // (coluna inexistente), grava de novo sem esses campos — o mapa continua
@@ -7451,6 +7532,7 @@
       if(act==='verpdf'){ if(!projetoOrigem || !svcAtual) return; abrirRecortePdf(m, svcAtual, projetoOrigem); return; }
       if(act==='del'){ if(!canGestao) return; wrap.remove(); excluirMarcacao(m.id); return; }
       if(act==='geoconfirmar'){ if(!canGestao) return; wrap.remove(); confirmarPosicaoEmCampo(m); return; }
+      if(act==='gpsaqui'){ if(!gpsCampoPode()) return; wrap.remove(); confirmarPosicaoPorGps(m); return; }
       if(act==='ruaconfirmar'){ if(!canGestao) return; wrap.remove(); confirmarRuaMarcacao(m); return; }
       if(act==='fotoremove'){
         marcFotoAtual = '';
