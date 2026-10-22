@@ -1222,13 +1222,15 @@
   var LIB_URL = {
     xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
     jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
-    html2canvas: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'
+    html2canvas: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+    exceljs: 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'
   };
   var libCarregando = {};
   function libPronta(nome){
     if(nome==='xlsx') return typeof XLSX!=='undefined';
     if(nome==='jspdf') return !!(window.jspdf && window.jspdf.jsPDF);
     if(nome==='html2canvas') return !!window.html2canvas;
+    if(nome==='exceljs') return typeof ExcelJS!=='undefined' && !!ExcelJS.Workbook;
     return false;
   }
   function libsProntas(nomes){ return nomes.every(libPronta); }
@@ -1246,7 +1248,7 @@
   }
   function carregarLibs(nomes){
     if(libsProntas(nomes)) return Promise.resolve();
-    toast(nomes.indexOf('xlsx')>-1 ? 'Preparando o Excel…' : 'Preparando o gerador de PDF…','ok');
+    toast(nomes.indexOf('xlsx')>-1 || nomes.indexOf('exceljs')>-1 ? 'Preparando o Excel…' : 'Preparando o gerador de PDF…','ok');
     return Promise.all(nomes.map(carregarLib));
   }
   function avisoLibFalhou(nomes){
@@ -12370,10 +12372,251 @@
       return true;
     });
   }
+  // ===== Excel do ponto com a identidade Venko (ExcelJS) =====
+  // d = { ponto:[cab,...linhas], resumo:[cab,...], trilha:[cab,...], filtros:[[rótulo, valor],...], notas:[...],
+  //       periodo:'dd/mm/aaaa a dd/mm/aaaa', gerado:'texto', logo:'data:image/png;base64,...'|null, logoRatio:n }
+  var PXV = { preto:'FF1D1F23', amarelo:'FFF5C400', ouro:'FFA8820A', branco:'FFFFFFFF', cinza:'FF6B6E73', cinzaClaro:'FF9A9DA3',
+    linha:'FFE4E4E0', linhaGrupo:'FFB9BAB5', faixa:'FFF4F4F2', grupo:'FFFAFAF7' };
+  var PXV_SIT = {
+    'Presente':          { f:'FF2E8F4E', b:'FFE4F3E9' },
+    'Ponto incompleto':  { f:'FF7A5900', b:'FFFFF3CC' },
+    'Falta':             { f:'FFC6433F', b:'FFFBE7E6' },
+    'Falta justificada': { f:'FF2B6CB0', b:'FFE4EEF9' },
+    'Sem expediente':    { f:'FF55575C', b:'FFEBEAE6' },
+    'Sem registro':      { f:'FF9A9DA3', b:null }
+  };
+  function pxvSit(txt){ txt = String(txt||''); if(txt.indexOf('Ponto incompleto')===0) return PXV_SIT['Ponto incompleto']; return PXV_SIT[txt] || null; }
+  function pxvFill(argb){ return { type:'pattern', pattern:'solid', fgColor:{ argb:argb } }; }
+  function pxvFonte(o){ var f = { name:'Arial', size:9, color:{ argb:PXV.preto } }; for(var k in o) f[k] = o[k]; return f; }
+  function pxvLetra(n){ var s = ''; while(n>0){ var m = (n-1)%26; s = String.fromCharCode(65+m)+s; n = Math.floor((n-1)/26); } return s; }
+
+  // Faixa de título igual aos relatórios Venko: preto, logo em caixa branca, título amarelo, filete amarelo, linha de dados.
+  function pxvCabecalho(wb, ws, nCols, titulo, d, info, logoId){
+    ws.getRow(1).height = 24; ws.getRow(2).height = 24; ws.getRow(3).height = 4; ws.getRow(4).height = 18; ws.getRow(5).height = 8;
+    for(var c = 1; c<=nCols; c++){
+      ws.getCell(1,c).fill = pxvFill(PXV.preto); ws.getCell(2,c).fill = pxvFill(PXV.preto); ws.getCell(3,c).fill = pxvFill(PXV.amarelo);
+    }
+    ws.mergeCells(1,1,2,1);
+    ws.getCell(1,1).fill = pxvFill(PXV.branco);
+    if(logoId!=null){
+      var larg = (ws.getColumn(1).width||12)*7 + 5, w = Math.min(124, larg-16), h = w/(d.logoRatio||4.8);
+      ws.addImage(logoId, { tl:{ col:(larg-w)/2/larg, row:(48-h)/2/24 }, ext:{ width:w, height:h }, editAs:'oneCell' });
+    } else {
+      ws.getCell(1,1).value = 'VENKO'; ws.getCell(1,1).font = pxvFonte({ size:14, bold:true });
+      ws.getCell(1,1).alignment = { horizontal:'center', vertical:'middle' };
+    }
+    var fimTit = nCols>=4 ? nCols-2 : nCols;
+    if(fimTit>=2) ws.mergeCells(1,2,2,fimTit);
+    var t = ws.getCell(1,2);
+    t.value = titulo; t.font = pxvFonte({ size:14, bold:true, color:{ argb:PXV.amarelo } });
+    t.alignment = { vertical:'middle', horizontal:'left', indent:1 };
+    if(nCols>=4){
+      ws.mergeCells(1,nCols-1,2,nCols);
+      var r = ws.getCell(1,nCols-1);
+      r.value = 'CONTROLE DE PONTO'; r.font = pxvFonte({ size:8, bold:true, color:{ argb:PXV.branco } });
+      r.alignment = { vertical:'middle', horizontal:'right', indent:1 };
+    }
+    ws.mergeCells(4,1,4,nCols);
+    var m = ws.getCell(4,1);
+    m.value = info; m.font = pxvFonte({ size:8.5, color:{ argb:PXV.cinza } }); m.alignment = { vertical:'middle', horizontal:'left' };
+  }
+  // Cabeçalho das colunas: amarelo Venko, texto preto, filete preto embaixo.
+  function pxvCabColunas(ws, linha, cab){
+    var row = ws.getRow(linha); row.height = 30;
+    cab.forEach(function(txt, i){
+      var cel = row.getCell(i+1);
+      cel.value = txt; cel.fill = pxvFill(PXV.amarelo);
+      cel.font = pxvFonte({ size:8.5, bold:true });
+      cel.alignment = { horizontal:'center', vertical:'middle', wrapText:true };
+      cel.border = { bottom:{ style:'medium', color:{ argb:PXV.preto } }, left:{ style:'thin', color:{ argb:'FFE0B400' } }, right:{ style:'thin', color:{ argb:'FFE0B400' } } };
+    });
+  }
+  function pxvPagina(ws, linhaCab, nome){
+    ws.pageSetup = { paperSize:9, orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, horizontalCentered:true,
+      margins:{ left:0.35, right:0.35, top:0.45, bottom:0.55, header:0.2, footer:0.25 } };
+    if(linhaCab) ws.pageSetup.printTitlesRow = linhaCab+':'+linhaCab;
+    ws.headerFooter = { oddFooter:'&L&"Arial,Regular"&8Construtora Venko · '+nome+'&R&"Arial,Regular"&8Página &P de &N' };
+  }
+  function pxvLinhaVazia(ws, linha, nCols, txt){
+    ws.mergeCells(linha,1,linha,nCols);
+    var c = ws.getCell(linha,1);
+    c.value = txt; c.font = pxvFonte({ italic:true, color:{ argb:PXV.cinza } }); c.alignment = { horizontal:'center', vertical:'middle' };
+    ws.getRow(linha).height = 24;
+  }
+
+  function pontoXlsxVenko(ExcelJS, d){
+    var wb = new ExcelJS.Workbook();
+    wb.creator = 'RDO Venko'; wb.company = 'Construtora Venko'; wb.title = 'Relatório de ponto '+d.periodo;
+    wb.created = new Date();
+    var logoId = null;
+    if(d.logo){ try{ logoId = wb.addImage({ base64:d.logo, extension:'png' }); }catch(e){ logoId = null; } }
+    var nLin = d.ponto.length-1, nCol = d.resumo.length-1;
+    var info = 'Período: '+d.periodo+'   ·   '+nCol+' colaborador'+(nCol===1?'':'es')+'   ·   '+nLin+' linha'+(nLin===1?'':'s')+'   ·   Gerado em '+d.gerado;
+
+    // ---------- Aba Ponto ----------
+    var ws = wb.addWorksheet('Ponto', { properties:{ tabColor:{ argb:PXV.amarelo } },
+      views:[{ state:'frozen', xSplit:1, ySplit:9, showGridLines:false, zoomScale:100 }] });
+    var W1 = [30,27,11,13,9,11,11,9,30,13,10,46];
+    W1.forEach(function(w, i){ ws.getColumn(i+1).width = w; });
+    pxvCabecalho(wb, ws, 12, 'RELATÓRIO DE PONTO', d, info, logoId);
+    // indicadores do período (somados da aba Resumo)
+    var soma = function(ci){ var s = 0; for(var i = 1; i<d.resumo.length; i++) s += +d.resumo[i][ci]||0; return s; };
+    var kpis = [
+      [1,1,'COLABORADORES', nCol, null],
+      [2,2,'DIAS COMPLETOS', soma(1), null],
+      [3,4,'PONTOS INCOMPLETOS', soma(2), null],
+      [5,6,'FALTAS', soma(3), null],
+      [7,8,'FALTAS JUSTIFICADAS', soma(4), null],
+      [9,9,'SEM REGISTRO', soma(6), null],
+      [10,11,'HORAS TRABALHADAS', soma(7), '[h]:mm'],
+      [12,12,'DIAS COM CORREÇÃO', soma(9), null]
+    ];
+    ws.getRow(6).height = 16; ws.getRow(7).height = 26; ws.getRow(8).height = 10;
+    kpis.forEach(function(k){
+      if(k[1]>k[0]){ ws.mergeCells(6,k[0],6,k[1]); ws.mergeCells(7,k[0],7,k[1]); }
+      var a = ws.getCell(6,k[0]), b = ws.getCell(7,k[0]);
+      a.value = k[2]; a.font = pxvFonte({ size:7.5, bold:true, color:{ argb:PXV.cinza } });
+      a.alignment = { vertical:'bottom', horizontal:'left', indent:1 };
+      b.value = k[3]; b.font = pxvFonte({ size:15, bold:true, color:{ argb:(k[2]==='FALTAS' && k[3]>0) ? 'FFC6433F' : PXV.preto } });
+      b.alignment = { vertical:'middle', horizontal:'left', indent:1 };
+      if(k[4]) b.numFmt = k[4];
+      for(var c = k[0]; c<=k[1]; c++){
+        ws.getCell(6,c).fill = pxvFill(PXV.faixa); ws.getCell(7,c).fill = pxvFill(PXV.faixa);
+        ws.getCell(6,c).border = { top:{ style:'medium', color:{ argb:PXV.amarelo } }, left:c===k[0] ? { style:'medium', color:{ argb:PXV.branco } } : undefined };
+        ws.getCell(7,c).border = { left:c===k[0] ? { style:'medium', color:{ argb:PXV.branco } } : undefined };
+      }
+    });
+    var HC = 9;
+    pxvCabColunas(ws, HC, d.ponto[0]);
+    var FMT = { 2:'dd/mm/yyyy', 4:'hh:mm', 5:'hh:mm', 6:'hh:mm', 7:'hh:mm', 9:'[h]:mm', 10:'[h]:mm' };
+    var anterior = null, grupo = -1;
+    for(var i = 1; i<d.ponto.length; i++){
+      var lin = d.ponto[i], rn = HC+i, row = ws.getRow(rn);
+      var novo = lin[0]!==anterior; if(novo){ grupo++; anterior = lin[0]; }
+      var fds = lin[3]==='Sábado' || lin[3]==='Domingo';
+      row.height = 16;
+      for(var c = 0; c<12; c++){
+        var cel = row.getCell(c+1), v = lin[c];
+        cel.value = (v===undefined || v==='') ? null : v;
+        if(FMT[c]!=null) cel.numFmt = FMT[c];
+        var cor = PXV.preto;
+        if(c===0 && !novo) cor = PXV.cinzaClaro;
+        if((c===2 || c===3) && fds) cor = PXV.cinzaClaro;
+        cel.font = pxvFonte({ color:{ argb:cor }, bold:(c===0 && novo) || c===9 });
+        cel.alignment = { vertical:'middle', horizontal:(c<2 || c===11) ? 'left' : 'center', indent:(c<2 || c===11) ? 1 : 0 };
+        if(grupo%2===1) cel.fill = pxvFill(PXV.grupo);
+        cel.border = { bottom:{ style:'thin', color:{ argb:PXV.linha } },
+          top: (novo && i>1) ? { style:'thin', color:{ argb:PXV.linhaGrupo } } : undefined };
+      }
+      var st = pxvSit(lin[8]), cs = row.getCell(9);
+      if(st){ cs.font = pxvFonte({ size:8.5, bold:!!st.b, color:{ argb:st.f } }); if(st.b) cs.fill = pxvFill(st.b); }
+    }
+    var ult = HC + Math.max(nLin, 0);
+    if(!nLin){ pxvLinhaVazia(ws, HC+1, 12, 'Nenhuma linha no período.'); ult = HC+1; }
+    else ws.autoFilter = { from:{ row:HC, column:1 }, to:{ row:ult, column:12 } };
+    (d.notas||[]).forEach(function(n, k){
+      var rn = ult+2+k; ws.mergeCells(rn,1,rn,12);
+      var c = ws.getCell(rn,1); c.value = n; c.font = pxvFonte({ size:8, italic:true, color:{ argb:PXV.cinza } });
+    });
+    pxvPagina(ws, HC, 'Relatório de ponto · '+d.periodo);
+
+    // ---------- Aba Resumo por colaborador ----------
+    var w2 = wb.addWorksheet('Resumo por colaborador', { properties:{ tabColor:{ argb:PXV.preto } },
+      views:[{ state:'frozen', xSplit:1, ySplit:6, showGridLines:false }] });
+    [30,13,13,10,13,12,12,16,13,13].forEach(function(w, i){ w2.getColumn(i+1).width = w; });
+    pxvCabecalho(wb, w2, 10, 'RESUMO POR COLABORADOR', d, info, logoId);
+    pxvCabColunas(w2, 6, d.resumo[0]);
+    for(var j = 1; j<d.resumo.length; j++){
+      var lr = d.resumo[j], r2 = w2.getRow(6+j); r2.height = 17;
+      for(var c2 = 0; c2<10; c2++){
+        var ce = r2.getCell(c2+1), vv = lr[c2];
+        ce.value = vv;
+        if(c2===7 || c2===8) ce.numFmt = '[h]:mm';
+        var cr = PXV.preto;
+        if(c2>0 && !vv) cr = PXV.cinzaClaro;
+        if(c2===3 && vv>0) cr = 'FFC6433F';
+        ce.font = pxvFonte({ color:{ argb:cr }, bold:c2===0 || (c2===7 && vv>0) || (c2===3 && vv>0) });
+        ce.alignment = { vertical:'middle', horizontal:c2===0 ? 'left' : 'center', indent:c2===0 ? 1 : 0 };
+        if(j%2===0) ce.fill = pxvFill(PXV.grupo);
+        ce.border = { bottom:{ style:'thin', color:{ argb:PXV.linha } } };
+      }
+    }
+    var ultR = 6 + nCol;
+    if(nCol){
+      w2.autoFilter = { from:{ row:6, column:1 }, to:{ row:ultR, column:10 } };
+      var tr = w2.getRow(ultR+1); tr.height = 20;
+      for(var c3 = 1; c3<=10; c3++){
+        var tc = tr.getCell(c3);
+        if(c3===1) tc.value = 'TOTAL DO PERÍODO';
+        else {
+          var tot = 0; for(var q = 1; q<d.resumo.length; q++) tot += +d.resumo[q][c3-1]||0;
+          var L = pxvLetra(c3);
+          tc.value = { formula:'SUM('+L+'7:'+L+ultR+')', result:tot };
+          if(c3===8 || c3===9) tc.numFmt = '[h]:mm';
+        }
+        tc.fill = pxvFill(PXV.preto);
+        tc.font = pxvFonte({ bold:true, color:{ argb:c3===1 ? PXV.amarelo : PXV.branco } });
+        tc.alignment = { vertical:'middle', horizontal:c3===1 ? 'left' : 'center', indent:c3===1 ? 1 : 0 };
+        tc.border = { top:{ style:'medium', color:{ argb:PXV.amarelo } } };
+      }
+    } else pxvLinhaVazia(w2, 7, 10, 'Nenhum colaborador no período.');
+    pxvPagina(w2, 6, 'Resumo por colaborador · '+d.periodo);
+
+    // ---------- Aba Trilha ----------
+    var w3 = wb.addWorksheet('Trilha', { properties:{ tabColor:{ argb:PXV.ouro } },
+      views:[{ state:'frozen', ySplit:6, showGridLines:false }] });
+    [15,30,11,15,13,13,44,22,19].forEach(function(w, i){ w3.getColumn(i+1).width = w; });
+    pxvCabecalho(wb, w3, 9, 'TRILHA DE ALTERAÇÕES', d, info, logoId);
+    pxvCabColunas(w3, 6, d.trilha[0]);
+    var ACAO = { 'Registro':PXV.cinza, 'Falta':'FFC6433F', 'Correção':'FF7A5900' };
+    for(var t = 1; t<d.trilha.length; t++){
+      var lt = d.trilha[t], r3 = w3.getRow(6+t); r3.height = 16;
+      for(var c4 = 0; c4<9; c4++){
+        var cc = r3.getCell(c4+1);
+        cc.value = (lt[c4]===undefined || lt[c4]==='') ? null : lt[c4];
+        if(c4===0) cc.numFmt = 'dd/mm/yyyy';
+        cc.font = pxvFonte({ bold:c4===2, color:{ argb:c4===2 ? (ACAO[lt[2]]||PXV.preto) : PXV.preto } });
+        cc.alignment = { vertical:'middle', horizontal:(c4===1 || c4===6 || c4===7) ? 'left' : 'center', indent:(c4===1 || c4===6 || c4===7) ? 1 : 0 };
+        if(t%2===0) cc.fill = pxvFill(PXV.grupo);
+        cc.border = { bottom:{ style:'thin', color:{ argb:PXV.linha } } };
+      }
+    }
+    if(d.trilha.length>1) w3.autoFilter = { from:{ row:6, column:1 }, to:{ row:5+d.trilha.length, column:9 } };
+    else pxvLinhaVazia(w3, 7, 9, 'Nenhuma alteração registrada no período.');
+    pxvPagina(w3, 6, 'Trilha de alterações · '+d.periodo);
+
+    // ---------- Aba Filtros ----------
+    var w4 = wb.addWorksheet('Filtros', { properties:{ tabColor:{ argb:PXV.cinzaClaro } }, views:[{ showGridLines:false }] });
+    w4.getColumn(1).width = 24; w4.getColumn(2).width = 96;
+    pxvCabecalho(wb, w4, 2, 'FILTROS E CRITÉRIOS', d, 'Relatório de ponto — Construtora Venko', logoId);
+    var rf = 6;
+    (d.filtros||[]).forEach(function(p){
+      var a = w4.getCell(rf,1), b = w4.getCell(rf,2);
+      a.value = String(p[0]).toUpperCase(); b.value = p[1];
+      a.font = pxvFonte({ size:8, bold:true, color:{ argb:PXV.cinza } }); a.fill = pxvFill(PXV.faixa);
+      a.alignment = { vertical:'middle', horizontal:'left', indent:1 };
+      b.font = pxvFonte({ size:10 }); b.alignment = { vertical:'middle', horizontal:'left', indent:1 };
+      a.border = b.border = { bottom:{ style:'thin', color:{ argb:PXV.linha } } };
+      w4.getRow(rf).height = 20; rf++;
+    });
+    rf++;
+    var ct = w4.getCell(rf,1);
+    ct.value = 'COMO LER'; ct.font = pxvFonte({ size:9, bold:true });
+    ct.border = { bottom:{ style:'medium', color:{ argb:PXV.amarelo } } };
+    rf++;
+    (d.notas||[]).forEach(function(n){
+      w4.mergeCells(rf,1,rf,2);
+      var c = w4.getCell(rf,1); c.value = n; c.font = pxvFonte({ size:9, color:{ argb:PXV.cinza } });
+      c.alignment = { vertical:'top', horizontal:'left', wrapText:true };
+      w4.getRow(rf).height = 26; rf++;
+    });
+    pxvPagina(w4, null, 'Filtros do relatório · '+d.periodo);
+    return wb;
+  }
+
   function pontoExcel(){
     var H = state.ponto.hist;
     if(!H.linhas || !H.per){ toast('Faça a consulta antes de exportar.','error'); return; }
-    if(!libsProntas(['xlsx'])){ return carregarLibs(['xlsx']).then(pontoExcel, function(){ avisoLibFalhou(['xlsx']); }); }
     var linhas = pontoHistFiltradas();
     if(!linhas.length){ toast('Nenhuma linha para exportar com esses filtros.','error'); return; }
     var serial = function(iso){ return (Date.UTC(+iso.slice(0,4), +iso.slice(5,7)-1, +iso.slice(8,10)) - Date.UTC(1899,11,30))/86400000; };
@@ -12385,13 +12628,6 @@
       aoa.push([l.nome, l.obraNome||'', serial(l.data), pontoDiaSemana(l.data), hv('entrada'), hv('saida_almoco'), hv('volta_almoco'), hv('saida'),
         l.sit.cod==='em_andamento' ? 'Ponto incompleto (dia em andamento)' : l.sit.txt, l.horas ? l.horas.trab/86400000 : null, l.horas ? l.horas.intervalo/86400000 : null, l.obs||null]);
     });
-    var ws = XLSX.utils.aoa_to_sheet(aoa);
-    for(var i = 1; i<aoa.length; i++){
-      var fmt = function(col, z){ var ref = XLSX.utils.encode_cell({ r:i, c:col }); if(ws[ref] && ws[ref].t==='n') ws[ref].z = z; };
-      fmt(2, 'dd/mm/yyyy'); [4,5,6,7].forEach(function(cc){ fmt(cc, 'hh:mm'); }); fmt(9, '[h]:mm'); fmt(10, '[h]:mm');
-    }
-    ws['!cols'] = [{wch:30},{wch:26},{wch:11},{wch:13},{wch:9},{wch:12},{wch:12},{wch:9},{wch:26},{wch:16},{wch:10},{wch:60}];
-    ws['!autofilter'] = { ref: 'A1:L'+aoa.length };
     // resumo por colaborador (só dias completos somam horas)
     var porC = {}, ordem = [];
     linhas.forEach(function(l){
@@ -12402,10 +12638,6 @@
     });
     var aoa2 = [['Colaborador','Dias presentes (completos)','Pontos incompletos','Faltas','Faltas justificadas','Sem expediente','Sem registro','Horas trabalhadas (dias completos)','Intervalo total','Dias com correção']];
     ordem.forEach(function(k){ var x = porC[k]; aoa2.push([x.nome, x.presente, x.incompleto, x.falta, x.falta_justificada, x.sem_expediente, x.sem_registro, x.trab/86400000, x.intervalo/86400000, x.corr]); });
-    var ws2 = XLSX.utils.aoa_to_sheet(aoa2);
-    for(var j = 1; j<aoa2.length; j++){ [7,8].forEach(function(cc){ var ref = XLSX.utils.encode_cell({ r:j, c:cc }); if(ws2[ref]) ws2[ref].z = '[h]:mm'; }); }
-    ws2['!cols'] = [{wch:30},{wch:14},{wch:14},{wch:8},{wch:14},{wch:12},{wch:12},{wch:18},{wch:14},{wch:14}];
-    ws2['!autofilter'] = { ref: 'A1:J'+aoa2.length };
     // trilha das correções/lançamentos do período (mesmos filtros de colaborador)
     var nomesOk = {}; linhas.forEach(function(l){ nomesOk[(l.colabId||'')+'|'+l.data] = 1; });
     var aoa3 = [['Data','Colaborador','Ação','Campo','Valor anterior','Valor novo','Justificativa','Usuário','Quando']];
@@ -12415,26 +12647,58 @@
         a.campo==='ocorrencia' ? (PONTO_OCORR[a.valor_novo]||a.valor_novo||'') : (a.valor_novo||'').slice(0,5),
         a.justificativa||'', a.usuario_nome||'', new Date(a.criado_em).toLocaleString('pt-BR', { timeZone:PONTO_TZ })]);
     });
-    var ws3 = XLSX.utils.aoa_to_sheet(aoa3);
-    for(var k3 = 1; k3<aoa3.length; k3++){ var rf = XLSX.utils.encode_cell({ r:k3, c:0 }); if(ws3[rf]) ws3[rf].z = 'dd/mm/yyyy'; }
-    ws3['!cols'] = [{wch:11},{wch:30},{wch:10},{wch:14},{wch:12},{wch:12},{wch:50},{wch:22},{wch:20}];
-    ws3['!autofilter'] = { ref: 'A1:I'+aoa3.length };
-    var filtros = [['Relatório de ponto — RDO Venko'], ['Período', fmtDate(H.per.de)+' a '+fmtDate(H.per.ate)],
+    var gerado = new Date().toLocaleString('pt-BR', { timeZone:PONTO_TZ })+' por '+((state.currentUser||{}).nome||'');
+    var pares = [['Período', fmtDate(H.per.de)+' a '+fmtDate(H.per.ate)],
       ['Colaborador', H.colab ? ((state.colaboradores||[]).find(function(c){ return c.id===H.colab; })||{}).nome||'' : 'Todos'+(H.busca ? ' (nome contém "'+H.busca+'")' : '')],
       ['Obra', H.obraId==='__sem' ? 'Sem obra definida' : (H.obraId ? pontoObraNome(H.obraId) : 'Todas')],
       ['Situação', (document.querySelector('#phSit option:checked')||{}).textContent || 'Todas'],
-      ['Gerado em', new Date().toLocaleString('pt-BR', { timeZone:PONTO_TZ })+' por '+((state.currentUser||{}).nome||'')],
-      [], ['Horas trabalhadas = (saída para almoço − entrada) + (saída − volta do almoço). Só é calculada quando os 4 horários existem; sem jornada, tolerância, hora extra ou desconto.'],
-      ['Horários no fuso de São Paulo, gravados pelo servidor. Linhas "Sem registro" não têm horário inventado.']];
-    var ws0 = XLSX.utils.aoa_to_sheet(filtros); ws0['!cols'] = [{wch:16},{wch:90}];
-    var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Ponto');
-    XLSX.utils.book_append_sheet(wb, ws2, 'Resumo por colaborador');
-    XLSX.utils.book_append_sheet(wb, ws3, 'Trilha');
-    XLSX.utils.book_append_sheet(wb, ws0, 'Filtros');
+      ['Gerado em', gerado]];
+    var notas = ['Horas trabalhadas = (saída para almoço − entrada) + (saída − volta do almoço). Só é calculada quando os 4 horários existem; sem jornada, tolerância, hora extra ou desconto.',
+      'Horários no fuso de São Paulo, gravados pelo servidor. Linhas "Sem registro" não têm horário inventado.'];
     var nomeArq = H.colab ? (((state.colaboradores||[]).find(function(c){ return c.id===H.colab; })||{}).nome||'colaborador') : 'Todos';
-    XLSX.writeFile(wb, 'Ponto_'+String(nomeArq).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+H.per.de+'_a_'+H.per.ate+'.xlsx');
-    toast('Relatório de ponto baixado em Excel ('+linhas.length+' linha(s)).','ok');
+    var arquivo = 'Ponto_'+String(nomeArq).normalize('NFD').split('').filter(function(ch){ return ch.charCodeAt(0)<128; }).join('').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+H.per.de+'_a_'+H.per.ate+'.xlsx';
+    var pronto = function(){ toast('Relatório de ponto baixado em Excel ('+linhas.length+' linha(s)).','ok'); };
+    // modelo simples (sem formatação) — só se o gerador com a identidade Venko não carregar
+    var simples = function(){
+      var ws = XLSX.utils.aoa_to_sheet(aoa);
+      for(var i = 1; i<aoa.length; i++){
+        var fmt = function(col, z){ var ref = XLSX.utils.encode_cell({ r:i, c:col }); if(ws[ref] && ws[ref].t==='n') ws[ref].z = z; };
+        fmt(2, 'dd/mm/yyyy'); [4,5,6,7].forEach(function(cc){ fmt(cc, 'hh:mm'); }); fmt(9, '[h]:mm'); fmt(10, '[h]:mm');
+      }
+      ws['!cols'] = [{wch:30},{wch:26},{wch:11},{wch:13},{wch:9},{wch:12},{wch:12},{wch:9},{wch:26},{wch:16},{wch:10},{wch:60}];
+      ws['!autofilter'] = { ref: 'A1:L'+aoa.length };
+      var ws2 = XLSX.utils.aoa_to_sheet(aoa2);
+      for(var j = 1; j<aoa2.length; j++){ [7,8].forEach(function(cc){ var ref = XLSX.utils.encode_cell({ r:j, c:cc }); if(ws2[ref]) ws2[ref].z = '[h]:mm'; }); }
+      ws2['!cols'] = [{wch:30},{wch:14},{wch:14},{wch:8},{wch:14},{wch:12},{wch:12},{wch:18},{wch:14},{wch:14}];
+      ws2['!autofilter'] = { ref: 'A1:J'+aoa2.length };
+      var ws3 = XLSX.utils.aoa_to_sheet(aoa3);
+      for(var k3 = 1; k3<aoa3.length; k3++){ var rf = XLSX.utils.encode_cell({ r:k3, c:0 }); if(ws3[rf]) ws3[rf].z = 'dd/mm/yyyy'; }
+      ws3['!cols'] = [{wch:11},{wch:30},{wch:10},{wch:14},{wch:12},{wch:12},{wch:50},{wch:22},{wch:20}];
+      ws3['!autofilter'] = { ref: 'A1:I'+aoa3.length };
+      var ws0 = XLSX.utils.aoa_to_sheet([['Relatório de ponto — RDO Venko']].concat(pares, [[]], notas.map(function(n){ return [n]; })));
+      ws0['!cols'] = [{wch:16},{wch:90}];
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Ponto');
+      XLSX.utils.book_append_sheet(wb, ws2, 'Resumo por colaborador');
+      XLSX.utils.book_append_sheet(wb, ws3, 'Trilha');
+      XLSX.utils.book_append_sheet(wb, ws0, 'Filtros');
+      XLSX.writeFile(wb, arquivo);
+      pronto();
+    };
+    carregarLibs(['exceljs']).then(function(){ return cdmPrepararLogo(); }).then(function(){
+      var d = { ponto:aoa, resumo:aoa2, trilha:aoa3, filtros:pares, notas:notas, periodo:pares[0][1], gerado:gerado, logo:CDM_LOGO, logoRatio:CDM_LOGO_RATIO };
+      return pontoXlsxVenko(ExcelJS, d).xlsx.writeBuffer();
+    }).then(function(buf){
+      var blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = arquivo;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); }, 5000);
+      pronto();
+    }).catch(function(err){
+      try{ console.warn('Excel com a identidade Venko indisponível; usando o modelo simples.', err); }catch(e){}
+      if(libPronta('xlsx')) simples(); else carregarLib('xlsx').then(simples, function(){ avisoLibFalhou(['xlsx']); });
+    });
   }
 
   function pontoLigarEventos(root){
