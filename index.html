@@ -12468,7 +12468,7 @@
       [5,6,'FALTAS', soma(3), null],
       [7,8,'FALTAS JUSTIFICADAS', soma(4), null],
       [9,9,'SEM REGISTRO', soma(6), null],
-      [10,11,'HORAS TRABALHADAS', soma(7), '[h]:mm'],
+      [10,11,'HORAS TRABALHADAS', 0, '[h]:mm'],
       [12,12,'DIAS COM CORREÇÃO', soma(9), null]
     ];
     ws.getRow(6).height = 16; ws.getRow(7).height = 26; ws.getRow(8).height = 10;
@@ -12489,7 +12489,7 @@
     var HC = 9;
     pxvCabColunas(ws, HC, d.ponto[0]);
     var FMT = { 2:'dd/mm/yyyy', 4:'hh:mm', 5:'hh:mm', 6:'hh:mm', 7:'hh:mm', 9:'[h]:mm', 10:'[h]:mm' };
-    var anterior = null, grupo = -1;
+    var anterior = null, grupo = -1, horasPor = {}, intervPor = {}, totH = 0;
     for(var i = 1; i<d.ponto.length; i++){
       var lin = d.ponto[i], rn = HC+i, row = ws.getRow(rn);
       var novo = lin[0]!==anterior; if(novo){ grupo++; anterior = lin[0]; }
@@ -12508,12 +12508,26 @@
         cel.border = { bottom:{ style:'thin', color:{ argb:PXV.linha } },
           top: (novo && i>1) ? { style:'thin', color:{ argb:PXV.linhaGrupo } } : undefined };
       }
+      // horas e intervalo como fórmula: se alguém mudar um horário no Excel, recalcula sozinho
+      var tem4 = [4,5,6,7].every(function(k){ return typeof lin[k]==='number'; });
+      var ordemOk = tem4 && lin[5]>=lin[4] && lin[6]>=lin[5] && lin[7]>=lin[6];
+      var vTrab = ordemOk ? (lin[5]-lin[4])+(lin[7]-lin[6]) : (tem4 ? 'Conferir' : '');
+      var vInt = ordemOk ? lin[6]-lin[5] : (tem4 ? 'Conferir' : '');
+      var base = 'IF(COUNT(E'+rn+':H'+rn+')<4,"",IF(AND(F'+rn+'>=E'+rn+',G'+rn+'>=F'+rn+',H'+rn+'>=G'+rn+'),';
+      row.getCell(10).value = { formula:base+'(F'+rn+'-E'+rn+')+(H'+rn+'-G'+rn+'),"Conferir"))', result:vTrab };
+      row.getCell(11).value = { formula:base+'G'+rn+'-F'+rn+',"Conferir"))', result:vInt };
+      if(ordemOk){ horasPor[lin[0]] = (horasPor[lin[0]]||0)+vTrab; intervPor[lin[0]] = (intervPor[lin[0]]||0)+vInt; totH += vTrab; }
       var st = pxvSit(lin[8]), cs = row.getCell(9);
       if(st){ cs.font = pxvFonte({ size:8.5, bold:!!st.b, color:{ argb:st.f } }); if(st.b) cs.fill = pxvFill(st.b); }
     }
     var ult = HC + Math.max(nLin, 0);
     if(!nLin){ pxvLinhaVazia(ws, HC+1, 12, 'Nenhuma linha no período.'); ult = HC+1; }
-    else ws.autoFilter = { from:{ row:HC, column:1 }, to:{ row:ult, column:12 } };
+    else {
+      ws.autoFilter = { from:{ row:HC, column:1 }, to:{ row:ult, column:12 } };
+      ws.getCell(7,10).value = { formula:'SUM(J'+(HC+1)+':J'+ult+')', result:totH };
+      ws.addConditionalFormatting({ ref:'J'+(HC+1)+':K'+ult, rules:[{ type:'expression', formulae:['J'+(HC+1)+'="Conferir"'], priority:1,
+        style:{ font:{ bold:true, color:{ argb:'FFC6433F' } } } }] });
+    }
     (d.notas||[]).forEach(function(n, k){
       var rn = ult+2+k; ws.mergeCells(rn,1,rn,12);
       var c = ws.getCell(rn,1); c.value = n; c.font = pxvFonte({ size:8, italic:true, color:{ argb:PXV.cinza } });
@@ -12531,7 +12545,11 @@
       for(var c2 = 0; c2<10; c2++){
         var ce = r2.getCell(c2+1), vv = lr[c2];
         ce.value = vv;
-        if(c2===7 || c2===8) ce.numFmt = '[h]:mm';
+        if(c2===7 || c2===8){
+          ce.numFmt = '[h]:mm';
+          if(nLin){ var Lc = c2===7 ? 'J' : 'K'; vv = (c2===7 ? horasPor : intervPor)[lr[0]]||0;
+            ce.value = { formula:'SUMIF(Ponto!$A$'+(HC+1)+':$A$'+ult+',A'+(6+j)+',Ponto!$'+Lc+'$'+(HC+1)+':$'+Lc+'$'+ult+')', result:vv }; }
+        }
         var cr = PXV.preto;
         if(c2>0 && !vv) cr = PXV.cinzaClaro;
         if(c2===3 && vv>0) cr = 'FFC6433F';
@@ -12550,6 +12568,7 @@
         if(c3===1) tc.value = 'TOTAL DO PERÍODO';
         else {
           var tot = 0; for(var q = 1; q<d.resumo.length; q++) tot += +d.resumo[q][c3-1]||0;
+          if(c3===8 || c3===9){ tot = 0; var mp = c3===8 ? horasPor : intervPor; for(var nm in mp) tot += mp[nm]; }
           var L = pxvLetra(c3);
           tc.value = { formula:'SUM('+L+'7:'+L+ultR+')', result:tot };
           if(c3===8 || c3===9) tc.numFmt = '[h]:mm';
