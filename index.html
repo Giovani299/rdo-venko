@@ -587,6 +587,49 @@
   .seg button{border:0;background:transparent;color:var(--ink-soft);font:600 13px/1 Inter,sans-serif;padding:9px 16px;cursor:pointer;min-height:36px;}
   .seg button + button{border-left:1px solid var(--line);}
   .seg button.ativo{background:var(--ink);color:var(--paper);}
+  /* v51 — Ponto */
+  .ponto-abas{margin:2px 0 14px;}
+  .ponto-barra{display:flex;flex-direction:column;gap:10px;}
+  .ponto-datanav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .ponto-datanav input[type=date], .ponto-periodo input{width:auto;min-width:0;}
+  .ponto-filtros{display:grid;grid-template-columns:2fr 1fr;gap:10px;}
+  .ponto-resumo{display:flex;flex-wrap:wrap;gap:8px;}
+  .ponto-cont{font-size:12px;padding:4px 10px;border-radius:20px;border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);}
+  .ponto-cont b{font-variant-numeric:tabular-nums;color:var(--ink);}
+  .ponto-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;margin-top:12px;}
+  .ponto-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:10px;}
+  .ponto-topo{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .ponto-quem b{display:block;font-size:14.5px;}
+  .ponto-quem span{font-size:12px;color:var(--steel);}
+  .ponto-etapas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
+  .ponto-etapa, .btn.ponto-etapa-btn{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;padding:8px 9px;border-radius:8px;min-height:54px;white-space:normal;text-align:left;}
+  .ponto-etapa span, .ponto-etapa-btn span{font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;line-height:1.2;}
+  .ponto-etapa b{font-size:17px;font-variant-numeric:tabular-nums;}
+  .ponto-etapa-btn b{font-size:13px;}
+  .ponto-etapa.feita{background:var(--status-approved-bg);color:var(--status-approved);}
+  .ponto-etapa.pendente{border:1px dashed var(--line);color:var(--steel);}
+  .ponto-etapa.pendente b{font-size:12px;font-weight:600;}
+  .ponto-rodape{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
+  .ponto-acoes{display:flex;gap:6px;margin-left:auto;}
+  .ps-presente{color:var(--status-approved);} .chip.ps-presente{background:var(--status-approved-bg);}
+  .ps-em_andamento, .ps-incompleto{color:var(--status-stopped);} .chip.ps-em_andamento, .chip.ps-incompleto{background:var(--status-stopped-bg);}
+  .ps-falta{color:var(--status-rejected);} .chip.ps-falta{background:var(--status-rejected-bg);}
+  .ps-falta_justificada{color:var(--status-sent);} .chip.ps-falta_justificada{background:var(--status-sent-bg);}
+  .ps-sem_expediente, .ps-sem_registro{color:var(--status-draft);} .chip.ps-sem_expediente, .chip.ps-sem_registro{background:var(--status-draft-bg);}
+  .ponto-cont.ps-presente b, .ponto-cont.ps-em_andamento b, .ponto-cont.ps-incompleto b, .ponto-cont.ps-falta b, .ponto-cont.ps-falta_justificada b{color:inherit;}
+  .ponto-vazio{color:var(--steel);}
+  .ponto-trilha{margin-top:12px;border-top:1px solid var(--line);padding-top:10px;font-size:12px;max-height:190px;overflow:auto;}
+  .ponto-trilha ul{margin:6px 0 0;padding-left:18px;}
+  .ponto-periodo{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;}
+  .field.ponto-campo{margin:0;display:inline-flex;align-items:center;gap:6px;}
+  .ponto-filtros .field.ponto-campo{display:block;}
+  .field.ponto-campo input[type=search], .field.ponto-campo select{width:100%;}
+  .ponto-datanav .field.ponto-campo input[type=date]{width:auto;}
+  @media (max-width:760px){
+    .ponto-filtros{grid-template-columns:1fr;}
+    .ponto-lista{grid-template-columns:1fr;}
+  }
+  @media (max-width:420px){ .ponto-etapas{grid-template-columns:repeat(2,minmax(0,1fr));} }
   .seg button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px;}
   .rede-resumo{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:12px 14px;margin:0 0 10px;}
   .rede-resumo-topo{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;margin-bottom:8px;}
@@ -877,6 +920,7 @@
       <button class="tab-btn" data-view="mapa" id="tabMapa" style="display:none">Mapeamento</button>
       <button class="tab-btn" data-view="equipamentos">Equipamentos</button>
       <button class="tab-btn" data-view="colaboradores">Colaboradores</button>
+      <button class="tab-btn" data-view="ponto" id="tabPonto" style="display:none">Ponto</button>
       <button class="tab-btn" data-view="equipes" style="display:none">Equipes</button>
       <button class="tab-btn" data-view="financeiro" id="tabFinanceiro" style="display:none">Financeiro</button>
       <button class="tab-btn" data-view="tabelaprecos" id="tabTabelaPrecos" style="display:none">Tabela de Preços</button>
@@ -1051,6 +1095,8 @@
       </div>
       <div id="colaboradorList"></div>
     </section>
+
+    <section id="view-ponto" class="view"></section>
 
     <section id="view-equipes" class="view">
       <div class="page-head">
@@ -1813,6 +1859,7 @@
     });
     if(view==='novo' && state.editId===null){ renderRdoForm(null); rdoPerguntarEquipesAnteriores(rdoFormAtual); }
     if(view==='detail' && state.detailId){ registrarAcessoRdo(state.detailId); }
+    if(view==='ponto'){ pontoAbrir(); }
     if(view==='mapa'){ state.mapaMode=null; state.mapaRamalPoints=[]; if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers(); updateMapaModeUI(); }
     renderAll();
     if(view==='mapa-obra'){ setTimeout(function(){ if(leafletMapInstance) leafletMapInstance.invalidateSize(); }, 30); }
@@ -1827,6 +1874,7 @@
     if((view==='mapa'||view==='mapa-obra') && !obrasCanAccess()) return;
     if(view==='clientes' && !obrasGestaoCanAccess()) return;
     if((view==='planejamento'||view==='planejamento-obra') && !planejamentoCanAccess()) return;
+    if(view==='ponto' && !pontoPodeBater()) return;
     if(view==='tabelaprecos'){
       if(!financeiroCanAccess()) return;
       if(!state.tabelaPrecosUnlocked){
@@ -2157,6 +2205,7 @@
           document.getElementById('tabObras').style.display = (fresh.is_admin || fresh.acesso_obras !== false) ? '' : 'none';
           document.getElementById('tabMapa').style.display = (fresh.is_admin || fresh.acesso_obras !== false) ? '' : 'none';
           document.getElementById('tabPlanejamento').style.display = (fresh.is_admin || fresh.acesso_planejamento) ? '' : 'none';
+          document.getElementById('tabPonto').style.display = pontoPodeBater() ? '' : 'none';
           var podeGestaoObras = (fresh.is_admin || fresh.acesso_obras_gestao !== false);
           var clienteFormCard = document.getElementById('clienteFormCard'); if(clienteFormCard) clienteFormCard.style.display = podeGestaoObras ? '' : 'none';
           var obraFormCard = document.getElementById('obraFormCard'); if(obraFormCard) obraFormCard.style.display = podeGestaoObras ? '' : 'none';
@@ -2462,6 +2511,7 @@
       .on('postgres_changes', {event:'*', schema:'public', table:'mapa_marcacoes'}, function(){ cargaRealtime('marc', function(){ if(state.mapaObraId) loadMapaMarcacoes(state.mapaObraId); }); })
       .on('postgres_changes', {event:'*', schema:'public', table:'planejamento_servicos'}, function(){ cargaRealtime('plan', function(){ if(state.planejamentoObraId) loadPlanejamentoServicos(state.planejamentoObraId); }); })
       .on('postgres_changes', {event:'*', schema:'public', table:'mapa_fila_ia'}, function(){ cargaRealtime('fila', function(){ if(state.mapaObraId) loadMapaFilaIA(state.mapaObraId); }); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'ponto_registros'}, function(){ cargaRealtime('ponto', function(){ if(state.view==='ponto' && state.ponto.aba==='dia') pontoCarregarDia(); }); })
       .on('postgres_changes', {event:'*', schema:'public', table:'projetos_obra'}, function(){ cargaRealtime('proj', function(){ if(state.planejamentoObraId) loadProjetosObra(state.planejamentoObraId); }); })
       .subscribe();
   }
@@ -2517,6 +2567,7 @@
     document.getElementById('tabObras').style.display = (profile.is_admin || profile.acesso_obras !== false) ? '' : 'none';
     document.getElementById('tabMapa').style.display = (profile.is_admin || profile.acesso_obras !== false) ? '' : 'none';
     document.getElementById('tabPlanejamento').style.display = (profile.is_admin || profile.acesso_planejamento) ? '' : 'none';
+    document.getElementById('tabPonto').style.display = pontoPodeBater() ? '' : 'none';
     var podeGestaoObrasLogin = (profile.is_admin || profile.acesso_obras_gestao !== false);
     var clienteFormCardLogin = document.getElementById('clienteFormCard'); if(clienteFormCardLogin) clienteFormCardLogin.style.display = podeGestaoObrasLogin ? '' : 'none';
     var obraFormCardLogin = document.getElementById('obraFormCard'); if(obraFormCardLogin) obraFormCardLogin.style.display = podeGestaoObrasLogin ? '' : 'none';
@@ -4561,6 +4612,7 @@
     if(state.view==='tabelaprecos'){ renderTabelaPrecos(); }
     if(state.view==='planejamento'){ renderPlanejamentoObraList(); }
     if(state.view==='planejamento-obra' && state.planejamentoObraId){ renderPlanejamentoObra(); }
+    if(state.view==='ponto'){ renderPonto(); }
   }
 
   function renderKpis(){
@@ -11812,6 +11864,623 @@
     });
   }
   document.getElementById('btnExportCdm').addEventListener('click', openCdmModal);
+
+  /* ---------------- PONTO (v51) ----------------
+     Registro diário de entrada, almoço e saída de cada colaborador já cadastrado.
+     Toda gravação passa pelas funções do banco (migration 054): horário do SERVIDOR em
+     São Paulo, sequência das etapas, sem duplicidade, falta x horário, permissões por obra
+     e trilha de auditoria. A tela nunca grava direto na tabela. */
+  var PONTO_ETAPAS = [
+    { k:'entrada', t:'Entrada' }, { k:'saida_almoco', t:'Saída almoço' },
+    { k:'volta_almoco', t:'Volta almoço' }, { k:'saida', t:'Saída' }
+  ];
+  var PONTO_OCORR = { falta:'Falta', falta_justificada:'Falta justificada', sem_expediente:'Sem expediente' };
+  var PONTO_TZ = 'America/Sao_Paulo';
+  var PONTO_SIT_TXT = { presente:'Presente', incompleto:'Ponto incompleto', em_andamento:'Em andamento', falta:'Falta', falta_justificada:'Falta justificada', sem_expediente:'Sem expediente', sem_registro:'Sem registro' };
+  var DIAS_SEMANA = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+  state.ponto = { aba:'dia', data:'', hoje:'', offsetMs:0, busca:'', obraId:'', regs:{}, carregado:'', erro:'', ocupado:{},
+    hist:{ colab:'', busca:'', obraId:'', modo:'mes', mes:'', de:'', ate:'', dia:'', situacao:'', linhas:null, audit:[], carregando:false } };
+  var pontoRelogioTimer = null;
+
+  function pontoPodeBater(){
+    var u = state.currentUser;
+    return !!(u && (u.is_admin || u.acesso_obras_gestao !== false || /encarregad/i.test(u.cargo||'')));
+  }
+  function pontoPodeCorrigir(){
+    var u = state.currentUser;
+    return !!(u && (u.is_admin || u.acesso_obras_gestao !== false));
+  }
+  // mesmas regras do banco: admin ou "todas as obras" vê todos; senão só os das obras liberadas
+  function pontoVeObra(obraId){
+    var u = state.currentUser;
+    if(!u) return false;
+    if(u.is_admin || !u.obras_ids) return true;
+    return !!obraId && u.obras_ids.indexOf(obraId)>-1;
+  }
+  function pontoColabs(incluirInativos){
+    return (state.colaboradores||[]).filter(function(c){
+      return (incluirInativos || c.ativo!==false) && pontoVeObra(c.obraId);
+    }).sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+  }
+  function pontoObraNome(id){ var o = (state.obras||[]).find(function(x){ return x.id===id; }); return o ? o.nome : ''; }
+  function pontoEquipeNome(id){ var e = (state.equipes||[]).find(function(x){ return x.id===id; }); return e ? e.nome : ''; }
+  function pontoHora(ts){
+    if(!ts) return '';
+    try{ return new Date(ts).toLocaleTimeString('pt-BR', { timeZone:PONTO_TZ, hour:'2-digit', minute:'2-digit' }); }catch(e){ return ''; }
+  }
+  function pontoHoraSeg(ts){
+    if(!ts) return null;
+    var p = new Intl.DateTimeFormat('en-GB', { timeZone:PONTO_TZ, hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }).formatToParts(new Date(ts));
+    var g = function(t){ var x = p.find(function(y){ return y.type===t; }); return x ? Number(x.value) : 0; };
+    return (g('hour')%24)*3600 + g('minute')*60 + g('second');
+  }
+  function pontoDiaSP(d){
+    var p = new Intl.DateTimeFormat('en-CA', { timeZone:PONTO_TZ, year:'numeric', month:'2-digit', day:'2-digit' }).format(d || new Date());
+    return p;
+  }
+  function pontoSomaDias(iso, n){
+    var d = new Date(iso+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10);
+  }
+  function pontoDiaSemana(iso){ return DIAS_SEMANA[new Date(iso+'T12:00:00Z').getUTCDay()]; }
+  function pontoFmtDur(ms){
+    if(ms==null) return '';
+    var min = Math.round(ms/60000), h = Math.floor(min/60), m = min%60;
+    return h+'h'+String(m).padStart(2,'0');
+  }
+  // horas = (saída almoço − entrada) + (saída − volta almoço); intervalo = volta − saída almoço.
+  // Só com os 4 registros; senão não há total (ponto incompleto).
+  function pontoHoras(r){
+    if(!r || !r.entrada || !r.saida_almoco || !r.volta_almoco || !r.saida) return null;
+    var e = new Date(r.entrada), sa = new Date(r.saida_almoco), va = new Date(r.volta_almoco), s = new Date(r.saida);
+    return { trab: (sa-e) + (s-va), intervalo: va-sa };
+  }
+  function pontoSituacao(r, data){
+    if(r && r.ocorrencia) return { cod:r.ocorrencia, txt:PONTO_OCORR[r.ocorrencia]||r.ocorrencia };
+    var n = r ? PONTO_ETAPAS.filter(function(e){ return !!r[e.k]; }).length : 0;
+    if(n===4) return { cod:'presente', txt:'Presente' };
+    if(n===0) return { cod:'sem_registro', txt:'Sem registro' };
+    if(data && data===state.ponto.hoje) return { cod:'em_andamento', txt:'Em andamento' };
+    return { cod:'incompleto', txt:'Ponto incompleto' };
+  }
+  function pontoChip(sit){ return '<span class="chip ponto-sit ps-'+sit.cod+'">'+esc(sit.txt)+'</span>'; }
+  function pontoErroMsg(err){
+    var m = (err && (err.message || err.details)) || String(err||'erro');
+    if(/vk_ponto_|ponto_registros|ponto_auditoria/.test(m) && /does not exist|not find|schema cache/i.test(m)) return 'O módulo de ponto ainda não foi instalado no banco (migration 054).';
+    if(/Failed to fetch|NetworkError|network/i.test(m)) return 'Sem conexão: o ponto precisa de internet (usa o horário do servidor).';
+    return m;
+  }
+
+  function pontoAbrir(){
+    var P = state.ponto;
+    var hojeLocal = pontoDiaSP(new Date(Date.now()+P.offsetMs));
+    if(!P.data) P.data = hojeLocal;
+    if(!P.hoje) P.hoje = hojeLocal;
+    if(!P.hist.mes) P.hist.mes = P.hoje.slice(0,7);
+    renderPonto();
+    Promise.resolve(supabaseClient.rpc('vk_ponto_agora')).then(function(res){
+      if(res && !res.error && res.data){
+        var hojeAntes = P.hoje;
+        P.hoje = String(res.data.data);
+        P.offsetMs = new Date(res.data.agora).getTime() - Date.now();
+        if(P.data===hojeAntes) P.data = P.hoje;
+        P.erro = '';
+      } else if(res && res.error){ P.erro = pontoErroMsg(res.error); }
+      if(P.aba==='dia') pontoCarregarDia();
+      renderPonto();
+    }, function(err){ P.erro = pontoErroMsg(err); renderPonto(); });
+    if(!pontoRelogioTimer) pontoRelogioTimer = setInterval(function(){
+      if(state.view!=='ponto'){ clearInterval(pontoRelogioTimer); pontoRelogioTimer = null; return; }
+      var el = document.getElementById('pontoRelogio'); if(el) el.textContent = pontoRelogioTxt();
+    }, 15000);
+  }
+  function pontoRelogioTxt(){
+    return 'Horário do servidor: '+new Date(Date.now()+state.ponto.offsetMs).toLocaleTimeString('pt-BR', { timeZone:PONTO_TZ, hour:'2-digit', minute:'2-digit' });
+  }
+  function pontoCarregarDia(){
+    var P = state.ponto, data = P.data;
+    if(!data || !supabaseClient) return Promise.resolve();
+    return Promise.resolve(supabaseClient.from('ponto_registros').select('*').eq('data', data)).then(function(res){
+      if(P.data!==data) return;
+      if(res.error){ P.erro = pontoErroMsg(res.error); renderPonto(); return; }
+      var m = {};
+      (res.data||[]).forEach(function(r){ if(r.colaborador_id) m[r.colaborador_id] = r; });
+      P.regs = m; P.carregado = data; P.erro = '';
+      if(state.view==='ponto' && P.aba==='dia') pontoRenderLista();
+    }, function(err){ P.erro = pontoErroMsg(err); renderPonto(); });
+  }
+
+  function renderPonto(){
+    var root = document.getElementById('view-ponto');
+    if(!root) return;
+    var P = state.ponto;
+    if(!root.getAttribute('data-montado')){
+      root.setAttribute('data-montado','1');
+      root.innerHTML =
+        '<div class="page-head"><div><h1>Ponto</h1><p>Entrada, almoço e saída de cada colaborador, com o horário do servidor (São Paulo). Cada toque registra a hora de agora.</p></div></div>'+
+        '<div class="seg ponto-abas" role="tablist"><button type="button" data-pontoaba="dia">Bater ponto</button><button type="button" data-pontoaba="historico">Histórico de ponto</button></div>'+
+        '<div id="pontoAviso"></div><div id="pontoCorpo"></div>';
+      pontoLigarEventos(root);
+    }
+    root.querySelectorAll('[data-pontoaba]').forEach(function(b){ b.classList.toggle('ativo', b.getAttribute('data-pontoaba')===P.aba); });
+    var aviso = document.getElementById('pontoAviso');
+    aviso.innerHTML = P.erro ? '<p class="med-aviso" style="margin:12px 0 0;">'+esc(P.erro)+'</p>' : '';
+    var corpo = document.getElementById('pontoCorpo');
+    if(corpo.getAttribute('data-aba')!==P.aba){
+      corpo.setAttribute('data-aba', P.aba);
+      corpo.innerHTML = P.aba==='dia' ? pontoDiaShellHtml() : pontoHistShellHtml();
+    }
+    if(P.aba==='dia') pontoRenderLista(); else pontoHistRender();
+  }
+
+  // ----- aba do dia -----
+  function pontoObraOptions(sel){
+    var ids = {};
+    pontoColabs(true).forEach(function(c){ if(c.obraId) ids[c.obraId] = true; });
+    var obras = (state.obras||[]).filter(function(o){ return ids[o.id]; }).sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+    return '<option value="">Todas as obras</option>'+obras.map(function(o){ return '<option value="'+esc(o.id)+'"'+(o.id===sel?' selected':'')+'>'+esc(o.nome)+'</option>'; }).join('')+
+      (pontoColabs(true).some(function(c){ return !c.obraId; }) ? '<option value="__sem"'+(sel==='__sem'?' selected':'')+'>Sem obra definida</option>' : '');
+  }
+  function pontoDiaShellHtml(){
+    var P = state.ponto;
+    return '<div class="card ponto-barra">'+
+        '<div class="ponto-datanav">'+
+          '<button type="button" class="btn ghost sm" data-pontodia="-1" aria-label="Dia anterior">◀</button>'+
+          '<span class="field ponto-campo"><input type="date" id="pontoData" value="'+esc(P.data)+'" max="'+esc(P.hoje)+'"></span>'+
+          '<button type="button" class="btn ghost sm" data-pontodia="1" aria-label="Próximo dia">▶</button>'+
+          '<button type="button" class="btn ghost sm" data-pontodia="hoje">Hoje</button>'+
+          '<span class="hint" id="pontoDiaTxt" style="margin:0;"></span>'+
+        '</div>'+
+        '<div class="ponto-filtros">'+
+          '<div class="field ponto-campo"><input type="search" id="pontoBusca" placeholder="Buscar colaborador pelo nome…" value="'+esc(P.busca)+'" autocomplete="off" aria-label="Buscar colaborador"></div>'+
+          '<div class="field ponto-campo"><select id="pontoObra" aria-label="Obra">'+pontoObraOptions(P.obraId)+'</select></div>'+
+        '</div>'+
+        '<div class="ponto-resumo" id="pontoResumo"></div>'+
+        '<p class="hint" id="pontoRelogio" style="margin:8px 0 0;">'+esc(pontoRelogioTxt())+'</p>'+
+      '</div>'+
+      '<div id="pontoLista" class="ponto-lista"></div>';
+  }
+  function pontoFiltraColabs(lista, busca, obraId){
+    var b = normalizarBusca(busca);
+    return lista.filter(function(c){
+      if(obraId==='__sem' && c.obraId) return false;
+      if(obraId && obraId!=='__sem' && c.obraId!==obraId) return false;
+      if(b && normalizarBusca(c.nome).indexOf(b)===-1) return false;
+      return true;
+    });
+  }
+  function normalizarBusca(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
+  function pontoCardHtml(c){
+    var P = state.ponto, r = P.regs[c.id] || null, data = P.data, ehHoje = data===P.hoje && c.ativo!==false;
+    var sit = pontoSituacao(r, data);
+    var proxima = (!r || !r.ocorrencia) ? PONTO_ETAPAS.find(function(e){ return !(r && r[e.k]); }) : null;
+    var ocupado = !!P.ocupado[c.id];
+    var etapas = PONTO_ETAPAS.map(function(e){
+      var hora = r && r[e.k] ? pontoHora(r[e.k]) : '';
+      if(hora) return '<div class="ponto-etapa feita"><span>'+e.t+'</span><b>'+esc(hora)+'</b></div>';
+      if(ehHoje && pontoPodeBater() && proxima && proxima.k===e.k && !(r && r.ocorrencia))
+        return '<button type="button" class="btn primary ponto-etapa-btn" data-pontobater="'+e.k+'" data-colab="'+esc(c.id)+'"'+(ocupado?' disabled':'')+'><span>'+e.t+'</span><b>'+(ocupado?'Gravando…':'Registrar')+'</b></button>';
+      return '<div class="ponto-etapa pendente"><span>'+e.t+'</span><b>'+(r && r.ocorrencia ? '—' : (ehHoje ? 'pendente' : 'sem registro'))+'</b></div>';
+    }).join('');
+    var h = pontoHoras(r);
+    var extra = [];
+    if(h) extra.push('Trabalhou '+pontoFmtDur(h.trab)+' · intervalo '+pontoFmtDur(h.intervalo));
+    if(r && r.justificativa) extra.push('Justificativa: '+r.justificativa);
+    if(r && r.corrigido) extra.push('Registro corrigido — veja a trilha em Corrigir');
+    var semHorario = !r || !PONTO_ETAPAS.some(function(e){ return !!r[e.k]; });
+    var acoes = '';
+    if(ehHoje && pontoPodeBater() && semHorario && !(r && r.ocorrencia)) acoes += '<button type="button" class="btn danger sm" data-pontofalta="'+esc(c.id)+'"'+(ocupado?' disabled':'')+'>Falta</button>';
+    if(pontoPodeCorrigir()) acoes += '<button type="button" class="btn ghost sm" data-pontocorrigir="'+esc(c.id)+'" data-data="'+esc(data)+'">Corrigir</button>';
+    var sub = [c.funcao, pontoEquipeNome(c.equipeId), pontoObraNome(c.obraId) || (c.obraId ? '' : 'Sem obra definida')].filter(Boolean).join(' · ');
+    return '<div class="ponto-card" data-colabcard="'+esc(c.id)+'">'+
+      '<div class="ponto-topo"><div class="ponto-quem"><b>'+esc(c.nome)+(c.ativo===false ? ' <span class="tag-example">inativo</span>' : '')+'</b><span>'+esc(sub)+'</span></div>'+pontoChip(sit)+'</div>'+
+      '<div class="ponto-etapas">'+etapas+'</div>'+
+      ((extra.length || acoes) ? '<div class="ponto-rodape"><span class="hint" style="margin:0;">'+esc(extra.join(' · '))+'</span><div class="ponto-acoes">'+acoes+'</div></div>' : '')+
+    '</div>';
+  }
+  function pontoRenderLista(){
+    var P = state.ponto;
+    if(state.view!=='ponto' || P.aba!=='dia') return;
+    var lista = document.getElementById('pontoLista'); if(!lista) return;
+    var inp = document.getElementById('pontoData'); if(inp && inp.value!==P.data) inp.value = P.data;
+    if(inp) inp.max = P.hoje;
+    var selObra = document.getElementById('pontoObra');
+    if(selObra){ var opHtml = pontoObraOptions(P.obraId); if(selObra.getAttribute('data-h')!==opHtml){ selObra.innerHTML = opHtml; selObra.setAttribute('data-h', opHtml); } }
+    var dt = document.getElementById('pontoDiaTxt');
+    if(dt) dt.textContent = pontoDiaSemana(P.data)+(P.data===P.hoje ? ' · hoje' : (P.data<P.hoje ? ' · dia anterior: só consulta e correção' : ''));
+    var todos = pontoColabs(false);
+    // inativos com registro neste dia continuam aparecendo
+    pontoColabs(true).forEach(function(c){ if(c.ativo===false && P.regs[c.id] && todos.indexOf(c)===-1) todos.push(c); });
+    var vis = pontoFiltraColabs(todos, P.busca, P.obraId);
+    var cont = { presente:0, em_andamento:0, incompleto:0, falta:0, falta_justificada:0, sem_expediente:0, sem_registro:0 };
+    todos.forEach(function(c){ var s = pontoSituacao(P.regs[c.id], P.data); cont[s.cod] = (cont[s.cod]||0) + 1; });
+    var res = document.getElementById('pontoResumo');
+    if(res) res.innerHTML = P.carregado!==P.data ? '<span class="hint" style="margin:0;">Carregando o ponto do dia…</span>' :
+      [['presente','Presentes'],['em_andamento','Em andamento'],['incompleto','Incompletos'],['falta','Faltas'],['falta_justificada','Faltas justificadas'],['sem_expediente','Sem expediente'],['sem_registro','Sem registro']]
+        .filter(function(x){ return cont[x[0]] || x[0]==='presente' || x[0]==='sem_registro'; })
+        .map(function(x){ return '<span class="ponto-cont ps-'+x[0]+'"><b>'+cont[x[0]]+'</b> '+x[1]+'</span>'; }).join('');
+    if(!todos.length){ lista.innerHTML = '<p class="empty-hint">Nenhum colaborador ativo nas obras liberadas para você. Cadastre em Colaboradores.</p>'; return; }
+    if(P.carregado!==P.data){ lista.innerHTML = '<p class="empty-hint">Carregando…</p>'; return; }
+    lista.innerHTML = vis.length ? vis.map(pontoCardHtml).join('') : '<p class="empty-hint">Nenhum colaborador encontrado com esse filtro.</p>';
+  }
+  function pontoAtualizarCard(colabId){
+    var el = document.querySelector('[data-colabcard="'+colabId+'"]');
+    var c = (state.colaboradores||[]).find(function(x){ return x.id===colabId; });
+    if(el && c){ var tmp = document.createElement('div'); tmp.innerHTML = pontoCardHtml(c); el.replaceWith(tmp.firstChild); }
+    pontoRenderLista();
+  }
+  function pontoIrPara(data){
+    var P = state.ponto;
+    if(!data) return;
+    if(data>P.hoje) data = P.hoje;
+    P.data = data; P.regs = {}; P.carregado = '';
+    pontoRenderLista();
+    pontoCarregarDia();
+  }
+
+  function pontoBater(colabId, etapa){
+    var P = state.ponto;
+    if(P.ocupado[colabId]) return;
+    var c = (state.colaboradores||[]).find(function(x){ return x.id===colabId; }); if(!c) return;
+    if(!navigator.onLine){ toast('Sem conexão: o ponto precisa de internet (usa o horário do servidor).','error'); return; }
+    P.ocupado[colabId] = true; pontoAtualizarCard(colabId);
+    Promise.resolve(supabaseClient.rpc('vk_ponto_bater', { p_colaborador: colabId, p_etapa: etapa })).then(function(res){
+      delete P.ocupado[colabId];
+      if(res.error){ toast(pontoErroMsg(res.error),'error'); pontoCarregarDia(); pontoAtualizarCard(colabId); return; }
+      var r = res.data;
+      if(r && r.data===P.data) P.regs[colabId] = r;
+      else if(r && r.data!==P.data){ toast('O dia virou no servidor: registro gravado em '+fmtDate(r.data)+'.','ok'); P.hoje = r.data; pontoIrPara(r.data); return; }
+      var et = PONTO_ETAPAS.find(function(e){ return e.k===etapa; });
+      toast(et.t+' de '+c.nome.split(' ')[0]+' registrada às '+pontoHora(r[etapa])+'.','ok');
+      pontoAtualizarCard(colabId);
+    }, function(err){ delete P.ocupado[colabId]; toast(pontoErroMsg(err),'error'); pontoAtualizarCard(colabId); });
+  }
+
+  function pontoFaltaModal(colabId){
+    var P = state.ponto;
+    var c = (state.colaboradores||[]).find(function(x){ return x.id===colabId; }); if(!c) return;
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div');
+    wrap.className = 'overlay';
+    wrap.innerHTML = '<div class="modal" style="max-width:460px;">'+
+      '<h3>Registrar falta</h3>'+
+      '<p>Lançar <b>'+esc(c.nome)+'</b> como ausente em <b>'+esc(fmtDate(P.data))+'</b>? Com a falta lançada, os horários deste dia ficam bloqueados (só um responsável pode corrigir).</p>'+
+      '<div class="seg" id="pontoFaltaTipo" style="margin:4px 0 12px;"><button type="button" data-ft="falta" class="ativo">Falta</button><button type="button" data-ft="falta_justificada">Falta justificada</button></div>'+
+      '<div class="field" id="pontoFaltaJustBox" style="display:none;"><label>Justificativa (obrigatória)</label><textarea id="pontoFaltaJust" rows="2" placeholder="Ex.: atestado médico entregue"></textarea></div>'+
+      '<div class="row" style="margin-top:12px;"><button class="btn ghost" data-act="cancel" type="button">Cancelar</button><button class="btn danger" data-act="ok" type="button">Registrar falta</button></div>'+
+    '</div>';
+    root.appendChild(wrap);
+    var tipo = 'falta';
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap){ wrap.remove(); return; }
+      var ft = e.target.getAttribute && e.target.getAttribute('data-ft');
+      if(ft){ tipo = ft; wrap.querySelectorAll('[data-ft]').forEach(function(b){ b.classList.toggle('ativo', b.getAttribute('data-ft')===ft); }); wrap.querySelector('#pontoFaltaJustBox').style.display = ft==='falta_justificada' ? '' : 'none'; return; }
+      var act = e.target.getAttribute && e.target.getAttribute('data-act');
+      if(act==='cancel'){ wrap.remove(); return; }
+      if(act==='ok'){
+        var just = wrap.querySelector('#pontoFaltaJust').value.trim();
+        if(tipo==='falta_justificada' && just.length<3){ toast('Escreva a justificativa da falta.','error'); return; }
+        e.target.disabled = true;
+        Promise.resolve(supabaseClient.rpc('vk_ponto_falta', { p_colaborador: colabId, p_tipo: tipo, p_justificativa: just || null })).then(function(res){
+          if(res.error){ e.target.disabled = false; toast(pontoErroMsg(res.error),'error'); return; }
+          wrap.remove();
+          if(res.data && res.data.data===P.data) P.regs[colabId] = res.data;
+          toast((tipo==='falta' ? 'Falta' : 'Falta justificada')+' de '+c.nome.split(' ')[0]+' registrada.','ok');
+          pontoAtualizarCard(colabId);
+        }, function(err){ e.target.disabled = false; toast(pontoErroMsg(err),'error'); });
+      }
+    });
+  }
+
+  function pontoHHMM(ts){ return ts ? pontoHora(ts) : ''; }
+  var PONTO_CAMPO_TXT = { entrada:'Entrada', saida_almoco:'Saída almoço', volta_almoco:'Volta almoço', saida:'Saída', ocorrencia:'Situação' };
+  function pontoAuditTxt(a){
+    var v = function(x){ if(x==null || x==='') return '∅'; return a.campo==='ocorrencia' ? (PONTO_OCORR[x]||x) : String(x).slice(0,5); };
+    var acao = a.acao==='registro' ? 'Registrou' : (a.acao==='falta' ? 'Lançou' : 'Corrigiu');
+    return new Date(a.criado_em).toLocaleString('pt-BR', { timeZone:PONTO_TZ, day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })+' · '+(a.usuario_nome||'—')+': '+acao+' '+(PONTO_CAMPO_TXT[a.campo]||a.campo)+' '+(a.acao==='registro' ? v(a.valor_novo) : v(a.valor_anterior)+' → '+v(a.valor_novo))+(a.justificativa ? ' — "'+a.justificativa+'"' : '');
+  }
+  function pontoCorrigirModal(colabId, data, depois){
+    if(!pontoPodeCorrigir()) return;
+    var c = (state.colaboradores||[]).find(function(x){ return x.id===colabId; }); if(!c) return;
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div');
+    wrap.className = 'overlay';
+    wrap.innerHTML = '<div class="modal" style="max-width:560px;width:calc(100vw - 32px);"><h3>Corrigir ponto</h3><p>Carregando…</p></div>';
+    root.appendChild(wrap);
+    Promise.all([
+      Promise.resolve(supabaseClient.from('ponto_registros').select('*').eq('colaborador_id', colabId).eq('data', data).maybeSingle()),
+      Promise.resolve(supabaseClient.from('ponto_auditoria').select('*').eq('colaborador_id', colabId).eq('data', data).order('criado_em', { ascending:true }))
+    ]).then(function(rs){
+      if(rs[0].error){ wrap.remove(); toast(pontoErroMsg(rs[0].error),'error'); return; }
+      var r = rs[0].data || null, audit = (rs[1] && rs[1].data) || [];
+      var oc = (r && r.ocorrencia) || '';
+      wrap.querySelector('.modal').innerHTML =
+        '<h3>Corrigir ponto</h3>'+
+        '<p><b>'+esc(c.nome)+'</b> · '+esc(pontoDiaSemana(data))+', '+esc(fmtDate(data))+'. A correção fica registrada com o valor anterior, o novo, você e a justificativa.</p>'+
+        '<div class="field"><label>Situação do dia</label><select id="pcOc">'+
+          '<option value=""'+(oc===''?' selected':'')+'>Trabalhou (horários abaixo)</option>'+
+          Object.keys(PONTO_OCORR).map(function(k){ return '<option value="'+k+'"'+(oc===k?' selected':'')+'>'+PONTO_OCORR[k]+'</option>'; }).join('')+
+        '</select></div>'+
+        '<div class="grid4" id="pcHoras" style="margin-top:10px;">'+PONTO_ETAPAS.map(function(e){
+          return '<div class="field"><label>'+e.t+'</label><input type="time" data-pc="'+e.k+'" value="'+esc(pontoHHMM(r && r[e.k]))+'"></div>';
+        }).join('')+'</div>'+
+        '<p class="hint" style="margin:6px 0 0;">Deixe em branco a etapa que não aconteceu. Os horários precisam estar em ordem.</p>'+
+        '<div class="field" style="margin-top:10px;"><label>Justificativa da correção (obrigatória)</label><textarea id="pcJust" rows="2" placeholder="Ex.: esqueceu de bater a saída; conferido com o encarregado"></textarea></div>'+
+        (audit.length ? '<div class="ponto-trilha"><b>Trilha deste dia</b><ul>'+audit.map(function(a){ return '<li>'+esc(pontoAuditTxt(a))+'</li>'; }).join('')+'</ul></div>' : '<p class="hint" style="margin:10px 0 0;">Nenhum registro ainda neste dia.</p>')+
+        '<div class="row" style="margin-top:14px;"><button class="btn ghost" data-act="cancel" type="button">Cancelar</button><button class="btn primary" data-act="ok" type="button">Salvar correção</button></div>';
+      var selOc = wrap.querySelector('#pcOc');
+      var syncHoras = function(){ var tem = !selOc.value; wrap.querySelectorAll('[data-pc]').forEach(function(i){ i.disabled = !tem; if(!tem) i.value = ''; }); };
+      selOc.addEventListener('change', syncHoras); syncHoras();
+    }, function(err){ wrap.remove(); toast(pontoErroMsg(err),'error'); });
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap){ wrap.remove(); return; }
+      var act = e.target.getAttribute && e.target.getAttribute('data-act');
+      if(act==='cancel'){ wrap.remove(); return; }
+      if(act!=='ok') return;
+      var just = (wrap.querySelector('#pcJust')||{}).value || '';
+      if(just.trim().length<5){ toast('Escreva a justificativa da correção.','error'); return; }
+      var hv = function(k){ var i = wrap.querySelector('[data-pc="'+k+'"]'); return i && i.value ? i.value : null; };
+      e.target.disabled = true;
+      Promise.resolve(supabaseClient.rpc('vk_ponto_corrigir', {
+        p_colaborador: colabId, p_data: data,
+        p_entrada: hv('entrada'), p_saida_almoco: hv('saida_almoco'), p_volta_almoco: hv('volta_almoco'), p_saida: hv('saida'),
+        p_ocorrencia: wrap.querySelector('#pcOc').value || null, p_justificativa: just.trim()
+      })).then(function(res){
+        if(res.error){ e.target.disabled = false; toast(pontoErroMsg(res.error),'error'); return; }
+        wrap.remove();
+        toast('Correção salva e registrada na trilha.','ok');
+        if(state.ponto.data===data && res.data) state.ponto.regs[colabId] = res.data;
+        if(state.view==='ponto' && state.ponto.aba==='dia') pontoAtualizarCard(colabId);
+        if(depois) depois();
+      }, function(err){ e.target.disabled = false; toast(pontoErroMsg(err),'error'); });
+    });
+  }
+
+  // ----- histórico -----
+  function pontoHistShellHtml(){
+    var H = state.ponto.hist, colabs = pontoColabs(true);
+    return '<div class="card ponto-barra">'+
+      '<div class="grid4">'+
+        '<div class="field"><label>Colaborador</label><select id="phColab"><option value="">Todos os colaboradores</option>'+colabs.map(function(c){ return '<option value="'+esc(c.id)+'"'+(c.id===H.colab?' selected':'')+'>'+esc(c.nome)+(c.ativo===false?' (inativo)':'')+'</option>'; }).join('')+'</select></div>'+
+        '<div class="field"><label>Buscar nome</label><input type="search" id="phBusca" value="'+esc(H.busca)+'" placeholder="Parte do nome…"></div>'+
+        '<div class="field"><label>Obra</label><select id="phObra">'+pontoObraOptions(H.obraId)+'</select></div>'+
+        '<div class="field"><label>Situação</label><select id="phSit">'+
+          [['','Todas'],['presente','Presente'],['incompleto','Ponto incompleto / em andamento'],['falta','Falta'],['falta_justificada','Falta justificada'],['sem_expediente','Sem expediente'],['sem_registro','Sem registro'],['corrigido','Com correção']]
+            .map(function(o){ return '<option value="'+o[0]+'"'+(o[0]===H.situacao?' selected':'')+'>'+o[1]+'</option>'; }).join('')+'</select></div>'+
+      '</div>'+
+      '<div class="ponto-periodo">'+
+        '<div class="seg" id="phModo"><button type="button" data-phmodo="mes">Mês</button><button type="button" data-phmodo="periodo">Intervalo</button><button type="button" data-phmodo="dia">Data</button></div>'+
+        '<span id="phModoCampos" class="field ponto-campo"></span>'+
+        '<button type="button" class="btn primary sm" id="phBuscar">Consultar</button>'+
+        '<button type="button" class="btn ghost sm" id="phExcel">⬇ Excel</button>'+
+      '</div>'+
+      '</div>'+
+      '<div id="phResumo"></div><div id="phTabela"></div>';
+  }
+  function pontoHistModoCampos(){
+    var H = state.ponto.hist, max = state.ponto.hoje;
+    if(!H.dia) H.dia = max;
+    if(!H.ate) H.ate = max;
+    if(!H.de) H.de = max.slice(0,8)+'01';
+    if(H.modo==='mes') return '<input type="month" id="phMes" value="'+esc(H.mes)+'" max="'+esc(max.slice(0,7))+'">';
+    if(H.modo==='dia') return '<input type="date" id="phDia" value="'+esc(H.dia)+'" max="'+esc(max)+'">';
+    return '<input type="date" id="phDe" value="'+esc(H.de)+'" max="'+esc(max)+'"> até <input type="date" id="phAte" value="'+esc(H.ate)+'" max="'+esc(max)+'">';
+  }
+  function pontoHistPeriodo(){
+    var H = state.ponto.hist, hoje = state.ponto.hoje;
+    if(H.modo==='mes'){
+      if(!/^\d{4}-\d{2}$/.test(H.mes||'')) return null;
+      var y = +H.mes.slice(0,4), m = +H.mes.slice(5,7);
+      var fim = new Date(Date.UTC(y, m, 0)).toISOString().slice(0,10);
+      return { de: H.mes+'-01', ate: fim>hoje ? hoje : fim };
+    }
+    if(H.modo==='dia') return H.dia ? { de:H.dia, ate:H.dia } : null;
+    if(!H.de || !H.ate || H.de>H.ate) return null;
+    return { de:H.de, ate:H.ate>hoje ? hoje : H.ate };
+  }
+  function pontoHistRender(){
+    var H = state.ponto.hist;
+    var modo = document.getElementById('phModo'); if(!modo) return;
+    modo.querySelectorAll('[data-phmodo]').forEach(function(b){ b.classList.toggle('ativo', b.getAttribute('data-phmodo')===H.modo); });
+    var campos = document.getElementById('phModoCampos');
+    if(campos.getAttribute('data-modo')!==H.modo){ campos.setAttribute('data-modo', H.modo); campos.innerHTML = pontoHistModoCampos(); }
+    var resumo = document.getElementById('phResumo'), tab = document.getElementById('phTabela');
+    if(H.carregando){ tab.innerHTML = '<p class="empty-hint">Consultando…</p>'; resumo.innerHTML = ''; return; }
+    if(!H.linhas){ tab.innerHTML = '<p class="empty-hint">Escolha os filtros e clique em Consultar.</p>'; resumo.innerHTML = ''; return; }
+    var linhas = pontoHistFiltradas();
+    var cont = {}, totTrab = 0, diasTrab = 0;
+    linhas.forEach(function(l){ cont[l.sit.cod] = (cont[l.sit.cod]||0)+1; if(l.horas){ totTrab += l.horas.trab; diasTrab++; } });
+    resumo.innerHTML = '<div class="ponto-resumo" style="margin:12px 0;">'+
+      '<span class="ponto-cont"><b>'+linhas.length+'</b> linha(s)</span>'+
+      ['presente','incompleto','em_andamento','falta','falta_justificada','sem_expediente','sem_registro'].filter(function(k){ return cont[k]; }).map(function(k){ return '<span class="ponto-cont ps-'+k+'"><b>'+cont[k]+'</b> '+PONTO_SIT_TXT[k]+'</span>'; }).join('')+
+      (diasTrab ? '<span class="ponto-cont"><b>'+pontoFmtDur(totTrab)+'</b> trabalhadas em '+diasTrab+' dia(s) completo(s)</span>' : '')+
+    '</div>';
+    if(!linhas.length){ tab.innerHTML = '<p class="empty-hint">Nenhum registro com esses filtros.</p>'; return; }
+    var LIM = 1500;
+    tab.innerHTML = '<div class="table-wrap"><table class="rdo-list ponto-tab"><thead><tr><th>Data</th><th>Colaborador</th><th>Entrada</th><th>Saída almoço</th><th>Volta almoço</th><th>Saída</th><th>Trabalhadas</th><th>Intervalo</th><th>Situação</th><th>Observações</th></tr></thead><tbody>'+
+      linhas.slice(0, LIM).map(function(l){
+        var r = l.reg;
+        var cel = function(k){ return r && r[k] ? esc(pontoHora(r[k])) : '<span class="ponto-vazio">—</span>'; };
+        return '<tr'+(pontoPodeCorrigir() && l.colabId ? ' data-phcorr="'+esc(l.colabId)+'" data-data="'+esc(l.data)+'" title="Clique para corrigir / ver a trilha"' : ' style="cursor:default;"')+'>'+
+          '<td data-label="Data" class="mono-num">'+esc(fmtDate(l.data))+' <span class="hint" style="margin:0;">'+esc(pontoDiaSemana(l.data).slice(0,3))+'</span></td>'+
+          '<td data-label="Colaborador">'+esc(l.nome)+(l.obraNome ? '<div class="hint" style="margin:0;">'+esc(l.obraNome)+'</div>' : '')+'</td>'+
+          '<td data-label="Entrada" class="mono-num">'+cel('entrada')+'</td><td data-label="Saída almoço" class="mono-num">'+cel('saida_almoco')+'</td>'+
+          '<td data-label="Volta almoço" class="mono-num">'+cel('volta_almoco')+'</td><td data-label="Saída" class="mono-num">'+cel('saida')+'</td>'+
+          '<td data-label="Trabalhadas" class="mono-num">'+(l.horas ? pontoFmtDur(l.horas.trab) : '<span class="ponto-vazio">—</span>')+'</td>'+
+          '<td data-label="Intervalo" class="mono-num">'+(l.horas ? pontoFmtDur(l.horas.intervalo) : '<span class="ponto-vazio">—</span>')+'</td>'+
+          '<td data-label="Situação">'+pontoChip(l.sit)+(r && r.corrigido ? ' <span class="tag-example">corrigido</span>' : '')+'</td>'+
+          '<td data-label="Observações">'+esc(l.obs)+'</td></tr>';
+      }).join('')+'</tbody></table></div>'+
+      (linhas.length>LIM ? '<p class="hint">Mostrando '+LIM+' de '+linhas.length+' linhas — a exportação para Excel leva todas.</p>' : '');
+  }
+  function pontoHistObs(reg, audits){
+    var partes = [];
+    if(reg && reg.justificativa) partes.push('Justificativa: '+reg.justificativa);
+    var js = {};
+    (audits||[]).forEach(function(a){ if(a.acao==='correcao' && a.justificativa && !js[a.justificativa]){ js[a.justificativa] = 1; partes.push('Correção ('+(a.usuario_nome||'—')+'): '+a.justificativa); } });
+    return partes.join(' | ');
+  }
+  function pontoHistConsultar(){
+    var P = state.ponto, H = P.hist;
+    var per = pontoHistPeriodo();
+    if(!per){ toast('Escolha um período válido.','error'); return; }
+    var dias = Math.round((new Date(per.ate+'T12:00:00Z') - new Date(per.de+'T12:00:00Z'))/86400000) + 1;
+    if(dias>370){ toast('Período muito longo: escolha até 1 ano.','error'); return; }
+    H.carregando = true; H.per = per; pontoHistRender();
+    var q1 = supabaseClient.from('ponto_registros').select('*').gte('data', per.de).lte('data', per.ate);
+    var q2 = supabaseClient.from('ponto_auditoria').select('*').gte('data', per.de).lte('data', per.ate).order('criado_em', { ascending:true });
+    if(H.colab){ q1 = q1.eq('colaborador_id', H.colab); q2 = q2.eq('colaborador_id', H.colab); }
+    Promise.all([Promise.resolve(q1), Promise.resolve(q2)]).then(function(rs){
+      H.carregando = false;
+      if(rs[0].error){ H.linhas = null; toast(pontoErroMsg(rs[0].error),'error'); pontoHistRender(); return; }
+      var regs = rs[0].data||[], audit = (rs[1] && !rs[1].error && rs[1].data) || [];
+      H.audit = audit;
+      var porChave = {}; regs.forEach(function(r){ porChave[(r.colaborador_id||'x:'+r.colaborador_nome)+'|'+r.data] = r; });
+      var audPor = {}; audit.forEach(function(a){ var k = (a.colaborador_id||'x:'+a.colaborador_nome)+'|'+a.data; (audPor[k] = audPor[k] || []).push(a); });
+      var datas = []; for(var d = per.de; d<=per.ate; d = pontoSomaDias(d, 1)) datas.push(d);
+      var colabs = H.colab ? pontoColabs(true).filter(function(c){ return c.id===H.colab; }) : pontoColabs(true).filter(function(c){ return c.ativo!==false || regs.some(function(r){ return r.colaborador_id===c.id; }); });
+      var linhas = [];
+      colabs.forEach(function(c){
+        datas.forEach(function(d){
+          var k = c.id+'|'+d, r = porChave[k] || null;
+          if(r) delete porChave[k];
+          var obraId = r ? r.obra_id : c.obraId;
+          linhas.push({ colabId:c.id, nome:c.nome, obraId:obraId, obraNome:pontoObraNome(obraId), data:d, reg:r, sit:pontoSituacao(r, d), horas:pontoHoras(r), obs:pontoHistObs(r, audPor[k]) });
+        });
+      });
+      // registros de colaborador excluído do cadastro: continuam no histórico, pelo nome gravado
+      Object.keys(porChave).forEach(function(k){
+        var r = porChave[k];
+        if(H.colab && r.colaborador_id!==H.colab) return;
+        linhas.push({ colabId:null, nome:r.colaborador_nome+(r.colaborador_id ? '' : ' (fora do cadastro)'), obraId:r.obra_id, obraNome:pontoObraNome(r.obra_id), data:r.data, reg:r, sit:pontoSituacao(r, r.data), horas:pontoHoras(r), obs:pontoHistObs(r, audPor[k]) });
+      });
+      linhas.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'') || a.data.localeCompare(b.data); });
+      H.linhas = linhas;
+      pontoHistRender();
+    }, function(err){ H.carregando = false; toast(pontoErroMsg(err),'error'); pontoHistRender(); });
+  }
+  function pontoHistFiltradas(){
+    var H = state.ponto.hist, b = normalizarBusca(H.busca);
+    return (H.linhas||[]).filter(function(l){
+      if(H.obraId==='__sem' && l.obraId) return false;
+      if(H.obraId && H.obraId!=='__sem' && l.obraId!==H.obraId) return false;
+      if(b && normalizarBusca(l.nome).indexOf(b)===-1) return false;
+      if(H.situacao==='corrigido') return !!(l.reg && l.reg.corrigido);
+      if(H.situacao==='incompleto') return l.sit.cod==='incompleto' || l.sit.cod==='em_andamento';
+      if(H.situacao && l.sit.cod!==H.situacao) return false;
+      return true;
+    });
+  }
+  function pontoExcel(){
+    var H = state.ponto.hist;
+    if(!H.linhas || !H.per){ toast('Faça a consulta antes de exportar.','error'); return; }
+    if(!libsProntas(['xlsx'])){ return carregarLibs(['xlsx']).then(pontoExcel, function(){ avisoLibFalhou(['xlsx']); }); }
+    var linhas = pontoHistFiltradas();
+    if(!linhas.length){ toast('Nenhuma linha para exportar com esses filtros.','error'); return; }
+    var serial = function(iso){ return (Date.UTC(+iso.slice(0,4), +iso.slice(5,7)-1, +iso.slice(8,10)) - Date.UTC(1899,11,30))/86400000; };
+    var cab = ['Colaborador','Obra / local','Data','Dia da semana','Entrada','Saída almoço','Volta almoço','Saída','Situação','Horas trabalhadas','Intervalo','Observações / justificativas'];
+    var aoa = [cab];
+    linhas.forEach(function(l){
+      var r = l.reg;
+      var hv = function(k){ var s = r && r[k] ? pontoHoraSeg(r[k]) : null; return s==null ? null : s/86400; };
+      aoa.push([l.nome, l.obraNome||'', serial(l.data), pontoDiaSemana(l.data), hv('entrada'), hv('saida_almoco'), hv('volta_almoco'), hv('saida'),
+        l.sit.cod==='em_andamento' ? 'Ponto incompleto (dia em andamento)' : l.sit.txt, l.horas ? l.horas.trab/86400000 : null, l.horas ? l.horas.intervalo/86400000 : null, l.obs||null]);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    for(var i = 1; i<aoa.length; i++){
+      var fmt = function(col, z){ var ref = XLSX.utils.encode_cell({ r:i, c:col }); if(ws[ref] && ws[ref].t==='n') ws[ref].z = z; };
+      fmt(2, 'dd/mm/yyyy'); [4,5,6,7].forEach(function(cc){ fmt(cc, 'hh:mm'); }); fmt(9, '[h]:mm'); fmt(10, '[h]:mm');
+    }
+    ws['!cols'] = [{wch:30},{wch:26},{wch:11},{wch:13},{wch:9},{wch:12},{wch:12},{wch:9},{wch:26},{wch:16},{wch:10},{wch:60}];
+    ws['!autofilter'] = { ref: 'A1:L'+aoa.length };
+    // resumo por colaborador (só dias completos somam horas)
+    var porC = {}, ordem = [];
+    linhas.forEach(function(l){
+      var k = l.nome;
+      if(!porC[k]){ porC[k] = { nome:l.nome, presente:0, incompleto:0, falta:0, falta_justificada:0, sem_expediente:0, sem_registro:0, trab:0, intervalo:0, corr:0 }; ordem.push(k); }
+      var x = porC[k], cod = l.sit.cod==='em_andamento' ? 'incompleto' : l.sit.cod;
+      x[cod] = (x[cod]||0)+1; if(l.horas){ x.trab += l.horas.trab; x.intervalo += l.horas.intervalo; } if(l.reg && l.reg.corrigido) x.corr++;
+    });
+    var aoa2 = [['Colaborador','Dias presentes (completos)','Pontos incompletos','Faltas','Faltas justificadas','Sem expediente','Sem registro','Horas trabalhadas (dias completos)','Intervalo total','Dias com correção']];
+    ordem.forEach(function(k){ var x = porC[k]; aoa2.push([x.nome, x.presente, x.incompleto, x.falta, x.falta_justificada, x.sem_expediente, x.sem_registro, x.trab/86400000, x.intervalo/86400000, x.corr]); });
+    var ws2 = XLSX.utils.aoa_to_sheet(aoa2);
+    for(var j = 1; j<aoa2.length; j++){ [7,8].forEach(function(cc){ var ref = XLSX.utils.encode_cell({ r:j, c:cc }); if(ws2[ref]) ws2[ref].z = '[h]:mm'; }); }
+    ws2['!cols'] = [{wch:30},{wch:14},{wch:14},{wch:8},{wch:14},{wch:12},{wch:12},{wch:18},{wch:14},{wch:14}];
+    ws2['!autofilter'] = { ref: 'A1:J'+aoa2.length };
+    // trilha das correções/lançamentos do período (mesmos filtros de colaborador)
+    var nomesOk = {}; linhas.forEach(function(l){ nomesOk[(l.colabId||'')+'|'+l.data] = 1; });
+    var aoa3 = [['Data','Colaborador','Ação','Campo','Valor anterior','Valor novo','Justificativa','Usuário','Quando']];
+    (H.audit||[]).filter(function(a){ return nomesOk[(a.colaborador_id||'')+'|'+a.data]; }).forEach(function(a){
+      aoa3.push([serial(a.data), a.colaborador_nome, a.acao==='registro'?'Registro':(a.acao==='falta'?'Falta':'Correção'), PONTO_CAMPO_TXT[a.campo]||a.campo,
+        a.campo==='ocorrencia' ? (PONTO_OCORR[a.valor_anterior]||a.valor_anterior||'') : (a.valor_anterior||'').slice(0,5),
+        a.campo==='ocorrencia' ? (PONTO_OCORR[a.valor_novo]||a.valor_novo||'') : (a.valor_novo||'').slice(0,5),
+        a.justificativa||'', a.usuario_nome||'', new Date(a.criado_em).toLocaleString('pt-BR', { timeZone:PONTO_TZ })]);
+    });
+    var ws3 = XLSX.utils.aoa_to_sheet(aoa3);
+    for(var k3 = 1; k3<aoa3.length; k3++){ var rf = XLSX.utils.encode_cell({ r:k3, c:0 }); if(ws3[rf]) ws3[rf].z = 'dd/mm/yyyy'; }
+    ws3['!cols'] = [{wch:11},{wch:30},{wch:10},{wch:14},{wch:12},{wch:12},{wch:50},{wch:22},{wch:20}];
+    ws3['!autofilter'] = { ref: 'A1:I'+aoa3.length };
+    var filtros = [['Relatório de ponto — RDO Venko'], ['Período', fmtDate(H.per.de)+' a '+fmtDate(H.per.ate)],
+      ['Colaborador', H.colab ? ((state.colaboradores||[]).find(function(c){ return c.id===H.colab; })||{}).nome||'' : 'Todos'+(H.busca ? ' (nome contém "'+H.busca+'")' : '')],
+      ['Obra', H.obraId==='__sem' ? 'Sem obra definida' : (H.obraId ? pontoObraNome(H.obraId) : 'Todas')],
+      ['Situação', (document.querySelector('#phSit option:checked')||{}).textContent || 'Todas'],
+      ['Gerado em', new Date().toLocaleString('pt-BR', { timeZone:PONTO_TZ })+' por '+((state.currentUser||{}).nome||'')],
+      [], ['Horas trabalhadas = (saída para almoço − entrada) + (saída − volta do almoço). Só é calculada quando os 4 horários existem; sem jornada, tolerância, hora extra ou desconto.'],
+      ['Horários no fuso de São Paulo, gravados pelo servidor. Linhas "Sem registro" não têm horário inventado.']];
+    var ws0 = XLSX.utils.aoa_to_sheet(filtros); ws0['!cols'] = [{wch:16},{wch:90}];
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Ponto');
+    XLSX.utils.book_append_sheet(wb, ws2, 'Resumo por colaborador');
+    XLSX.utils.book_append_sheet(wb, ws3, 'Trilha');
+    XLSX.utils.book_append_sheet(wb, ws0, 'Filtros');
+    var nomeArq = H.colab ? (((state.colaboradores||[]).find(function(c){ return c.id===H.colab; })||{}).nome||'colaborador') : 'Todos';
+    XLSX.writeFile(wb, 'Ponto_'+String(nomeArq).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+H.per.de+'_a_'+H.per.ate+'.xlsx');
+    toast('Relatório de ponto baixado em Excel ('+linhas.length+' linha(s)).','ok');
+  }
+
+  function pontoLigarEventos(root){
+    root.addEventListener('click', function(e){
+      var t = e.target.closest ? e.target : e.target.parentNode;
+      var aba = t.closest('[data-pontoaba]');
+      if(aba){
+        state.ponto.aba = aba.getAttribute('data-pontoaba');
+        if(state.ponto.aba==='dia') pontoCarregarDia();
+        renderPonto();
+        if(state.ponto.aba==='historico' && !state.ponto.hist.linhas && !state.ponto.hist.carregando) pontoHistConsultar();
+        return;
+      }
+      var nav = t.closest('[data-pontodia]');
+      if(nav){ var v = nav.getAttribute('data-pontodia'); pontoIrPara(v==='hoje' ? state.ponto.hoje : pontoSomaDias(state.ponto.data, +v)); return; }
+      var bt = t.closest('[data-pontobater]');
+      if(bt && !bt.disabled){ pontoBater(bt.getAttribute('data-colab'), bt.getAttribute('data-pontobater')); return; }
+      var ft = t.closest('[data-pontofalta]');
+      if(ft && !ft.disabled){ pontoFaltaModal(ft.getAttribute('data-pontofalta')); return; }
+      var cr = t.closest('[data-pontocorrigir]');
+      if(cr){ pontoCorrigirModal(cr.getAttribute('data-pontocorrigir'), cr.getAttribute('data-data')); return; }
+      var md = t.closest('[data-phmodo]');
+      if(md){ state.ponto.hist.modo = md.getAttribute('data-phmodo'); pontoHistRender(); return; }
+      if(t.closest('#phBuscar')){ pontoHistConsultar(); return; }
+      if(t.closest('#phExcel')){ pontoExcel(); return; }
+      var hr = t.closest('[data-phcorr]');
+      if(hr){ pontoCorrigirModal(hr.getAttribute('data-phcorr'), hr.getAttribute('data-data'), function(){ pontoHistConsultar(); }); return; }
+    });
+    root.addEventListener('input', function(e){
+      var id = e.target.id, P = state.ponto, H = P.hist;
+      if(id==='pontoBusca'){ P.busca = e.target.value; pontoRenderLista(); }
+      if(id==='phBusca'){ H.busca = e.target.value; pontoHistRender(); }
+    });
+    root.addEventListener('change', function(e){
+      var id = e.target.id, P = state.ponto, H = P.hist;
+      if(id==='pontoData'){ pontoIrPara(e.target.value); }
+      if(id==='pontoObra'){ P.obraId = e.target.value; pontoRenderLista(); }
+      if(id==='phColab'){ H.colab = e.target.value; H.linhas = null; pontoHistRender(); }
+      if(id==='phObra'){ H.obraId = e.target.value; pontoHistRender(); }
+      if(id==='phSit'){ H.situacao = e.target.value; pontoHistRender(); }
+      if(id==='phMes'){ H.mes = e.target.value; }
+      if(id==='phDia'){ H.dia = e.target.value; }
+      if(id==='phDe'){ H.de = e.target.value; }
+      if(id==='phAte'){ H.ate = e.target.value; }
+    });
+  }
 
   /* ---------------- boot ---------------- */
   bootAuth();
