@@ -616,6 +616,17 @@
   .ps-falta{color:var(--status-rejected);} .chip.ps-falta{background:var(--status-rejected-bg);}
   .ps-falta_justificada{color:var(--status-sent);} .chip.ps-falta_justificada{background:var(--status-sent-bg);}
   .ps-sem_expediente, .ps-sem_registro{color:var(--status-draft);} .chip.ps-sem_expediente, .chip.ps-sem_registro{background:var(--status-draft-bg);}
+  .ps-folga{color:var(--steel);} .chip.ps-folga{background:transparent;border:1px dashed var(--line);}
+  .ps-feriado{color:#6B5BC4;} .chip.ps-feriado{background:rgba(107,91,196,.14);}
+  .ponto-extra{color:#9A6F00;font-weight:700;} .ponto-falt{color:var(--status-rejected);font-weight:700;}
+  .ponto-fer-form{display:grid;grid-template-columns:160px minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end;}
+  .ponto-fer-form .field{margin:0;}
+  .ponto-fer-ano{margin:16px 0 6px;font-size:13px;color:var(--ink-soft);}
+  .ponto-fer-item{display:flex;align-items:center;gap:12px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);margin-bottom:6px;}
+  .ponto-fer-item .mono-num{min-width:96px;font-weight:700;}
+  .ponto-fer-item .hint{margin:0;}
+  .ponto-fer-item button{margin-left:auto;}
+  @media (max-width:760px){ .ponto-fer-form{grid-template-columns:1fr;} }
   .ponto-cont.ps-presente b, .ponto-cont.ps-em_andamento b, .ponto-cont.ps-incompleto b, .ponto-cont.ps-falta b, .ponto-cont.ps-falta_justificada b{color:inherit;}
   .ponto-vazio{color:var(--steel);}
   .ponto-trilha{margin-top:12px;border-top:1px solid var(--line);padding-top:10px;font-size:12px;max-height:190px;overflow:auto;}
@@ -1081,7 +1092,9 @@
         <h2><span class="idx">+</span>Cadastrar colaborador</h2>
         <form id="colaboradorForm">
           <div class="grid4">
-            <div class="field"><label>Nome</label><input type="text" id="colaboradorNome" maxlength="80" placeholder="Ex: Wilson" required></div>
+            <div class="field"><label>Nome (como aparece no RDO)</label><input type="text" id="colaboradorNome" maxlength="80" placeholder="Ex: Wilson" required></div>
+            <div class="field"><label>Nome completo</label><input type="text" id="colaboradorNomeCompleto" maxlength="120" placeholder="Ex: Wilson Pereira da Silva" autocomplete="off"></div>
+            <div class="field" id="colaboradorCpfBox" style="display:none"><label>CPF</label><input type="text" id="colaboradorCpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" autocomplete="off"></div>
             <div class="field"><label>Função</label>
               <select id="colaboradorFuncaoSel"></select>
               <input type="text" id="colaboradorFuncaoOutra" placeholder="Nome da função" style="margin-top:6px;display:none">
@@ -2030,7 +2043,7 @@
     return { id:row.id, nome:row.nome, encarregado:row.encarregado, descricao:row.descricao, ativa:row.ativa, createdAt:row.created_at, updatedAt:row.updated_at };
   }
   function mapColaboradorRow(row){
-    return { id:row.id, nome:row.nome, funcao:row.funcao, departamentoId:row.departamento_id, equipeId:row.equipe_id, obraId:row.obra_id||null, ativo:row.ativo, createdAt:row.created_at, updatedAt:row.updated_at };
+    return { id:row.id, nome:row.nome, nomeCompleto:row.nome_completo||'', funcao:row.funcao, departamentoId:row.departamento_id, equipeId:row.equipe_id, obraId:row.obra_id||null, ativo:row.ativo, createdAt:row.created_at, updatedAt:row.updated_at };
   }
   function mapRdoRow(row){
     var legacyCond = row.impraticavel ? 'Impraticável' : (row.clima ? 'Praticável' : '');
@@ -2121,6 +2134,7 @@
       state.colaboradores = (res.data||[]).map(mapColaboradorRow);
       state.colaboradores.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
       cacheSet('colaboradores', state.colaboradores);
+      colabPrivCarregar();
       renderAll();
       try{ if(state.view==='novo' && rdoFormAtual) renderRdoColaboradores(rdoFormAtual); }catch(e){}
     });
@@ -2514,6 +2528,7 @@
       .on('postgres_changes', {event:'*', schema:'public', table:'planejamento_servicos'}, function(){ cargaRealtime('plan', function(){ if(state.planejamentoObraId) loadPlanejamentoServicos(state.planejamentoObraId); }); })
       .on('postgres_changes', {event:'*', schema:'public', table:'mapa_fila_ia'}, function(){ cargaRealtime('fila', function(){ if(state.mapaObraId) loadMapaFilaIA(state.mapaObraId); }); })
       .on('postgres_changes', {event:'*', schema:'public', table:'ponto_registros'}, function(){ cargaRealtime('ponto', function(){ if(state.view==='ponto' && state.ponto.aba==='dia') pontoCarregarDia(); }); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'ponto_feriados'}, function(){ cargaRealtime('feriados', function(){ pontoCarregarFeriados(true).then(function(){ if(state.view==='ponto') renderPonto(); }); }); })
       .on('postgres_changes', {event:'*', schema:'public', table:'projetos_obra'}, function(){ cargaRealtime('proj', function(){ if(state.planejamentoObraId) loadProjetosObra(state.planejamentoObraId); }); })
       .subscribe();
   }
@@ -8090,12 +8105,81 @@
     });
   }
 
+  // ----- v54: CPF do colaborador (tabela colaboradores_privado: só administrador e gestão leem/alteram) -----
+  state.colabPriv = {};
+  function vkCpfDig(v){ return String(v||'').replace(/[^0-9]/g, ''); }
+  function vkCpfValido(v){
+    var d = vkCpfDig(v);
+    if(d.length!==11 || d.split('').every(function(ch){ return ch===d[0]; })) return false;
+    for(var t = 9; t<11; t++){
+      var soma = 0;
+      for(var i = 0; i<t; i++) soma += (+d[i]) * (t+1-i);
+      if(((soma*10) % 11) % 10 !== +d[t]) return false;
+    }
+    return true;
+  }
+  function vkCpfFmt(v){ var d = vkCpfDig(v); return d.length===11 ? d.slice(0,3)+'.'+d.slice(3,6)+'.'+d.slice(6,9)+'-'+d.slice(9) : String(v||''); }
+  function colabPrivCarregar(){
+    if(!supabaseClient || !pontoPodeCorrigir()){ state.colabPriv = {}; return Promise.resolve(); }
+    return Promise.resolve(supabaseClient.from('colaboradores_privado').select('colaborador_id,cpf')).then(function(res){
+      if(!res || res.error) return;
+      var m = {}; (res.data||[]).forEach(function(r){ if(r.cpf) m[r.colaborador_id] = r.cpf; });
+      state.colabPriv = m;
+      if(state.view==='colaboradores') renderColaboradorList();
+    }, function(){});
+  }
+  function colabPrivSalvar(colabId, cpfDig){
+    return Promise.resolve(supabaseClient.from('colaboradores_privado').upsert({ colaborador_id:colabId, cpf:cpfDig || null, atualizado_em:new Date().toISOString() }, { onConflict:'colaborador_id' })).then(function(res){
+      if(res.error){ toast('CPF não foi salvo: '+pontoErroMsg(res.error),'error'); return false; }
+      if(cpfDig) state.colabPriv[colabId] = cpfDig; else delete state.colabPriv[colabId];
+      if(state.view==='colaboradores') renderColaboradorList();
+      return true;
+    }, function(err){ toast('CPF não foi salvo: '+pontoErroMsg(err),'error'); return false; });
+  }
+  function colabCpfMascara(inp){
+    if(inp) inp.addEventListener('blur', function(){ if(vkCpfDig(inp.value).length===11) inp.value = vkCpfFmt(inp.value); });
+  }
+  colabCpfMascara(document.getElementById('colaboradorCpf'));
+  function colabDadosModal(colabId){
+    var c = (state.colaboradores||[]).find(function(x){ return x.id===colabId; }); if(!c) return;
+    var podeCpf = pontoPodeCorrigir(), cpfAtual = (state.colabPriv||{})[colabId] || '';
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div'); wrap.className = 'overlay';
+    wrap.innerHTML = '<div class="modal" style="max-width:480px;width:calc(100vw - 32px);">'+
+      '<h3>Dados do colaborador</h3>'+
+      '<p><b>'+esc(c.nome)+'</b>'+(c.funcao ? ' · '+esc(c.funcao) : '')+'. O nome completo aparece no ponto e no Excel'+(podeCpf ? '; o CPF só é visto por administrador e gestão.' : '.')+'</p>'+
+      '<div class="field"><label>Nome completo</label><input type="text" id="cdNome" maxlength="120" value="'+esc(c.nomeCompleto||'')+'" placeholder="Ex: Wilson Pereira da Silva" autocomplete="off"></div>'+
+      (podeCpf ? '<div class="field" style="margin-top:10px;"><label>CPF</label><input type="text" id="cdCpf" inputmode="numeric" maxlength="14" value="'+esc(cpfAtual ? vkCpfFmt(cpfAtual) : '')+'" placeholder="000.000.000-00" autocomplete="off"></div>' : '')+
+      '<div class="row" style="margin-top:14px;"><button class="btn ghost" data-act="cancel" type="button">Cancelar</button><button class="btn primary" data-act="ok" type="button">Salvar</button></div>'+
+    '</div>';
+    root.appendChild(wrap);
+    colabCpfMascara(wrap.querySelector('#cdCpf'));
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap){ wrap.remove(); return; }
+      var act = e.target.getAttribute && e.target.getAttribute('data-act');
+      if(act==='cancel'){ wrap.remove(); return; }
+      if(act!=='ok') return;
+      var nomeC = wrap.querySelector('#cdNome').value.replace(/ +/g, ' ').trim();
+      var cpfIn = podeCpf ? vkCpfDig(wrap.querySelector('#cdCpf').value) : '';
+      if(podeCpf && cpfIn && !vkCpfValido(cpfIn)){ toast('CPF inválido: confira os 11 números.','error'); return; }
+      e.target.disabled = true;
+      Promise.resolve(supabaseClient.from('colaboradores').update({ nome_completo: nomeC || null, updated_at: new Date().toISOString() }).eq('id', colabId)).then(function(res){
+        if(res.error){ e.target.disabled = false; toast('Erro: '+pontoErroMsg(res.error),'error'); return; }
+        var feito = function(){ wrap.remove(); toast('Dados de '+c.nome+' salvos.','ok'); loadColaboradores(); };
+        if(podeCpf && cpfIn!==cpfAtual) colabPrivSalvar(colabId, cpfIn).then(function(ok){ if(ok) feito(); else e.target.disabled = false; });
+        else feito();
+      }, function(err){ e.target.disabled = false; toast(pontoErroMsg(err),'error'); });
+    });
+  }
+
   /* ---------------- colaboradores view (cadastro) ---------------- */
   function colabObraOptionsHtml(sel){
     return '<option value="">Todas as obras</option>' + (state.obras||[]).slice().sort(function(a, b){ return String(a.nome||'').localeCompare(String(b.nome||''), 'pt-BR'); })
       .map(function(o){ return '<option value="'+esc(o.id)+'"'+(sel===o.id?' selected':'')+'>'+esc(o.nome||'')+'</option>'; }).join('');
   }
   function populateColaboradorFormSelects(){
+    var cpfBox = document.getElementById('colaboradorCpfBox');
+    if(cpfBox) cpfBox.style.display = pontoPodeCorrigir() ? '' : 'none';
     var funcSel = document.getElementById('colaboradorFuncaoSel');
     if(funcSel && !funcSel.options.length){
       funcSel.innerHTML = '<option value="">Sem função</option>' + FUNCAO_OPTS.map(function(f){ return '<option value="'+esc(f)+'">'+esc(f)+'</option>'; }).join('') + '<option value="__custom__">Outra (digitar)…</option>';
@@ -8133,8 +8217,14 @@
     var deptoId = document.getElementById('colaboradorDepto').value || null;
     var obraIdC = document.getElementById('colaboradorObra').value || null;
     if(state.colaboradores.some(function(c){ return c.ativo!==false && rdoNorm(c.nome||'')===rdoNorm(nome) && (c.obraId||null)===obraIdC; })){ toast('“'+nome+'” já está cadastrado nesta obra.','error'); return; }
-    supabaseClient.from('colaboradores').insert({ nome: nome, funcao: funcao || null, departamento_id: deptoId, obra_id: obraIdC }).then(function(res){
+    var nomeCompleto = (document.getElementById('colaboradorNomeCompleto').value||'').replace(/ +/g, ' ').trim();
+    var cpfDig = pontoPodeCorrigir() ? vkCpfDig(document.getElementById('colaboradorCpf').value) : '';
+    if(cpfDig && !vkCpfValido(cpfDig)){ toast('CPF inválido: confira os 11 números.','error'); return; }
+    var novoColab = { nome: nome, funcao: funcao || null, departamento_id: deptoId, obra_id: obraIdC };
+    if(nomeCompleto) novoColab.nome_completo = nomeCompleto;
+    supabaseClient.from('colaboradores').insert(novoColab).select('id').single().then(function(res){
       if(res.error){ toast('Erro ao salvar colaborador: '+res.error.message,'error'); return; }
+      if(cpfDig && res.data) colabPrivSalvar(res.data.id, cpfDig);
       toast('Colaborador cadastrado.','ok');
       e.target.reset();
       document.getElementById('colaboradorFuncaoOutra').style.display = 'none';
@@ -8151,9 +8241,10 @@
       var depto = state.departamentos.find(function(d){ return d.id===c.departamentoId; });
       return '<div class="obra-card" data-id="'+c.id+'">'+
         '<div class="info"><b>'+esc(c.nome)+(!c.ativo?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">inativo</span>':'')+'</b>'+
-          '<div class="meta">'+esc(c.funcao||'Sem função')+'</div>'+
+          '<div class="meta">'+esc(c.funcao||'Sem função')+(c.nomeCompleto ? ' · '+esc(c.nomeCompleto) : '')+(pontoPodeCorrigir() && (state.colabPriv||{})[c.id] ? ' · CPF '+esc(vkCpfFmt(state.colabPriv[c.id])) : '')+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
+          '<button class="btn ghost sm" data-dados-colab="'+c.id+'">'+(pontoPodeCorrigir() ? 'Nome completo e CPF' : 'Nome completo')+'</button>'+
           '<select class="colab-obra-sel" data-colab-obra="'+c.id+'" aria-label="Obra de '+esc(c.nome)+'">'+colabObraOptionsHtml(c.obraId)+'</select>'+
           '<button class="btn ghost sm" data-toggle-colab="'+c.id+'">'+(c.ativo?'Marcar inativo':'Reativar')+'</button>'+
           (ehAdmin() ? '<button class="btn danger sm" data-del-colab="'+c.id+'">Excluir</button>' : '')+
@@ -8177,6 +8268,9 @@
           if(res.error){ toast('Erro: '+res.error.message,'error'); return; } loadColaboradores();
         });
       });
+    });
+    list.querySelectorAll('[data-dados-colab]').forEach(function(b){
+      b.addEventListener('click', function(){ colabDadosModal(b.getAttribute('data-dados-colab')); });
     });
     list.querySelectorAll('[data-del-colab]').forEach(function(b){
       b.addEventListener('click', function(){
@@ -11878,7 +11972,7 @@
   ];
   var PONTO_OCORR = { falta:'Falta', falta_justificada:'Falta justificada', sem_expediente:'Sem expediente' };
   var PONTO_TZ = 'America/Sao_Paulo';
-  var PONTO_SIT_TXT = { presente:'Presente', incompleto:'Ponto incompleto', em_andamento:'Em andamento', falta:'Falta', falta_justificada:'Falta justificada', sem_expediente:'Sem expediente', sem_registro:'Sem registro' };
+  var PONTO_SIT_TXT = { presente:'Presente', incompleto:'Ponto incompleto', em_andamento:'Em andamento', falta:'Falta', falta_justificada:'Falta justificada', sem_expediente:'Sem expediente', feriado:'Feriado', folga:'Folga', sem_registro:'Sem registro' };
   var DIAS_SEMANA = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
   state.ponto = { aba:'dia', data:'', hoje:'', offsetMs:0, busca:'', obraId:'', regs:{}, carregado:'', erro:'', ocupado:{},
     hist:{ colab:'', busca:'', obraId:'', modo:'mes', mes:'', de:'', ate:'', dia:'', situacao:'', linhas:null, audit:[], carregando:false } };
@@ -11902,7 +11996,7 @@
   function pontoColabs(incluirInativos){
     return (state.colaboradores||[]).filter(function(c){
       return (incluirInativos || c.ativo!==false) && pontoVeObra(c.obraId);
-    }).sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+    }).sort(function(a,b){ return pontoNomeCompleto(a).localeCompare(pontoNomeCompleto(b)); });
   }
   function pontoObraNome(id){ var o = (state.obras||[]).find(function(x){ return x.id===id; }); return o ? o.nome : ''; }
   function pontoEquipeNome(id){ var e = (state.equipes||[]).find(function(x){ return x.id===id; }); return e ? e.nome : ''; }
@@ -11936,17 +12030,115 @@
     var e = new Date(r.entrada), sa = new Date(r.saida_almoco), va = new Date(r.volta_almoco), s = new Date(r.saida);
     return { trab: (sa-e) + (s-va), intervalo: va-sa };
   }
-  function pontoSituacao(r, data){
+  // ----- v54: nome completo, jornada, feriados e horas extras -----
+  // Jornada: segunda a quinta 07:00–17:00 e sexta 07:00–16:00, com 1 h de almoço (9h00 e 8h00). Sábado, domingo e feriado: zero.
+  // Extras: segunda a sábado 60%; domingo e feriado 100%. Tolerância: até 10 min de diferença no dia não conta (CLT art. 58 §1º).
+  var PONTO_JORNADA_MIN = [0, 540, 540, 540, 540, 480, 0];
+  var PONTO_TOLERANCIA_MIN = 10;
+  state.feriados = [];
+  var pontoFeriadosProm = null;
+  function pontoNomeCompleto(c){ return (c && (c.nomeCompleto || c.nome)) || ''; }
+  function pontoCarregarFeriados(forcar){
+    if(pontoFeriadosProm && !forcar) return pontoFeriadosProm;
+    if(!supabaseClient) return Promise.resolve();
+    var p = Promise.resolve(supabaseClient.from('ponto_feriados').select('id,data,descricao,obra_id').order('data', { ascending:true })).then(function(res){
+      if(res && !res.error) state.feriados = res.data || [];
+      else if(pontoFeriadosProm===p) pontoFeriadosProm = null;
+    }, function(){ if(pontoFeriadosProm===p) pontoFeriadosProm = null; });
+    pontoFeriadosProm = p;
+    return p;
+  }
+  // feriado sem obra vale para todas; com obra, só para quem está naquela obra
+  function pontoFeriado(iso, obraId){
+    var f = (state.feriados||[]).find(function(x){ return x.data===iso && (!x.obra_id || (obraId && x.obra_id===obraId)); });
+    return f ? f.descricao : '';
+  }
+  function pontoJornadaBaseMin(iso){ return PONTO_JORNADA_MIN[new Date(iso+'T12:00:00Z').getUTCDay()]; }
+  function pontoJornadaMin(iso, obraId){ return pontoFeriado(iso, obraId) ? 0 : pontoJornadaBaseMin(iso); }
+  function pontoTipoExtra(iso, obraId){ return (pontoFeriado(iso, obraId) || new Date(iso+'T12:00:00Z').getUTCDay()===0) ? 100 : 60; }
+  // Minutos de extra (60% ou 100%) e faltantes do dia. Só entra dia completo (4 horários) ou falta sem justificativa.
+  function pontoBanco(iso, obraId, sit, horas){
+    var jorn = pontoJornadaMin(iso, obraId), tipo = pontoTipoExtra(iso, obraId);
+    var b = { jornada:jorn, tipo:tipo, ex60:0, ex100:0, falt:0 };
+    if(horas){
+      var saldo = horas.trab/60000 - jorn;
+      if(Math.round(saldo*100)/100 > PONTO_TOLERANCIA_MIN) b[tipo===100 ? 'ex100' : 'ex60'] = saldo;
+      else if(Math.round(-saldo*100)/100 > PONTO_TOLERANCIA_MIN) b.falt = -saldo;
+    } else if(sit && sit.cod==='falta') b.falt = jorn;
+    return b;
+  }
+  function pontoFmtMin(min){ return pontoFmtDur(min*60000); }
+  function pontoBancoHtml(b){
+    var p = [];
+    if(b.ex60) p.push('<span class="ponto-extra">+'+pontoFmtMin(b.ex60)+' (60%)</span>');
+    if(b.ex100) p.push('<span class="ponto-extra">+'+pontoFmtMin(b.ex100)+' (100%)</span>');
+    if(b.falt) p.push('<span class="ponto-falt">−'+pontoFmtMin(b.falt)+'</span>');
+    return p.length ? p.join(' ') : '<span class="ponto-vazio">—</span>';
+  }
+  // ----- aba Feriados -----
+  function pontoFeriadosRender(){
+    var box = document.getElementById('pontoFeriados'); if(!box) return;
+    var pode = pontoPodeCorrigir(), lista = (state.feriados||[]).slice();
+    var anos = {}; lista.forEach(function(f){ var y = String(f.data).slice(0,4); (anos[y] = anos[y] || []).push(f); });
+    var obrasOpt = '<option value="">Todas as obras (nacional / estadual)</option>'+(state.obras||[]).slice().sort(function(a,b){ return String(a.nome||'').localeCompare(String(b.nome||''), 'pt-BR'); })
+      .map(function(o){ return '<option value="'+esc(o.id)+'">Só '+esc(o.nome||'')+'</option>'; }).join('');
+    box.innerHTML = '<div class="card">'+
+      '<h2 style="margin-top:0;">Feriados</h2>'+
+      '<p class="hint" style="margin-top:0;">No feriado a jornada é zero: quem trabalhar recebe tudo como hora extra 100%, e quem não bater ponto aparece como "Feriado", não como "Sem registro". Os nacionais e o de SP (9 de julho) de 2026 e 2027 já vêm cadastrados; inclua os municipais de cada obra.</p>'+
+      (pode ? '<div class="ponto-fer-form">'+
+        '<div class="field"><label>Data</label><input type="date" id="pfData"></div>'+
+        '<div class="field"><label>Feriado</label><input type="text" id="pfDesc" maxlength="80" placeholder="Ex: Aniversário de Suzano"></div>'+
+        '<div class="field"><label>Vale para</label><select id="pfObra">'+obrasOpt+'</select></div>'+
+        '<button type="button" class="btn primary" id="pfAdd">Adicionar</button>'+
+      '</div>' : '<p class="hint">Só administrador e gestão incluem ou removem feriados.</p>')+
+      (lista.length ? Object.keys(anos).sort().map(function(y){
+        return '<div class="ponto-fer-ano"><b>'+esc(y)+'</b> · '+anos[y].length+' feriado(s)</div>'+anos[y].map(function(f){
+          return '<div class="ponto-fer-item"><span class="mono-num">'+esc(fmtDate(f.data))+'</span><span class="hint">'+esc(pontoDiaSemana(f.data))+'</span>'+
+            '<span>'+esc(f.descricao)+(f.obra_id ? ' <span class="tag-example">só '+esc(pontoObraNome(f.obra_id)||'uma obra')+'</span>' : '')+'</span>'+
+            (pode ? '<button type="button" class="btn ghost sm" data-feriado-del="'+esc(f.id)+'">Remover</button>' : '')+'</div>';
+        }).join('');
+      }).join('') : '<p class="empty-hint">Nenhum feriado cadastrado.</p>')+
+    '</div>';
+  }
+  function pontoFeriadoAdicionar(){
+    var data = (document.getElementById('pfData')||{}).value, desc = ((document.getElementById('pfDesc')||{}).value||'').replace(/ +/g, ' ').trim(), obra = (document.getElementById('pfObra')||{}).value || null;
+    if(!data){ toast('Escolha a data do feriado.','error'); return; }
+    if(desc.length<2){ toast('Escreva o nome do feriado.','error'); return; }
+    var bt = document.getElementById('pfAdd'); if(bt) bt.disabled = true;
+    Promise.resolve(supabaseClient.from('ponto_feriados').insert({ data:data, descricao:desc, obra_id:obra })).then(function(res){
+      if(bt) bt.disabled = false;
+      if(res.error){ toast(/duplicate|unique/i.test(res.error.message||'') ? 'Já existe feriado nessa data para essa obra.' : pontoErroMsg(res.error),'error'); return; }
+      toast('Feriado incluído: '+fmtDate(data)+' — '+desc+'.','ok');
+      pontoCarregarFeriados(true).then(function(){ renderPonto(); });
+    }, function(err){ if(bt) bt.disabled = false; toast(pontoErroMsg(err),'error'); });
+  }
+  function pontoFeriadoRemover(id){
+    var f = (state.feriados||[]).find(function(x){ return x.id===id; }); if(!f) return;
+    confirmModal({ title:'Remover feriado', msg:'Remover '+fmtDate(f.data)+' — '+f.descricao+'? O dia volta a ter jornada normal no cálculo de horas extras.', okLabel:'Remover', danger:true }).then(function(ok){
+      if(!ok) return;
+      Promise.resolve(supabaseClient.from('ponto_feriados').delete().eq('id', id)).then(function(res){
+        if(res.error){ toast(pontoErroMsg(res.error),'error'); return; }
+        toast('Feriado removido.','ok');
+        pontoCarregarFeriados(true).then(function(){ renderPonto(); });
+      }, function(err){ toast(pontoErroMsg(err),'error'); });
+    });
+  }
+  function pontoSituacao(r, data, obraId){
     if(r && r.ocorrencia) return { cod:r.ocorrencia, txt:PONTO_OCORR[r.ocorrencia]||r.ocorrencia };
     var n = r ? PONTO_ETAPAS.filter(function(e){ return !!r[e.k]; }).length : 0;
     if(n===4) return { cod:'presente', txt:'Presente' };
-    if(n===0) return { cod:'sem_registro', txt:'Sem registro' };
+    if(n===0){
+      if(data && pontoFeriado(data, obraId)) return { cod:'feriado', txt:'Feriado' };
+      if(data && pontoJornadaBaseMin(data)===0) return { cod:'folga', txt:'Folga' };
+      return { cod:'sem_registro', txt:'Sem registro' };
+    }
     if(data && data===state.ponto.hoje) return { cod:'em_andamento', txt:'Em andamento' };
     return { cod:'incompleto', txt:'Ponto incompleto' };
   }
   function pontoChip(sit){ return '<span class="chip ponto-sit ps-'+sit.cod+'">'+esc(sit.txt)+'</span>'; }
   function pontoErroMsg(err){
     var m = (err && (err.message || err.details)) || String(err||'erro');
+    if(/ponto_feriados|colaboradores_privado|nome_completo/.test(m) && /does not exist|not find|schema cache/i.test(m)) return 'Falta instalar a atualização do ponto no banco (migration 055).';
     if(/vk_ponto_|ponto_registros|ponto_auditoria/.test(m) && /does not exist|not find|schema cache/i.test(m)) return 'O módulo de ponto ainda não foi instalado no banco (migration 054).';
     if(/Failed to fetch|NetworkError|network/i.test(m)) return 'Sem conexão: o ponto precisa de internet (usa o horário do servidor).';
     return m;
@@ -11959,6 +12151,8 @@
     if(!P.hoje) P.hoje = hojeLocal;
     if(!P.hist.mes) P.hist.mes = P.hoje.slice(0,7);
     renderPonto();
+    pontoCarregarFeriados().then(function(){ if(state.view==='ponto') renderPonto(); });
+    colabPrivCarregar();
     Promise.resolve(supabaseClient.rpc('vk_ponto_agora')).then(function(res){
       if(res && !res.error && res.data){
         var hojeAntes = P.hoje;
@@ -11999,7 +12193,7 @@
       root.setAttribute('data-montado','1');
       root.innerHTML =
         '<div class="page-head"><div><h1>Ponto</h1><p>Entrada, almoço e saída de cada colaborador, com o horário do servidor (São Paulo). Cada toque registra a hora de agora.</p></div></div>'+
-        '<div class="seg ponto-abas" role="tablist"><button type="button" data-pontoaba="dia">Bater ponto</button><button type="button" data-pontoaba="historico">Histórico de ponto</button></div>'+
+        '<div class="seg ponto-abas" role="tablist"><button type="button" data-pontoaba="dia">Bater ponto</button><button type="button" data-pontoaba="historico">Histórico de ponto</button><button type="button" data-pontoaba="feriados">Feriados</button></div>'+
         '<div id="pontoAviso"></div><div id="pontoCorpo"></div>';
       pontoLigarEventos(root);
     }
@@ -12009,9 +12203,9 @@
     var corpo = document.getElementById('pontoCorpo');
     if(corpo.getAttribute('data-aba')!==P.aba){
       corpo.setAttribute('data-aba', P.aba);
-      corpo.innerHTML = P.aba==='dia' ? pontoDiaShellHtml() : pontoHistShellHtml();
+      corpo.innerHTML = P.aba==='dia' ? pontoDiaShellHtml() : (P.aba==='feriados' ? '<div id="pontoFeriados"></div>' : pontoHistShellHtml());
     }
-    if(P.aba==='dia') pontoRenderLista(); else pontoHistRender();
+    if(P.aba==='dia') pontoRenderLista(); else if(P.aba==='feriados') pontoFeriadosRender(); else pontoHistRender();
   }
 
   // ----- aba do dia -----
@@ -12046,14 +12240,15 @@
     return lista.filter(function(c){
       if(obraId==='__sem' && c.obraId) return false;
       if(obraId && obraId!=='__sem' && c.obraId!==obraId) return false;
-      if(b && normalizarBusca(c.nome).indexOf(b)===-1) return false;
+      if(b && normalizarBusca(c.nome+' '+(c.nomeCompleto||'')).indexOf(b)===-1) return false;
       return true;
     });
   }
   function normalizarBusca(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
   function pontoCardHtml(c){
     var P = state.ponto, r = P.regs[c.id] || null, data = P.data, ehHoje = data===P.hoje && c.ativo!==false;
-    var sit = pontoSituacao(r, data);
+    var obraCard = (r && r.obra_id) || c.obraId;
+    var sit = pontoSituacao(r, data, obraCard);
     var proxima = (!r || !r.ocorrencia) ? PONTO_ETAPAS.find(function(e){ return !(r && r[e.k]); }) : null;
     var ocupado = !!P.ocupado[c.id];
     var etapas = PONTO_ETAPAS.map(function(e){
@@ -12065,7 +12260,13 @@
     }).join('');
     var h = pontoHoras(r);
     var extra = [];
+    var fer = pontoFeriado(data, obraCard);
+    if(fer) extra.push('Feriado: '+fer);
     if(h) extra.push('Trabalhou '+pontoFmtDur(h.trab)+' · intervalo '+pontoFmtDur(h.intervalo));
+    var bc = pontoBanco(data, obraCard, sit, h);
+    if(bc.ex60) extra.push('Extra 60%: '+pontoFmtMin(bc.ex60));
+    if(bc.ex100) extra.push('Extra 100%: '+pontoFmtMin(bc.ex100));
+    if(bc.falt) extra.push('Faltante: '+pontoFmtMin(bc.falt));
     if(r && r.justificativa) extra.push('Justificativa: '+r.justificativa);
     if(r && r.corrigido) extra.push('Registro corrigido — veja a trilha em Corrigir');
     var semHorario = !r || !PONTO_ETAPAS.some(function(e){ return !!r[e.k]; });
@@ -12074,7 +12275,7 @@
     if(pontoPodeCorrigir()) acoes += '<button type="button" class="btn ghost sm" data-pontocorrigir="'+esc(c.id)+'" data-data="'+esc(data)+'">Corrigir</button>';
     var sub = [c.funcao, pontoEquipeNome(c.equipeId), pontoObraNome(c.obraId) || (c.obraId ? '' : 'Sem obra definida')].filter(Boolean).join(' · ');
     return '<div class="ponto-card" data-colabcard="'+esc(c.id)+'">'+
-      '<div class="ponto-topo"><div class="ponto-quem"><b>'+esc(c.nome)+(c.ativo===false ? ' <span class="tag-example">inativo</span>' : '')+'</b><span>'+esc(sub)+'</span></div>'+pontoChip(sit)+'</div>'+
+      '<div class="ponto-topo"><div class="ponto-quem"><b>'+esc(pontoNomeCompleto(c))+(c.ativo===false ? ' <span class="tag-example">inativo</span>' : '')+'</b><span>'+esc(sub)+'</span></div>'+pontoChip(sit)+'</div>'+
       '<div class="ponto-etapas">'+etapas+'</div>'+
       ((extra.length || acoes) ? '<div class="ponto-rodape"><span class="hint" style="margin:0;">'+esc(extra.join(' · '))+'</span><div class="ponto-acoes">'+acoes+'</div></div>' : '')+
     '</div>';
@@ -12088,17 +12289,17 @@
     var selObra = document.getElementById('pontoObra');
     if(selObra){ var opHtml = pontoObraOptions(P.obraId); if(selObra.getAttribute('data-h')!==opHtml){ selObra.innerHTML = opHtml; selObra.setAttribute('data-h', opHtml); } }
     var dt = document.getElementById('pontoDiaTxt');
-    if(dt) dt.textContent = pontoDiaSemana(P.data)+(P.data===P.hoje ? ' · hoje' : (P.data<P.hoje ? ' · dia anterior: só consulta e correção' : ''));
+    if(dt) dt.textContent = pontoDiaSemana(P.data)+(pontoFeriado(P.data, '') ? ' · feriado: '+pontoFeriado(P.data, '') : '')+(P.data===P.hoje ? ' · hoje' : (P.data<P.hoje ? ' · dia anterior: só consulta e correção' : ''));
     var todos = pontoColabs(false);
     // inativos com registro neste dia continuam aparecendo
     pontoColabs(true).forEach(function(c){ if(c.ativo===false && P.regs[c.id] && todos.indexOf(c)===-1) todos.push(c); });
     var vis = pontoFiltraColabs(todos, P.busca, P.obraId);
-    var cont = { presente:0, em_andamento:0, incompleto:0, falta:0, falta_justificada:0, sem_expediente:0, sem_registro:0 };
-    todos.forEach(function(c){ var s = pontoSituacao(P.regs[c.id], P.data); cont[s.cod] = (cont[s.cod]||0) + 1; });
+    var cont = { presente:0, em_andamento:0, incompleto:0, falta:0, falta_justificada:0, sem_expediente:0, feriado:0, folga:0, sem_registro:0 };
+    todos.forEach(function(c){ var rr = P.regs[c.id], s = pontoSituacao(rr, P.data, (rr && rr.obra_id) || c.obraId); cont[s.cod] = (cont[s.cod]||0) + 1; });
     var res = document.getElementById('pontoResumo');
     if(res) res.innerHTML = P.carregado!==P.data ? '<span class="hint" style="margin:0;">Carregando o ponto do dia…</span>' :
-      [['presente','Presentes'],['em_andamento','Em andamento'],['incompleto','Incompletos'],['falta','Faltas'],['falta_justificada','Faltas justificadas'],['sem_expediente','Sem expediente'],['sem_registro','Sem registro']]
-        .filter(function(x){ return cont[x[0]] || x[0]==='presente' || x[0]==='sem_registro'; })
+      [['presente','Presentes'],['em_andamento','Em andamento'],['incompleto','Incompletos'],['falta','Faltas'],['falta_justificada','Faltas justificadas'],['sem_expediente','Sem expediente'],['feriado','Feriado'],['folga','Folga'],['sem_registro','Sem registro']]
+        .filter(function(x){ return cont[x[0]] || x[0]==='presente'; })
         .map(function(x){ return '<span class="ponto-cont ps-'+x[0]+'"><b>'+cont[x[0]]+'</b> '+x[1]+'</span>'; }).join('');
     if(!todos.length){ lista.innerHTML = '<p class="empty-hint">Nenhum colaborador ativo nas obras liberadas para você. Cadastre em Colaboradores.</p>'; return; }
     if(P.carregado!==P.data){ lista.innerHTML = '<p class="empty-hint">Carregando…</p>'; return; }
@@ -12145,7 +12346,7 @@
     wrap.className = 'overlay';
     wrap.innerHTML = '<div class="modal" style="max-width:460px;">'+
       '<h3>Registrar falta</h3>'+
-      '<p>Lançar <b>'+esc(c.nome)+'</b> como ausente em <b>'+esc(fmtDate(P.data))+'</b>? Com a falta lançada, os horários deste dia ficam bloqueados (só um responsável pode corrigir).</p>'+
+      '<p>Lançar <b>'+esc(pontoNomeCompleto(c))+'</b> como ausente em <b>'+esc(fmtDate(P.data))+'</b>? Com a falta lançada, os horários deste dia ficam bloqueados (só um responsável pode corrigir).</p>'+
       '<div class="seg" id="pontoFaltaTipo" style="margin:4px 0 12px;"><button type="button" data-ft="falta" class="ativo">Falta</button><button type="button" data-ft="falta_justificada">Falta justificada</button></div>'+
       '<div class="field" id="pontoFaltaJustBox" style="display:none;"><label>Justificativa (obrigatória)</label><textarea id="pontoFaltaJust" rows="2" placeholder="Ex.: atestado médico entregue"></textarea></div>'+
       '<div class="row" style="margin-top:12px;"><button class="btn ghost" data-act="cancel" type="button">Cancelar</button><button class="btn danger" data-act="ok" type="button">Registrar falta</button></div>'+
@@ -12197,7 +12398,7 @@
       var oc = (r && r.ocorrencia) || '';
       wrap.querySelector('.modal').innerHTML =
         '<h3>Corrigir ponto</h3>'+
-        '<p><b>'+esc(c.nome)+'</b> · '+esc(pontoDiaSemana(data))+', '+esc(fmtDate(data))+'. A correção fica registrada com o valor anterior, o novo, você e a justificativa.</p>'+
+        '<p><b>'+esc(pontoNomeCompleto(c))+'</b> · '+esc(pontoDiaSemana(data))+', '+esc(fmtDate(data))+'. A correção fica registrada com o valor anterior, o novo, você e a justificativa.</p>'+
         '<div class="field"><label>Situação do dia</label><select id="pcOc">'+
           '<option value=""'+(oc===''?' selected':'')+'>Trabalhou (horários abaixo)</option>'+
           Object.keys(PONTO_OCORR).map(function(k){ return '<option value="'+k+'"'+(oc===k?' selected':'')+'>'+PONTO_OCORR[k]+'</option>'; }).join('')+
@@ -12242,11 +12443,11 @@
     var H = state.ponto.hist, colabs = pontoColabs(true);
     return '<div class="card ponto-barra">'+
       '<div class="grid4">'+
-        '<div class="field"><label>Colaborador</label><select id="phColab"><option value="">Todos os colaboradores</option>'+colabs.map(function(c){ return '<option value="'+esc(c.id)+'"'+(c.id===H.colab?' selected':'')+'>'+esc(c.nome)+(c.ativo===false?' (inativo)':'')+'</option>'; }).join('')+'</select></div>'+
+        '<div class="field"><label>Colaborador</label><select id="phColab"><option value="">Todos os colaboradores</option>'+colabs.map(function(c){ return '<option value="'+esc(c.id)+'"'+(c.id===H.colab?' selected':'')+'>'+esc(pontoNomeCompleto(c))+(c.ativo===false?' (inativo)':'')+'</option>'; }).join('')+'</select></div>'+
         '<div class="field"><label>Buscar nome</label><input type="search" id="phBusca" value="'+esc(H.busca)+'" placeholder="Parte do nome…"></div>'+
         '<div class="field"><label>Obra</label><select id="phObra">'+pontoObraOptions(H.obraId)+'</select></div>'+
         '<div class="field"><label>Situação</label><select id="phSit">'+
-          [['','Todas'],['presente','Presente'],['incompleto','Ponto incompleto / em andamento'],['falta','Falta'],['falta_justificada','Falta justificada'],['sem_expediente','Sem expediente'],['sem_registro','Sem registro'],['corrigido','Com correção']]
+          [['','Todas'],['presente','Presente'],['incompleto','Ponto incompleto / em andamento'],['falta','Falta'],['falta_justificada','Falta justificada'],['sem_expediente','Sem expediente'],['feriado','Feriado'],['folga','Folga (fim de semana)'],['sem_registro','Sem registro'],['extra','Com hora extra'],['faltante','Com horas faltantes'],['corrigido','Com correção']]
             .map(function(o){ return '<option value="'+o[0]+'"'+(o[0]===H.situacao?' selected':'')+'>'+o[1]+'</option>'; }).join('')+'</select></div>'+
       '</div>'+
       '<div class="ponto-periodo">'+
@@ -12289,16 +12490,19 @@
     if(H.carregando){ tab.innerHTML = '<p class="empty-hint">Consultando…</p>'; resumo.innerHTML = ''; return; }
     if(!H.linhas){ tab.innerHTML = '<p class="empty-hint">Escolha os filtros e clique em Consultar.</p>'; resumo.innerHTML = ''; return; }
     var linhas = pontoHistFiltradas();
-    var cont = {}, totTrab = 0, diasTrab = 0;
-    linhas.forEach(function(l){ cont[l.sit.cod] = (cont[l.sit.cod]||0)+1; if(l.horas){ totTrab += l.horas.trab; diasTrab++; } });
+    var cont = {}, totTrab = 0, diasTrab = 0, tEx60 = 0, tEx100 = 0, tFalt = 0;
+    linhas.forEach(function(l){ cont[l.sit.cod] = (cont[l.sit.cod]||0)+1; if(l.horas){ totTrab += l.horas.trab; diasTrab++; } tEx60 += l.banco.ex60; tEx100 += l.banco.ex100; tFalt += l.banco.falt; });
     resumo.innerHTML = '<div class="ponto-resumo" style="margin:12px 0;">'+
       '<span class="ponto-cont"><b>'+linhas.length+'</b> linha(s)</span>'+
-      ['presente','incompleto','em_andamento','falta','falta_justificada','sem_expediente','sem_registro'].filter(function(k){ return cont[k]; }).map(function(k){ return '<span class="ponto-cont ps-'+k+'"><b>'+cont[k]+'</b> '+PONTO_SIT_TXT[k]+'</span>'; }).join('')+
+      ['presente','incompleto','em_andamento','falta','falta_justificada','sem_expediente','feriado','folga','sem_registro'].filter(function(k){ return cont[k]; }).map(function(k){ return '<span class="ponto-cont ps-'+k+'"><b>'+cont[k]+'</b> '+PONTO_SIT_TXT[k]+'</span>'; }).join('')+
       (diasTrab ? '<span class="ponto-cont"><b>'+pontoFmtDur(totTrab)+'</b> trabalhadas em '+diasTrab+' dia(s) completo(s)</span>' : '')+
+      (tEx60 ? '<span class="ponto-cont"><b class="ponto-extra">'+pontoFmtMin(tEx60)+'</b> extras 60%</span>' : '')+
+      (tEx100 ? '<span class="ponto-cont"><b class="ponto-extra">'+pontoFmtMin(tEx100)+'</b> extras 100%</span>' : '')+
+      (tFalt ? '<span class="ponto-cont"><b class="ponto-falt">'+pontoFmtMin(tFalt)+'</b> faltantes</span>' : '')+
     '</div>';
     if(!linhas.length){ tab.innerHTML = '<p class="empty-hint">Nenhum registro com esses filtros.</p>'; return; }
     var LIM = 1500;
-    tab.innerHTML = '<div class="table-wrap"><table class="rdo-list ponto-tab"><thead><tr><th>Data</th><th>Colaborador</th><th>Entrada</th><th>Saída almoço</th><th>Volta almoço</th><th>Saída</th><th>Trabalhadas</th><th>Intervalo</th><th>Situação</th><th>Observações</th></tr></thead><tbody>'+
+    tab.innerHTML = '<div class="table-wrap"><table class="rdo-list ponto-tab"><thead><tr><th>Data</th><th>Colaborador</th><th>Entrada</th><th>Saída almoço</th><th>Volta almoço</th><th>Saída</th><th>Trabalhadas</th><th>Intervalo</th><th>Extra / faltante</th><th>Situação</th><th>Observações</th></tr></thead><tbody>'+
       linhas.slice(0, LIM).map(function(l){
         var r = l.reg;
         var cel = function(k){ return r && r[k] ? esc(pontoHora(r[k])) : '<span class="ponto-vazio">—</span>'; };
@@ -12309,13 +12513,16 @@
           '<td data-label="Volta almoço" class="mono-num">'+cel('volta_almoco')+'</td><td data-label="Saída" class="mono-num">'+cel('saida')+'</td>'+
           '<td data-label="Trabalhadas" class="mono-num">'+(l.horas ? pontoFmtDur(l.horas.trab) : '<span class="ponto-vazio">—</span>')+'</td>'+
           '<td data-label="Intervalo" class="mono-num">'+(l.horas ? pontoFmtDur(l.horas.intervalo) : '<span class="ponto-vazio">—</span>')+'</td>'+
+          '<td data-label="Extra / faltante" class="mono-num">'+pontoBancoHtml(l.banco)+'</td>'+
           '<td data-label="Situação">'+pontoChip(l.sit)+(r && r.corrigido ? ' <span class="tag-example">corrigido</span>' : '')+'</td>'+
           '<td data-label="Observações">'+esc(l.obs)+'</td></tr>';
       }).join('')+'</tbody></table></div>'+
       (linhas.length>LIM ? '<p class="hint">Mostrando '+LIM+' de '+linhas.length+' linhas — a exportação para Excel leva todas.</p>' : '');
   }
-  function pontoHistObs(reg, audits){
+  function pontoHistObs(reg, audits, data, obraId){
     var partes = [];
+    var fer = data ? pontoFeriado(data, obraId) : '';
+    if(fer) partes.push('Feriado: '+fer);
     if(reg && reg.justificativa) partes.push('Justificativa: '+reg.justificativa);
     var js = {};
     (audits||[]).forEach(function(a){ if(a.acao==='correcao' && a.justificativa && !js[a.justificativa]){ js[a.justificativa] = 1; partes.push('Correção ('+(a.usuario_nome||'—')+'): '+a.justificativa); } });
@@ -12328,6 +12535,7 @@
     var dias = Math.round((new Date(per.ate+'T12:00:00Z') - new Date(per.de+'T12:00:00Z'))/86400000) + 1;
     if(dias>370){ toast('Período muito longo: escolha até 1 ano.','error'); return; }
     H.carregando = true; H.per = per; pontoHistRender();
+    pontoCarregarFeriados().then(function(){
     var q1 = supabaseClient.from('ponto_registros').select('*').gte('data', per.de).lte('data', per.ate);
     var q2 = supabaseClient.from('ponto_auditoria').select('*').gte('data', per.de).lte('data', per.ate).order('criado_em', { ascending:true });
     if(H.colab){ q1 = q1.eq('colaborador_id', H.colab); q2 = q2.eq('colaborador_id', H.colab); }
@@ -12346,19 +12554,22 @@
           var k = c.id+'|'+d, r = porChave[k] || null;
           if(r) delete porChave[k];
           var obraId = r ? r.obra_id : c.obraId;
-          linhas.push({ colabId:c.id, nome:c.nome, obraId:obraId, obraNome:pontoObraNome(obraId), data:d, reg:r, sit:pontoSituacao(r, d), horas:pontoHoras(r), obs:pontoHistObs(r, audPor[k]) });
+          var sitL = pontoSituacao(r, d, obraId), horL = pontoHoras(r);
+          linhas.push({ colabId:c.id, nome:pontoNomeCompleto(c), cpf:(state.colabPriv||{})[c.id]||'', obraId:obraId, obraNome:pontoObraNome(obraId), data:d, reg:r, sit:sitL, horas:horL, banco:pontoBanco(d, obraId, sitL, horL), obs:pontoHistObs(r, audPor[k], d, obraId) });
         });
       });
       // registros de colaborador excluído do cadastro: continuam no histórico, pelo nome gravado
       Object.keys(porChave).forEach(function(k){
         var r = porChave[k];
         if(H.colab && r.colaborador_id!==H.colab) return;
-        linhas.push({ colabId:null, nome:r.colaborador_nome+(r.colaborador_id ? '' : ' (fora do cadastro)'), obraId:r.obra_id, obraNome:pontoObraNome(r.obra_id), data:r.data, reg:r, sit:pontoSituacao(r, r.data), horas:pontoHoras(r), obs:pontoHistObs(r, audPor[k]) });
+        var sitX = pontoSituacao(r, r.data, r.obra_id), horX = pontoHoras(r);
+        linhas.push({ colabId:null, nome:r.colaborador_nome+(r.colaborador_id ? '' : ' (fora do cadastro)'), cpf:'', obraId:r.obra_id, obraNome:pontoObraNome(r.obra_id), data:r.data, reg:r, sit:sitX, horas:horX, banco:pontoBanco(r.data, r.obra_id, sitX, horX), obs:pontoHistObs(r, audPor[k], r.data, r.obra_id) });
       });
       linhas.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||'') || a.data.localeCompare(b.data); });
       H.linhas = linhas;
       pontoHistRender();
     }, function(err){ H.carregando = false; toast(pontoErroMsg(err),'error'); pontoHistRender(); });
+    });
   }
   function pontoHistFiltradas(){
     var H = state.ponto.hist, b = normalizarBusca(H.busca);
@@ -12367,24 +12578,32 @@
       if(H.obraId && H.obraId!=='__sem' && l.obraId!==H.obraId) return false;
       if(b && normalizarBusca(l.nome).indexOf(b)===-1) return false;
       if(H.situacao==='corrigido') return !!(l.reg && l.reg.corrigido);
+      if(H.situacao==='extra') return !!(l.banco.ex60 || l.banco.ex100);
+      if(H.situacao==='faltante') return !!l.banco.falt;
       if(H.situacao==='incompleto') return l.sit.cod==='incompleto' || l.sit.cod==='em_andamento';
       if(H.situacao && l.sit.cod!==H.situacao) return false;
       return true;
     });
   }
   // ===== Excel do ponto com a identidade Venko (ExcelJS) =====
-  // d = { ponto:[cab,...linhas], resumo:[cab,...], trilha:[cab,...], filtros:[[rótulo, valor],...], notas:[...],
-  //       periodo:'dd/mm/aaaa a dd/mm/aaaa', gerado:'texto', logo:'data:image/png;base64,...'|null, logoRatio:n }
+  // d = { ponto:[cab,...linhas], tipos:[null, 60|100,...], resumo:[cab,...], trilha:[cab,...], filtros:[[rótulo, valor],...],
+  //       notas:[...], periodo:'dd/mm/aaaa a dd/mm/aaaa', gerado:'texto', ident:{nome,cpf,obra}|null,
+  //       logo:'data:image/png;base64,...'|null, logoRatio:n }
+  // Colunas da aba Ponto: A Colaborador · B Obra · C Data · D Dia · E–H horários · I Situação · J Trabalhadas · K Intervalo ·
+  //                       L Jornada prevista · M Extra 60% · N Extra 100% · O Faltantes · P Observações
   var PXV = { preto:'FF1D1F23', amarelo:'FFF5C400', ouro:'FFA8820A', branco:'FFFFFFFF', cinza:'FF6B6E73', cinzaClaro:'FF9A9DA3',
-    linha:'FFE4E4E0', linhaGrupo:'FFB9BAB5', faixa:'FFF4F4F2', grupo:'FFFAFAF7' };
+    linha:'FFE4E4E0', linhaGrupo:'FFB9BAB5', faixa:'FFF4F4F2', grupo:'FFFAFAF7', vermelho:'FFC6433F', extra:'FF7A5900' };
   var PXV_SIT = {
     'Presente':          { f:'FF2E8F4E', b:'FFE4F3E9' },
     'Ponto incompleto':  { f:'FF7A5900', b:'FFFFF3CC' },
     'Falta':             { f:'FFC6433F', b:'FFFBE7E6' },
     'Falta justificada': { f:'FF2B6CB0', b:'FFE4EEF9' },
     'Sem expediente':    { f:'FF55575C', b:'FFEBEAE6' },
+    'Feriado':           { f:'FF5B4BA8', b:'FFECE9F7' },
+    'Folga':             { f:'FF7C7E86', b:null },
     'Sem registro':      { f:'FF9A9DA3', b:null }
   };
+  var PXV_HM = '[h]:mm;-[h]:mm;""';
   function pxvSit(txt){ txt = String(txt||''); if(txt.indexOf('Ponto incompleto')===0) return PXV_SIT['Ponto incompleto']; return PXV_SIT[txt] || null; }
   function pxvFill(argb){ return { type:'pattern', pattern:'solid', fgColor:{ argb:argb } }; }
   function pxvFonte(o){ var f = { name:'Arial', size:9, color:{ argb:PXV.preto } }; for(var k in o) f[k] = o[k]; return f; }
@@ -12392,7 +12611,7 @@
 
   // Faixa de título igual aos relatórios Venko: preto, logo em caixa branca, título amarelo, filete amarelo, linha de dados.
   function pxvCabecalho(wb, ws, nCols, titulo, d, info, logoId){
-    ws.getRow(1).height = 24; ws.getRow(2).height = 24; ws.getRow(3).height = 4; ws.getRow(4).height = 18; ws.getRow(5).height = 8;
+    ws.getRow(1).height = 24; ws.getRow(2).height = 24; ws.getRow(3).height = 4; ws.getRow(4).height = d.ident ? 22 : 18; ws.getRow(5).height = 8;
     for(var c = 1; c<=nCols; c++){
       ws.getCell(1,c).fill = pxvFill(PXV.preto); ws.getCell(2,c).fill = pxvFill(PXV.preto); ws.getCell(3,c).fill = pxvFill(PXV.amarelo);
     }
@@ -12420,6 +12639,15 @@
     var m = ws.getCell(4,1);
     m.value = info; m.font = pxvFonte({ size:8.5, color:{ argb:PXV.cinza } }); m.alignment = { vertical:'middle', horizontal:'left' };
   }
+  // Linha de identificação: nome completo em negrito e CPF (quando o relatório é de um colaborador só).
+  function pxvInfo(d, resto){
+    if(!d.ident) return resto;
+    var f = function(o){ var x = { name:'Arial', size:9, color:{ argb:PXV.cinza } }; for(var k in o) x[k] = o[k]; return x; };
+    var partes = [{ font:f({}), text:'Colaborador: ' }, { font:f({ size:11, bold:true, color:{ argb:PXV.preto } }), text:d.ident.nome }];
+    if(d.ident.cpf){ partes.push({ font:f({}), text:'   ·   CPF: ' }); partes.push({ font:f({ size:10, bold:true, color:{ argb:PXV.preto } }), text:d.ident.cpf }); }
+    partes.push({ font:f({}), text:'   ·   '+resto });
+    return { richText:partes };
+  }
   // Cabeçalho das colunas: amarelo Venko, texto preto, filete preto embaixo.
   function pxvCabColunas(ws, linha, cab){
     var row = ws.getRow(linha); row.height = 30;
@@ -12433,7 +12661,7 @@
   }
   function pxvPagina(ws, linhaCab, nome){
     ws.pageSetup = { paperSize:9, orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, horizontalCentered:true,
-      margins:{ left:0.35, right:0.35, top:0.45, bottom:0.55, header:0.2, footer:0.25 } };
+      margins:{ left:0.3, right:0.3, top:0.45, bottom:0.55, header:0.2, footer:0.25 } };
     if(linhaCab) ws.pageSetup.printTitlesRow = linhaCab+':'+linhaCab;
     ws.headerFooter = { oddFooter:'&L&"Arial,Regular"&8Construtora Venko · '+nome+'&R&"Arial,Regular"&8Página &P de &N' };
   }
@@ -12443,6 +12671,7 @@
     c.value = txt; c.font = pxvFonte({ italic:true, color:{ argb:PXV.cinza } }); c.alignment = { horizontal:'center', vertical:'middle' };
     ws.getRow(linha).height = 24;
   }
+  function pxvRound2(x){ return Math.round(x*100)/100; }
 
   function pontoXlsxVenko(ExcelJS, d){
     var wb = new ExcelJS.Workbook();
@@ -12451,33 +12680,90 @@
     var logoId = null;
     if(d.logo){ try{ logoId = wb.addImage({ base64:d.logo, extension:'png' }); }catch(e){ logoId = null; } }
     var nLin = d.ponto.length-1, nCol = d.resumo.length-1;
-    var info = 'Período: '+d.periodo+'   ·   '+nCol+' colaborador'+(nCol===1?'':'es')+'   ·   '+nLin+' linha'+(nLin===1?'':'s')+'   ·   Gerado em '+d.gerado;
+    var resto = 'Período: '+d.periodo+'   ·   '+(d.ident ? (d.ident.obra ? 'Obra: '+d.ident.obra+'   ·   ' : '') : nCol+' colaborador'+(nCol===1?'':'es')+'   ·   ')+nLin+(d.ident ? ' dia' : ' linha')+(nLin===1?'':'s')+'   ·   Gerado em '+d.gerado;
+    var info = pxvInfo(d, resto);
+    var R = d.resumo[0], ri = function(nome){ return R.indexOf(nome); };
+    var soma = function(nome){ var ci = ri(nome), s = 0; if(ci<0) return 0; for(var i = 1; i<d.resumo.length; i++) s += +d.resumo[i][ci]||0; return s; };
 
     // ---------- Aba Ponto ----------
+    var NC = 16, HC = 9;
     var ws = wb.addWorksheet('Ponto', { properties:{ tabColor:{ argb:PXV.amarelo } },
-      views:[{ state:'frozen', xSplit:1, ySplit:9, showGridLines:false, zoomScale:100 }] });
-    var W1 = [30,27,11,13,9,11,11,9,30,13,10,46];
-    W1.forEach(function(w, i){ ws.getColumn(i+1).width = w; });
-    pxvCabecalho(wb, ws, 12, 'RELATÓRIO DE PONTO', d, info, logoId);
-    // indicadores do período (somados da aba Resumo)
-    var soma = function(ci){ var s = 0; for(var i = 1; i<d.resumo.length; i++) s += +d.resumo[i][ci]||0; return s; };
+      views:[{ state:'frozen', xSplit:1, ySplit:HC, showGridLines:false, zoomScale:100 }] });
+    [32,24,11,11,8.5,10,10,8.5,21,11,9,10,10,10,10,40].forEach(function(w, i){ ws.getColumn(i+1).width = w; });
+    pxvCabecalho(wb, ws, NC, 'RELATÓRIO DE PONTO', d, info, logoId);
+    var anterior = null, grupo = -1, tot = { J:0, M:0, N:0, O:0 };
+    var porNome = {};
+    pxvCabColunas(ws, HC, d.ponto[0]);
+    for(var i = 1; i<d.ponto.length; i++){
+      var lin = d.ponto[i], rn = HC+i, row = ws.getRow(rn), tipo = (d.tipos && d.tipos[i]) || 60;
+      var novo = lin[0]!==anterior; if(novo){ grupo++; anterior = lin[0]; }
+      var fds = lin[3]==='Sábado' || lin[3]==='Domingo';
+      row.height = 16;
+      for(var c = 0; c<NC; c++){
+        var cel = row.getCell(c+1), v = lin[c];
+        cel.value = (v===undefined || v==='') ? null : v;
+        if(c===2) cel.numFmt = 'dd/mm/yyyy';
+        if(c>=4 && c<=7) cel.numFmt = 'hh:mm';
+        if(c>=9 && c<=14) cel.numFmt = PXV_HM;
+        var cor = PXV.preto;
+        if(c===0 && !novo) cor = PXV.cinzaClaro;
+        if((c===2 || c===3) && fds) cor = PXV.cinzaClaro;
+        if(c===11) cor = PXV.cinza;
+        if(c===12 || c===13) cor = PXV.extra;
+        if(c===14) cor = PXV.vermelho;
+        cel.font = pxvFonte({ color:{ argb:cor }, bold:(c===0 && novo) || c===9 || c===12 || c===13 || c===14 });
+        cel.alignment = { vertical:'middle', horizontal:(c<2 || c===15) ? 'left' : 'center', indent:(c<2 || c===15) ? 1 : 0 };
+        if(grupo%2===1) cel.fill = pxvFill(PXV.grupo);
+        cel.border = { bottom:{ style:'thin', color:{ argb:PXV.linha } },
+          top: (novo && i>1) ? { style:'thin', color:{ argb:PXV.linhaGrupo } } : undefined };
+      }
+      // fórmulas: se alguém mudar um horário no Excel, horas, extras e faltantes recalculam sozinhos
+      var tem4 = [4,5,6,7].every(function(k){ return typeof lin[k]==='number'; });
+      var ordemOk = tem4 && lin[5]>=lin[4] && lin[6]>=lin[5] && lin[7]>=lin[6];
+      var vTrab = ordemOk ? (lin[5]-lin[4])+(lin[7]-lin[6]) : (tem4 ? 'Conferir' : '');
+      var vInt = ordemOk ? lin[6]-lin[5] : (tem4 ? 'Conferir' : '');
+      var jorn = typeof lin[11]==='number' ? lin[11] : 0;
+      var base = 'IF(COUNT(E'+rn+':H'+rn+')<4,"",IF(AND(F'+rn+'>=E'+rn+',G'+rn+'>=F'+rn+',H'+rn+'>=G'+rn+'),';
+      row.getCell(10).value = { formula:base+'(F'+rn+'-E'+rn+')+(H'+rn+'-G'+rn+'),"Conferir"))', result:vTrab };
+      row.getCell(11).value = { formula:base+'G'+rn+'-F'+rn+',"Conferir"))', result:vInt };
+      row.getCell(12).value = jorn;
+      var vEx = ordemOk ? (pxvRound2((vTrab-jorn)*1440)>10 ? vTrab-jorn : 0) : '';
+      var vFa = ordemOk ? (pxvRound2((jorn-vTrab)*1440)>10 ? jorn-vTrab : 0) : (lin[8]==='Falta' ? jorn : '');
+      var fEx = 'IF(ISNUMBER(J'+rn+'),IF(ROUND((J'+rn+'-L'+rn+')*1440,2)>10,J'+rn+'-L'+rn+',0),"")';
+      row.getCell(tipo===100 ? 14 : 13).value = { formula:fEx, result:vEx };
+      row.getCell(tipo===100 ? 13 : 14).value = null;
+      row.getCell(15).value = { formula:'IF(ISNUMBER(J'+rn+'),IF(ROUND((L'+rn+'-J'+rn+')*1440,2)>10,L'+rn+'-J'+rn+',0),IF(I'+rn+'="Falta",L'+rn+',""))', result:vFa };
+      var pn = porNome[lin[0]] = porNome[lin[0]] || { J:0, K:0, M:0, N:0, O:0 };
+      if(ordemOk){ pn.J += vTrab; pn.K += vInt; tot.J += vTrab; }
+      if(typeof vEx==='number'){ pn[tipo===100 ? 'N' : 'M'] += vEx; tot[tipo===100 ? 'N' : 'M'] += vEx; }
+      if(typeof vFa==='number'){ pn.O += vFa; tot.O += vFa; }
+      var st = pxvSit(lin[8]), cs = row.getCell(9);
+      if(st){ cs.font = pxvFonte({ size:8.5, bold:!!st.b, color:{ argb:st.f } }); if(st.b) cs.fill = pxvFill(st.b); }
+    }
+    var ult = HC + Math.max(nLin, 0);
+    // indicadores do período
     var kpis = [
       [1,1,'COLABORADORES', nCol, null],
-      [2,2,'DIAS COMPLETOS', soma(1), null],
-      [3,4,'PONTOS INCOMPLETOS', soma(2), null],
-      [5,6,'FALTAS', soma(3), null],
-      [7,8,'FALTAS JUSTIFICADAS', soma(4), null],
-      [9,9,'SEM REGISTRO', soma(6), null],
-      [10,11,'HORAS TRABALHADAS', 0, '[h]:mm'],
-      [12,12,'DIAS COM CORREÇÃO', soma(9), null]
+      [2,2,'DIAS COMPLETOS', soma('Dias presentes (completos)'), null],
+      [3,4,'FALTAS', soma('Faltas'), null],
+      [5,7,'HORAS TRABALHADAS', nLin ? { formula:'SUM(J'+(HC+1)+':J'+ult+')', result:tot.J } : 0, '[h]:mm'],
+      [8,9,'HORAS EXTRAS 60%', nLin ? { formula:'SUM(M'+(HC+1)+':M'+ult+')', result:tot.M } : 0, '[h]:mm'],
+      [10,11,'HORAS EXTRAS 100%', nLin ? { formula:'SUM(N'+(HC+1)+':N'+ult+')', result:tot.N } : 0, '[h]:mm'],
+      [12,13,'HORAS FALTANTES', nLin ? { formula:'SUM(O'+(HC+1)+':O'+ult+')', result:tot.O } : 0, '[h]:mm'],
+      [14,15,'SEM REGISTRO', soma('Sem registro'), null],
+      [16,16,'DIAS COM CORREÇÃO', soma('Dias com correção'), null]
     ];
     ws.getRow(6).height = 16; ws.getRow(7).height = 26; ws.getRow(8).height = 10;
     kpis.forEach(function(k){
       if(k[1]>k[0]){ ws.mergeCells(6,k[0],6,k[1]); ws.mergeCells(7,k[0],7,k[1]); }
       var a = ws.getCell(6,k[0]), b = ws.getCell(7,k[0]);
+      var corV = PXV.preto;
+      if(k[2]==='FALTAS' && k[3]>0) corV = PXV.vermelho;
+      if(k[2]==='HORAS FALTANTES') corV = PXV.vermelho;
+      if(k[2].indexOf('HORAS EXTRAS')===0) corV = PXV.extra;
       a.value = k[2]; a.font = pxvFonte({ size:7.5, bold:true, color:{ argb:PXV.cinza } });
       a.alignment = { vertical:'bottom', horizontal:'left', indent:1 };
-      b.value = k[3]; b.font = pxvFonte({ size:15, bold:true, color:{ argb:(k[2]==='FALTAS' && k[3]>0) ? 'FFC6433F' : PXV.preto } });
+      b.value = k[3]; b.font = pxvFonte({ size:15, bold:true, color:{ argb:corV } });
       b.alignment = { vertical:'middle', horizontal:'left', indent:1 };
       if(k[4]) b.numFmt = k[4];
       for(var c = k[0]; c<=k[1]; c++){
@@ -12486,74 +12772,42 @@
         ws.getCell(7,c).border = { left:c===k[0] ? { style:'medium', color:{ argb:PXV.branco } } : undefined };
       }
     });
-    var HC = 9;
-    pxvCabColunas(ws, HC, d.ponto[0]);
-    var FMT = { 2:'dd/mm/yyyy', 4:'hh:mm', 5:'hh:mm', 6:'hh:mm', 7:'hh:mm', 9:'[h]:mm', 10:'[h]:mm' };
-    var anterior = null, grupo = -1, horasPor = {}, intervPor = {}, totH = 0;
-    for(var i = 1; i<d.ponto.length; i++){
-      var lin = d.ponto[i], rn = HC+i, row = ws.getRow(rn);
-      var novo = lin[0]!==anterior; if(novo){ grupo++; anterior = lin[0]; }
-      var fds = lin[3]==='Sábado' || lin[3]==='Domingo';
-      row.height = 16;
-      for(var c = 0; c<12; c++){
-        var cel = row.getCell(c+1), v = lin[c];
-        cel.value = (v===undefined || v==='') ? null : v;
-        if(FMT[c]!=null) cel.numFmt = FMT[c];
-        var cor = PXV.preto;
-        if(c===0 && !novo) cor = PXV.cinzaClaro;
-        if((c===2 || c===3) && fds) cor = PXV.cinzaClaro;
-        cel.font = pxvFonte({ color:{ argb:cor }, bold:(c===0 && novo) || c===9 });
-        cel.alignment = { vertical:'middle', horizontal:(c<2 || c===11) ? 'left' : 'center', indent:(c<2 || c===11) ? 1 : 0 };
-        if(grupo%2===1) cel.fill = pxvFill(PXV.grupo);
-        cel.border = { bottom:{ style:'thin', color:{ argb:PXV.linha } },
-          top: (novo && i>1) ? { style:'thin', color:{ argb:PXV.linhaGrupo } } : undefined };
-      }
-      // horas e intervalo como fórmula: se alguém mudar um horário no Excel, recalcula sozinho
-      var tem4 = [4,5,6,7].every(function(k){ return typeof lin[k]==='number'; });
-      var ordemOk = tem4 && lin[5]>=lin[4] && lin[6]>=lin[5] && lin[7]>=lin[6];
-      var vTrab = ordemOk ? (lin[5]-lin[4])+(lin[7]-lin[6]) : (tem4 ? 'Conferir' : '');
-      var vInt = ordemOk ? lin[6]-lin[5] : (tem4 ? 'Conferir' : '');
-      var base = 'IF(COUNT(E'+rn+':H'+rn+')<4,"",IF(AND(F'+rn+'>=E'+rn+',G'+rn+'>=F'+rn+',H'+rn+'>=G'+rn+'),';
-      row.getCell(10).value = { formula:base+'(F'+rn+'-E'+rn+')+(H'+rn+'-G'+rn+'),"Conferir"))', result:vTrab };
-      row.getCell(11).value = { formula:base+'G'+rn+'-F'+rn+',"Conferir"))', result:vInt };
-      if(ordemOk){ horasPor[lin[0]] = (horasPor[lin[0]]||0)+vTrab; intervPor[lin[0]] = (intervPor[lin[0]]||0)+vInt; totH += vTrab; }
-      var st = pxvSit(lin[8]), cs = row.getCell(9);
-      if(st){ cs.font = pxvFonte({ size:8.5, bold:!!st.b, color:{ argb:st.f } }); if(st.b) cs.fill = pxvFill(st.b); }
-    }
-    var ult = HC + Math.max(nLin, 0);
-    if(!nLin){ pxvLinhaVazia(ws, HC+1, 12, 'Nenhuma linha no período.'); ult = HC+1; }
+    if(!nLin){ pxvLinhaVazia(ws, HC+1, NC, 'Nenhuma linha no período.'); ult = HC+1; }
     else {
-      ws.autoFilter = { from:{ row:HC, column:1 }, to:{ row:ult, column:12 } };
-      ws.getCell(7,10).value = { formula:'SUM(J'+(HC+1)+':J'+ult+')', result:totH };
+      ws.autoFilter = { from:{ row:HC, column:1 }, to:{ row:ult, column:NC } };
       ws.addConditionalFormatting({ ref:'J'+(HC+1)+':K'+ult, rules:[{ type:'expression', formulae:['J'+(HC+1)+'="Conferir"'], priority:1,
-        style:{ font:{ bold:true, color:{ argb:'FFC6433F' } } } }] });
+        style:{ font:{ bold:true, color:{ argb:PXV.vermelho } } } }] });
     }
     (d.notas||[]).forEach(function(n, k){
-      var rn = ult+2+k; ws.mergeCells(rn,1,rn,12);
+      var rn = ult+2+k; ws.mergeCells(rn,1,rn,NC);
       var c = ws.getCell(rn,1); c.value = n; c.font = pxvFonte({ size:8, italic:true, color:{ argb:PXV.cinza } });
     });
     pxvPagina(ws, HC, 'Relatório de ponto · '+d.periodo);
 
     // ---------- Aba Resumo por colaborador ----------
+    var nR = R.length;
     var w2 = wb.addWorksheet('Resumo por colaborador', { properties:{ tabColor:{ argb:PXV.preto } },
       views:[{ state:'frozen', xSplit:1, ySplit:6, showGridLines:false }] });
-    [30,13,13,10,13,12,12,16,13,13].forEach(function(w, i){ w2.getColumn(i+1).width = w; });
-    pxvCabecalho(wb, w2, 10, 'RESUMO POR COLABORADOR', d, info, logoId);
-    pxvCabColunas(w2, 6, d.resumo[0]);
+    R.forEach(function(h, i){ w2.getColumn(i+1).width = i===0 ? 32 : (h==='CPF' ? 16 : 12.5); });
+    pxvCabecalho(wb, w2, nR, 'RESUMO POR COLABORADOR', d, info, logoId);
+    pxvCabColunas(w2, 6, R);
+    var HORA_COL = { 'Horas trabalhadas':'J', 'Intervalo total':'K', 'Horas extras 60%':'M', 'Horas extras 100%':'N', 'Horas faltantes':'O' };
     for(var j = 1; j<d.resumo.length; j++){
       var lr = d.resumo[j], r2 = w2.getRow(6+j); r2.height = 17;
-      for(var c2 = 0; c2<10; c2++){
-        var ce = r2.getCell(c2+1), vv = lr[c2];
+      for(var c2 = 0; c2<nR; c2++){
+        var ce = r2.getCell(c2+1), vv = lr[c2], hcol = HORA_COL[R[c2]];
         ce.value = vv;
-        if(c2===7 || c2===8){
+        if(hcol){
           ce.numFmt = '[h]:mm';
-          if(nLin){ var Lc = c2===7 ? 'J' : 'K'; vv = (c2===7 ? horasPor : intervPor)[lr[0]]||0;
-            ce.value = { formula:'SUMIF(Ponto!$A$'+(HC+1)+':$A$'+ult+',A'+(6+j)+',Ponto!$'+Lc+'$'+(HC+1)+':$'+Lc+'$'+ult+')', result:vv }; }
+          vv = (porNome[lr[0]]||{})[hcol]||0;
+          if(nLin) ce.value = { formula:'SUMIF(Ponto!$A$'+(HC+1)+':$A$'+ult+',A'+(6+j)+',Ponto!$'+hcol+'$'+(HC+1)+':$'+hcol+'$'+ult+')', result:vv };
         }
         var cr = PXV.preto;
-        if(c2>0 && !vv) cr = PXV.cinzaClaro;
-        if(c2===3 && vv>0) cr = 'FFC6433F';
-        ce.font = pxvFonte({ color:{ argb:cr }, bold:c2===0 || (c2===7 && vv>0) || (c2===3 && vv>0) });
+        if(c2>0 && R[c2]!=='CPF' && !vv) cr = PXV.cinzaClaro;
+        if(R[c2]==='Faltas' && vv>0) cr = PXV.vermelho;
+        if(R[c2]==='Horas faltantes' && vv>0) cr = PXV.vermelho;
+        if(R[c2].indexOf('Horas extras')===0 && vv>0) cr = PXV.extra;
+        ce.font = pxvFonte({ color:{ argb:cr }, bold:c2===0 || (!!hcol && hcol!=='K' && vv>0) || (R[c2]==='Faltas' && vv>0) });
         ce.alignment = { vertical:'middle', horizontal:c2===0 ? 'left' : 'center', indent:c2===0 ? 1 : 0 };
         if(j%2===0) ce.fill = pxvFill(PXV.grupo);
         ce.border = { bottom:{ style:'thin', color:{ argb:PXV.linha } } };
@@ -12561,33 +12815,34 @@
     }
     var ultR = 6 + nCol;
     if(nCol){
-      w2.autoFilter = { from:{ row:6, column:1 }, to:{ row:ultR, column:10 } };
+      w2.autoFilter = { from:{ row:6, column:1 }, to:{ row:ultR, column:nR } };
       var tr = w2.getRow(ultR+1); tr.height = 20;
-      for(var c3 = 1; c3<=10; c3++){
-        var tc = tr.getCell(c3);
+      for(var c3 = 1; c3<=nR; c3++){
+        var tc = tr.getCell(c3), nomeC = R[c3-1];
         if(c3===1) tc.value = 'TOTAL DO PERÍODO';
-        else {
-          var tot = 0; for(var q = 1; q<d.resumo.length; q++) tot += +d.resumo[q][c3-1]||0;
-          if(c3===8 || c3===9){ tot = 0; var mp = c3===8 ? horasPor : intervPor; for(var nm in mp) tot += mp[nm]; }
+        else if(nomeC!=='CPF'){
+          var totC = 0, hc = HORA_COL[nomeC];
+          if(hc){ for(var nm in porNome) totC += porNome[nm][hc]||0; }
+          else { for(var q = 1; q<d.resumo.length; q++) totC += +d.resumo[q][c3-1]||0; }
           var L = pxvLetra(c3);
-          tc.value = { formula:'SUM('+L+'7:'+L+ultR+')', result:tot };
-          if(c3===8 || c3===9) tc.numFmt = '[h]:mm';
+          tc.value = { formula:'SUM('+L+'7:'+L+ultR+')', result:totC };
+          if(hc) tc.numFmt = '[h]:mm';
         }
         tc.fill = pxvFill(PXV.preto);
         tc.font = pxvFonte({ bold:true, color:{ argb:c3===1 ? PXV.amarelo : PXV.branco } });
         tc.alignment = { vertical:'middle', horizontal:c3===1 ? 'left' : 'center', indent:c3===1 ? 1 : 0 };
         tc.border = { top:{ style:'medium', color:{ argb:PXV.amarelo } } };
       }
-    } else pxvLinhaVazia(w2, 7, 10, 'Nenhum colaborador no período.');
+    } else pxvLinhaVazia(w2, 7, nR, 'Nenhum colaborador no período.');
     pxvPagina(w2, 6, 'Resumo por colaborador · '+d.periodo);
 
     // ---------- Aba Trilha ----------
     var w3 = wb.addWorksheet('Trilha', { properties:{ tabColor:{ argb:PXV.ouro } },
       views:[{ state:'frozen', ySplit:6, showGridLines:false }] });
-    [15,30,11,15,13,13,44,22,19].forEach(function(w, i){ w3.getColumn(i+1).width = w; });
+    [15,32,11,15,13,13,44,22,19].forEach(function(w, i){ w3.getColumn(i+1).width = w; });
     pxvCabecalho(wb, w3, 9, 'TRILHA DE ALTERAÇÕES', d, info, logoId);
     pxvCabColunas(w3, 6, d.trilha[0]);
-    var ACAO = { 'Registro':PXV.cinza, 'Falta':'FFC6433F', 'Correção':'FF7A5900' };
+    var ACAO = { 'Registro':PXV.cinza, 'Falta':PXV.vermelho, 'Correção':PXV.extra };
     for(var t = 1; t<d.trilha.length; t++){
       var lt = d.trilha[t], r3 = w3.getRow(6+t); r3.height = 16;
       for(var c4 = 0; c4<9; c4++){
@@ -12606,15 +12861,15 @@
 
     // ---------- Aba Filtros ----------
     var w4 = wb.addWorksheet('Filtros', { properties:{ tabColor:{ argb:PXV.cinzaClaro } }, views:[{ showGridLines:false }] });
-    w4.getColumn(1).width = 24; w4.getColumn(2).width = 96;
-    pxvCabecalho(wb, w4, 2, 'FILTROS E CRITÉRIOS', d, 'Relatório de ponto — Construtora Venko', logoId);
+    w4.getColumn(1).width = 24; w4.getColumn(2).width = 100;
+    pxvCabecalho(wb, w4, 2, 'FILTROS E CRITÉRIOS', { logoRatio:d.logoRatio }, 'Relatório de ponto — Construtora Venko', logoId);
     var rf = 6;
     (d.filtros||[]).forEach(function(p){
       var a = w4.getCell(rf,1), b = w4.getCell(rf,2);
       a.value = String(p[0]).toUpperCase(); b.value = p[1];
       a.font = pxvFonte({ size:8, bold:true, color:{ argb:PXV.cinza } }); a.fill = pxvFill(PXV.faixa);
       a.alignment = { vertical:'middle', horizontal:'left', indent:1 };
-      b.font = pxvFonte({ size:10 }); b.alignment = { vertical:'middle', horizontal:'left', indent:1 };
+      b.font = pxvFonte({ size:10, bold:p[0]==='Colaborador' || p[0]==='CPF' }); b.alignment = { vertical:'middle', horizontal:'left', indent:1 };
       a.border = b.border = { bottom:{ style:'thin', color:{ argb:PXV.linha } } };
       w4.getRow(rf).height = 20; rf++;
     });
@@ -12639,63 +12894,78 @@
     var linhas = pontoHistFiltradas();
     if(!linhas.length){ toast('Nenhuma linha para exportar com esses filtros.','error'); return; }
     var serial = function(iso){ return (Date.UTC(+iso.slice(0,4), +iso.slice(5,7)-1, +iso.slice(8,10)) - Date.UTC(1899,11,30))/86400000; };
-    var cab = ['Colaborador','Obra / local','Data','Dia da semana','Entrada','Saída almoço','Volta almoço','Saída','Situação','Horas trabalhadas','Intervalo','Observações / justificativas'];
-    var aoa = [cab];
+    var verCpf = pontoPodeCorrigir();
+    var cab = ['Colaborador','Obra / local','Data','Dia da semana','Entrada','Saída almoço','Volta almoço','Saída','Situação','Horas trabalhadas','Intervalo','Jornada prevista','Horas extras 60%','Horas extras 100%','Horas faltantes','Observações / justificativas'];
+    var aoa = [cab], tipos = [null];
     linhas.forEach(function(l){
-      var r = l.reg;
+      var r = l.reg, b = l.banco;
       var hv = function(k){ var s = r && r[k] ? pontoHoraSeg(r[k]) : null; return s==null ? null : s/86400; };
       aoa.push([l.nome, l.obraNome||'', serial(l.data), pontoDiaSemana(l.data), hv('entrada'), hv('saida_almoco'), hv('volta_almoco'), hv('saida'),
-        l.sit.cod==='em_andamento' ? 'Ponto incompleto (dia em andamento)' : l.sit.txt, l.horas ? l.horas.trab/86400000 : null, l.horas ? l.horas.intervalo/86400000 : null, l.obs||null]);
+        l.sit.cod==='em_andamento' ? 'Ponto incompleto (dia em andamento)' : l.sit.txt, l.horas ? l.horas.trab/86400000 : null, l.horas ? l.horas.intervalo/86400000 : null,
+        b.jornada/1440, b.ex60 ? b.ex60/1440 : null, b.ex100 ? b.ex100/1440 : null, b.falt ? b.falt/1440 : null, l.obs||null]);
+      tipos.push(b.tipo);
     });
     // resumo por colaborador (só dias completos somam horas)
     var porC = {}, ordem = [];
     linhas.forEach(function(l){
       var k = l.nome;
-      if(!porC[k]){ porC[k] = { nome:l.nome, presente:0, incompleto:0, falta:0, falta_justificada:0, sem_expediente:0, sem_registro:0, trab:0, intervalo:0, corr:0 }; ordem.push(k); }
-      var x = porC[k], cod = l.sit.cod==='em_andamento' ? 'incompleto' : l.sit.cod;
+      if(!porC[k]){ porC[k] = { nome:l.nome, cpf:l.cpf||'', presente:0, incompleto:0, falta:0, falta_justificada:0, sem_expediente:0, folga:0, sem_registro:0, trab:0, intervalo:0, ex60:0, ex100:0, falt:0, corr:0 }; ordem.push(k); }
+      var x = porC[k], cod = l.sit.cod==='em_andamento' ? 'incompleto' : (l.sit.cod==='feriado' ? 'folga' : l.sit.cod);
       x[cod] = (x[cod]||0)+1; if(l.horas){ x.trab += l.horas.trab; x.intervalo += l.horas.intervalo; } if(l.reg && l.reg.corrigido) x.corr++;
+      x.ex60 += l.banco.ex60; x.ex100 += l.banco.ex100; x.falt += l.banco.falt;
     });
-    var aoa2 = [['Colaborador','Dias presentes (completos)','Pontos incompletos','Faltas','Faltas justificadas','Sem expediente','Sem registro','Horas trabalhadas (dias completos)','Intervalo total','Dias com correção']];
-    ordem.forEach(function(k){ var x = porC[k]; aoa2.push([x.nome, x.presente, x.incompleto, x.falta, x.falta_justificada, x.sem_expediente, x.sem_registro, x.trab/86400000, x.intervalo/86400000, x.corr]); });
+    var cab2 = ['Colaborador'].concat(verCpf ? ['CPF'] : [], ['Dias presentes (completos)','Pontos incompletos','Faltas','Faltas justificadas','Sem expediente','Folgas / feriados','Sem registro','Horas trabalhadas','Intervalo total','Horas extras 60%','Horas extras 100%','Horas faltantes','Dias com correção']);
+    var aoa2 = [cab2];
+    ordem.forEach(function(k){ var x = porC[k]; aoa2.push([x.nome].concat(verCpf ? [x.cpf ? vkCpfFmt(x.cpf) : ''] : [], [x.presente, x.incompleto, x.falta, x.falta_justificada, x.sem_expediente, x.folga, x.sem_registro, x.trab/86400000, x.intervalo/86400000, x.ex60/1440, x.ex100/1440, x.falt/1440, x.corr])); });
     // trilha das correções/lançamentos do período (mesmos filtros de colaborador)
     var nomesOk = {}; linhas.forEach(function(l){ nomesOk[(l.colabId||'')+'|'+l.data] = 1; });
     var aoa3 = [['Data','Colaborador','Ação','Campo','Valor anterior','Valor novo','Justificativa','Usuário','Quando']];
     (H.audit||[]).filter(function(a){ return nomesOk[(a.colaborador_id||'')+'|'+a.data]; }).forEach(function(a){
-      aoa3.push([serial(a.data), a.colaborador_nome, a.acao==='registro'?'Registro':(a.acao==='falta'?'Falta':'Correção'), PONTO_CAMPO_TXT[a.campo]||a.campo,
+      var cA = (state.colaboradores||[]).find(function(c){ return c.id===a.colaborador_id; });
+      aoa3.push([serial(a.data), cA ? pontoNomeCompleto(cA) : a.colaborador_nome, a.acao==='registro'?'Registro':(a.acao==='falta'?'Falta':'Correção'), PONTO_CAMPO_TXT[a.campo]||a.campo,
         a.campo==='ocorrencia' ? (PONTO_OCORR[a.valor_anterior]||a.valor_anterior||'') : (a.valor_anterior||'').slice(0,5),
         a.campo==='ocorrencia' ? (PONTO_OCORR[a.valor_novo]||a.valor_novo||'') : (a.valor_novo||'').slice(0,5),
         a.justificativa||'', a.usuario_nome||'', new Date(a.criado_em).toLocaleString('pt-BR', { timeZone:PONTO_TZ })]);
     });
     var gerado = new Date().toLocaleString('pt-BR', { timeZone:PONTO_TZ })+' por '+((state.currentUser||{}).nome||'');
+    var cSel = H.colab ? (state.colaboradores||[]).find(function(c){ return c.id===H.colab; }) : null;
+    var ident = null;
+    if(ordem.length===1){
+      var x1 = porC[ordem[0]], l1 = linhas[0];
+      ident = { nome:x1.nome, cpf:verCpf && x1.cpf ? vkCpfFmt(x1.cpf) : '', obra:l1.obraNome||'' };
+    }
     var pares = [['Período', fmtDate(H.per.de)+' a '+fmtDate(H.per.ate)],
-      ['Colaborador', H.colab ? ((state.colaboradores||[]).find(function(c){ return c.id===H.colab; })||{}).nome||'' : 'Todos'+(H.busca ? ' (nome contém "'+H.busca+'")' : '')],
-      ['Obra', H.obraId==='__sem' ? 'Sem obra definida' : (H.obraId ? pontoObraNome(H.obraId) : 'Todas')],
+      ['Colaborador', cSel ? pontoNomeCompleto(cSel) : (ident ? ident.nome : 'Todos'+(H.busca ? ' (nome contém "'+H.busca+'")' : ''))]];
+    if(ident && ident.cpf) pares.push(['CPF', ident.cpf]);
+    pares.push(['Obra', H.obraId==='__sem' ? 'Sem obra definida' : (H.obraId ? pontoObraNome(H.obraId) : 'Todas')],
       ['Situação', (document.querySelector('#phSit option:checked')||{}).textContent || 'Todas'],
-      ['Gerado em', gerado]];
-    var notas = ['Horas trabalhadas = (saída para almoço − entrada) + (saída − volta do almoço). Só é calculada quando os 4 horários existem; sem jornada, tolerância, hora extra ou desconto.',
-      'Horários no fuso de São Paulo, gravados pelo servidor. Linhas "Sem registro" não têm horário inventado.'];
-    var nomeArq = H.colab ? (((state.colaboradores||[]).find(function(c){ return c.id===H.colab; })||{}).nome||'colaborador') : 'Todos';
+      ['Gerado em', gerado]);
+    var notas = ['Horas trabalhadas = (saída para almoço − entrada) + (saída − volta do almoço). Só é calculada quando os 4 horários existem.',
+      'Jornada prevista: segunda a quinta 07:00–17:00 e sexta 07:00–16:00, com 1 h de almoço (9h00 e 8h00). Sábado, domingo e feriado: jornada zero.',
+      'Horas extras: o que passar da jornada. Segunda a sábado = 60%; domingo e feriado = 100%. Horas faltantes: o que faltar para a jornada; falta sem justificativa = jornada inteira.',
+      'Tolerância: diferença de até 10 minutos no dia não conta como extra nem como falta (CLT art. 58 §1º). Passou de 10 minutos, conta a diferença toda.',
+      'Horários no fuso de São Paulo, gravados pelo servidor. Linhas "Sem registro" não têm horário inventado. Se alguém mudar um horário neste Excel, as horas, extras e faltantes recalculam, mas a situação do dia continua a do sistema.'];
+    var nomeArq = cSel ? pontoNomeCompleto(cSel) : (ident ? ident.nome : 'Todos');
     var arquivo = 'Ponto_'+String(nomeArq).normalize('NFD').split('').filter(function(ch){ return ch.charCodeAt(0)<128; }).join('').replace(/[^a-zA-Z0-9]+/g,'_')+'_'+H.per.de+'_a_'+H.per.ate+'.xlsx';
     var pronto = function(){ toast('Relatório de ponto baixado em Excel ('+linhas.length+' linha(s)).','ok'); };
     // modelo simples (sem formatação) — só se o gerador com a identidade Venko não carregar
     var simples = function(){
+      var fmtCols = function(ws, aoaX, mapa){
+        for(var i = 1; i<aoaX.length; i++) Object.keys(mapa).forEach(function(col){ var ref = XLSX.utils.encode_cell({ r:i, c:+col }); if(ws[ref] && ws[ref].t==='n') ws[ref].z = mapa[col]; });
+      };
       var ws = XLSX.utils.aoa_to_sheet(aoa);
-      for(var i = 1; i<aoa.length; i++){
-        var fmt = function(col, z){ var ref = XLSX.utils.encode_cell({ r:i, c:col }); if(ws[ref] && ws[ref].t==='n') ws[ref].z = z; };
-        fmt(2, 'dd/mm/yyyy'); [4,5,6,7].forEach(function(cc){ fmt(cc, 'hh:mm'); }); fmt(9, '[h]:mm'); fmt(10, '[h]:mm');
-      }
-      ws['!cols'] = [{wch:30},{wch:26},{wch:11},{wch:13},{wch:9},{wch:12},{wch:12},{wch:9},{wch:26},{wch:16},{wch:10},{wch:60}];
-      ws['!autofilter'] = { ref: 'A1:L'+aoa.length };
-      var ws2 = XLSX.utils.aoa_to_sheet(aoa2);
-      for(var j = 1; j<aoa2.length; j++){ [7,8].forEach(function(cc){ var ref = XLSX.utils.encode_cell({ r:j, c:cc }); if(ws2[ref]) ws2[ref].z = '[h]:mm'; }); }
-      ws2['!cols'] = [{wch:30},{wch:14},{wch:14},{wch:8},{wch:14},{wch:12},{wch:12},{wch:18},{wch:14},{wch:14}];
-      ws2['!autofilter'] = { ref: 'A1:J'+aoa2.length };
+      fmtCols(ws, aoa, { 2:'dd/mm/yyyy', 4:'hh:mm', 5:'hh:mm', 6:'hh:mm', 7:'hh:mm', 9:'[h]:mm', 10:'[h]:mm', 11:'[h]:mm', 12:'[h]:mm', 13:'[h]:mm', 14:'[h]:mm' });
+      ws['!cols'] = [{wch:32},{wch:24},{wch:11},{wch:12},{wch:9},{wch:12},{wch:12},{wch:9},{wch:24},{wch:12},{wch:10},{wch:11},{wch:11},{wch:11},{wch:11},{wch:50}];
+      ws['!autofilter'] = { ref: 'A1:P'+aoa.length };
+      var ws2 = XLSX.utils.aoa_to_sheet(aoa2), m2 = {};
+      cab2.forEach(function(h, i){ if(/^Horas|^Intervalo/.test(h)) m2[i] = '[h]:mm'; });
+      fmtCols(ws2, aoa2, m2);
+      ws2['!cols'] = cab2.map(function(h, i){ return { wch: i===0 ? 32 : 14 }; });
       var ws3 = XLSX.utils.aoa_to_sheet(aoa3);
-      for(var k3 = 1; k3<aoa3.length; k3++){ var rf = XLSX.utils.encode_cell({ r:k3, c:0 }); if(ws3[rf]) ws3[rf].z = 'dd/mm/yyyy'; }
-      ws3['!cols'] = [{wch:11},{wch:30},{wch:10},{wch:14},{wch:12},{wch:12},{wch:50},{wch:22},{wch:20}];
-      ws3['!autofilter'] = { ref: 'A1:I'+aoa3.length };
+      fmtCols(ws3, aoa3, { 0:'dd/mm/yyyy' });
+      ws3['!cols'] = [{wch:11},{wch:32},{wch:10},{wch:14},{wch:12},{wch:12},{wch:50},{wch:22},{wch:20}];
       var ws0 = XLSX.utils.aoa_to_sheet([['Relatório de ponto — RDO Venko']].concat(pares, [[]], notas.map(function(n){ return [n]; })));
-      ws0['!cols'] = [{wch:16},{wch:90}];
+      ws0['!cols'] = [{wch:16},{wch:110}];
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Ponto');
       XLSX.utils.book_append_sheet(wb, ws2, 'Resumo por colaborador');
@@ -12705,7 +12975,7 @@
       pronto();
     };
     carregarLibs(['exceljs']).then(function(){ return cdmPrepararLogo(); }).then(function(){
-      var d = { ponto:aoa, resumo:aoa2, trilha:aoa3, filtros:pares, notas:notas, periodo:pares[0][1], gerado:gerado, logo:CDM_LOGO, logoRatio:CDM_LOGO_RATIO };
+      var d = { ponto:aoa, tipos:tipos, resumo:aoa2, trilha:aoa3, filtros:pares, notas:notas, periodo:pares[0][1], gerado:gerado, ident:ident, logo:CDM_LOGO, logoRatio:CDM_LOGO_RATIO };
       return pontoXlsxVenko(ExcelJS, d).xlsx.writeBuffer();
     }).then(function(buf){
       var blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -12729,8 +12999,12 @@
         if(state.ponto.aba==='dia') pontoCarregarDia();
         renderPonto();
         if(state.ponto.aba==='historico' && !state.ponto.hist.linhas && !state.ponto.hist.carregando) pontoHistConsultar();
+        if(state.ponto.aba==='feriados') pontoCarregarFeriados(true).then(function(){ if(state.ponto.aba==='feriados') pontoFeriadosRender(); });
         return;
       }
+      if(t.closest('#pfAdd')){ pontoFeriadoAdicionar(); return; }
+      var fdel = t.closest('[data-feriado-del]');
+      if(fdel){ pontoFeriadoRemover(fdel.getAttribute('data-feriado-del')); return; }
       var nav = t.closest('[data-pontodia]');
       if(nav){ var v = nav.getAttribute('data-pontodia'); pontoIrPara(v==='hoje' ? state.ponto.hoje : pontoSomaDias(state.ponto.data, +v)); return; }
       var bt = t.closest('[data-pontobater]');
