@@ -8140,32 +8140,47 @@
     if(inp) inp.addEventListener('blur', function(){ if(vkCpfDig(inp.value).length===11) inp.value = vkCpfFmt(inp.value); });
   }
   colabCpfMascara(document.getElementById('colaboradorCpf'));
+  // v56: editar colaborador — nome (como aparece no RDO), nome completo, função e, para admin/gestão, CPF
   function colabDadosModal(colabId){
     var c = (state.colaboradores||[]).find(function(x){ return x.id===colabId; }); if(!c) return;
     var podeCpf = pontoVeCpf(), cpfAtual = (state.colabPriv||{})[colabId] || '';
+    var funcs = FUNCAO_OPTS.slice();
+    var funcOutra = !!(c.funcao && funcs.indexOf(c.funcao)===-1);
     var root = document.getElementById('modal-root');
     var wrap = document.createElement('div'); wrap.className = 'overlay';
-    wrap.innerHTML = '<div class="modal" style="max-width:480px;width:calc(100vw - 32px);">'+
-      '<h3>Dados do colaborador</h3>'+
-      '<p><b>'+esc(c.nome)+'</b>'+(c.funcao ? ' · '+esc(c.funcao) : '')+'. O nome completo aparece no ponto e no Excel'+(podeCpf ? '; o CPF só é visto por administrador e gestão.' : '.')+'</p>'+
-      '<div class="field"><label>Nome completo</label><input type="text" id="cdNome" maxlength="120" value="'+esc(c.nomeCompleto||'')+'" placeholder="Ex: Wilson Pereira da Silva" autocomplete="off"></div>'+
-      (podeCpf ? '<div class="field" style="margin-top:10px;"><label>CPF</label><input type="text" id="cdCpf" inputmode="numeric" maxlength="14" value="'+esc(cpfAtual ? vkCpfFmt(cpfAtual) : '')+'" placeholder="000.000.000-00" autocomplete="off"></div>' : '')+
+    wrap.innerHTML = '<div class="modal" style="max-width:500px;width:calc(100vw - 32px);">'+
+      '<h3>Editar colaborador</h3>'+
+      '<div class="field"><label>Nome (como aparece no RDO e no ponto)</label><input type="text" id="cdApelido" maxlength="80" value="'+esc(c.nome||'')+'" autocomplete="off"></div>'+
+      '<div class="field" style="margin-top:10px;"><label>Nome completo</label><input type="text" id="cdNome" maxlength="120" value="'+esc(c.nomeCompleto||'')+'" placeholder="Ex: Wilson Pereira da Silva" autocomplete="off"></div>'+
+      '<div class="field" style="margin-top:10px;"><label>Função</label><select id="cdFuncao"><option value="">Sem função</option>'+
+        funcs.map(function(f){ return '<option value="'+esc(f)+'"'+(f===c.funcao?' selected':'')+'>'+esc(f)+'</option>'; }).join('')+
+        '<option value="__custom__"'+(funcOutra?' selected':'')+'>Outra (digitar)…</option></select>'+
+        '<input type="text" id="cdFuncaoOutra" maxlength="60" placeholder="Nome da função" value="'+esc(funcOutra ? c.funcao : '')+'" style="margin-top:6px;'+(funcOutra?'':'display:none')+'"></div>'+
+      (podeCpf ? '<div class="field" style="margin-top:10px;"><label>CPF <span class="hint" style="margin:0;">(só administrador e gestão veem)</span></label><input type="text" id="cdCpf" inputmode="numeric" maxlength="14" value="'+esc(cpfAtual ? vkCpfFmt(cpfAtual) : '')+'" placeholder="000.000.000-00" autocomplete="off"></div>' : '')+
+      '<p class="hint" style="margin:10px 0 0;">O nome novo vale daqui para a frente. RDOs já salvos continuam com o nome que tinham; o histórico de ponto mostra o nome atual.</p>'+
       '<div class="row" style="margin-top:14px;"><button class="btn ghost" data-act="cancel" type="button">Cancelar</button><button class="btn primary" data-act="ok" type="button">Salvar</button></div>'+
     '</div>';
     root.appendChild(wrap);
     colabCpfMascara(wrap.querySelector('#cdCpf'));
+    var selF = wrap.querySelector('#cdFuncao'), outraF = wrap.querySelector('#cdFuncaoOutra');
+    selF.addEventListener('change', function(){ outraF.style.display = selF.value==='__custom__' ? '' : 'none'; });
+    setTimeout(function(){ var i = wrap.querySelector('#cdApelido'); if(i){ i.focus(); i.select(); } }, 30);
     wrap.addEventListener('click', function(e){
       if(e.target===wrap){ wrap.remove(); return; }
       var act = e.target.getAttribute && e.target.getAttribute('data-act');
       if(act==='cancel'){ wrap.remove(); return; }
       if(act!=='ok') return;
+      var apelido = wrap.querySelector('#cdApelido').value.replace(/ +/g, ' ').trim();
       var nomeC = wrap.querySelector('#cdNome').value.replace(/ +/g, ' ').trim();
+      var funcao = selF.value==='__custom__' ? outraF.value.replace(/ +/g, ' ').trim() : selF.value;
       var cpfIn = podeCpf ? vkCpfDig(wrap.querySelector('#cdCpf').value) : '';
+      if(!apelido){ toast('Informe o nome do colaborador.','error'); return; }
+      if(state.colaboradores.some(function(x){ return x.id!==colabId && x.ativo!==false && rdoNorm(x.nome||'')===rdoNorm(apelido) && (x.obraId||null)===(c.obraId||null); })){ toast('Já existe “'+apelido+'” nesta obra. Use um nome diferente (ex.: com o sobrenome).','error'); return; }
       if(podeCpf && cpfIn && !vkCpfValido(cpfIn)){ toast('CPF inválido: confira os 11 números.','error'); return; }
       e.target.disabled = true;
-      Promise.resolve(supabaseClient.from('colaboradores').update({ nome_completo: nomeC || null, updated_at: new Date().toISOString() }).eq('id', colabId)).then(function(res){
+      Promise.resolve(supabaseClient.from('colaboradores').update({ nome: apelido, nome_completo: nomeC || null, funcao: funcao || null, updated_at: new Date().toISOString() }).eq('id', colabId)).then(function(res){
         if(res.error){ e.target.disabled = false; toast('Erro: '+pontoErroMsg(res.error),'error'); return; }
-        var feito = function(){ wrap.remove(); toast('Dados de '+c.nome+' salvos.','ok'); loadColaboradores(); };
+        var feito = function(){ wrap.remove(); toast('Colaborador '+apelido+' atualizado.','ok'); loadColaboradores(); };
         if(podeCpf && cpfIn!==cpfAtual) colabPrivSalvar(colabId, cpfIn).then(function(ok){ if(ok) feito(); else e.target.disabled = false; });
         else feito();
       }, function(err){ e.target.disabled = false; toast(pontoErroMsg(err),'error'); });
@@ -8244,7 +8259,7 @@
           '<div class="meta">'+esc(c.funcao||'Sem função')+(c.nomeCompleto ? ' · '+esc(c.nomeCompleto) : '')+(pontoVeCpf() && (state.colabPriv||{})[c.id] ? ' · CPF '+esc(vkCpfFmt(state.colabPriv[c.id])) : '')+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
-          '<button class="btn ghost sm" data-dados-colab="'+c.id+'">'+(pontoVeCpf() ? 'Nome completo e CPF' : 'Nome completo')+'</button>'+
+          '<button class="btn ghost sm" data-dados-colab="'+c.id+'" aria-label="Editar '+esc(c.nome)+'">✎ Editar</button>'+
           '<select class="colab-obra-sel" data-colab-obra="'+c.id+'" aria-label="Obra de '+esc(c.nome)+'">'+colabObraOptionsHtml(c.obraId)+'</select>'+
           '<button class="btn ghost sm" data-toggle-colab="'+c.id+'">'+(c.ativo?'Marcar inativo':'Reativar')+'</button>'+
           (ehAdmin() ? '<button class="btn danger sm" data-del-colab="'+c.id+'">Excluir</button>' : '')+
