@@ -8120,7 +8120,7 @@
   }
   function vkCpfFmt(v){ var d = vkCpfDig(v); return d.length===11 ? d.slice(0,3)+'.'+d.slice(3,6)+'.'+d.slice(6,9)+'-'+d.slice(9) : String(v||''); }
   function colabPrivCarregar(){
-    if(!supabaseClient || !pontoPodeCorrigir()){ state.colabPriv = {}; return Promise.resolve(); }
+    if(!supabaseClient || !pontoVeCpf()){ state.colabPriv = {}; return Promise.resolve(); }
     return Promise.resolve(supabaseClient.from('colaboradores_privado').select('colaborador_id,cpf')).then(function(res){
       if(!res || res.error) return;
       var m = {}; (res.data||[]).forEach(function(r){ if(r.cpf) m[r.colaborador_id] = r.cpf; });
@@ -8142,7 +8142,7 @@
   colabCpfMascara(document.getElementById('colaboradorCpf'));
   function colabDadosModal(colabId){
     var c = (state.colaboradores||[]).find(function(x){ return x.id===colabId; }); if(!c) return;
-    var podeCpf = pontoPodeCorrigir(), cpfAtual = (state.colabPriv||{})[colabId] || '';
+    var podeCpf = pontoVeCpf(), cpfAtual = (state.colabPriv||{})[colabId] || '';
     var root = document.getElementById('modal-root');
     var wrap = document.createElement('div'); wrap.className = 'overlay';
     wrap.innerHTML = '<div class="modal" style="max-width:480px;width:calc(100vw - 32px);">'+
@@ -8179,7 +8179,7 @@
   }
   function populateColaboradorFormSelects(){
     var cpfBox = document.getElementById('colaboradorCpfBox');
-    if(cpfBox) cpfBox.style.display = pontoPodeCorrigir() ? '' : 'none';
+    if(cpfBox) cpfBox.style.display = pontoVeCpf() ? '' : 'none';
     var funcSel = document.getElementById('colaboradorFuncaoSel');
     if(funcSel && !funcSel.options.length){
       funcSel.innerHTML = '<option value="">Sem função</option>' + FUNCAO_OPTS.map(function(f){ return '<option value="'+esc(f)+'">'+esc(f)+'</option>'; }).join('') + '<option value="__custom__">Outra (digitar)…</option>';
@@ -8218,7 +8218,7 @@
     var obraIdC = document.getElementById('colaboradorObra').value || null;
     if(state.colaboradores.some(function(c){ return c.ativo!==false && rdoNorm(c.nome||'')===rdoNorm(nome) && (c.obraId||null)===obraIdC; })){ toast('“'+nome+'” já está cadastrado nesta obra.','error'); return; }
     var nomeCompleto = (document.getElementById('colaboradorNomeCompleto').value||'').replace(/ +/g, ' ').trim();
-    var cpfDig = pontoPodeCorrigir() ? vkCpfDig(document.getElementById('colaboradorCpf').value) : '';
+    var cpfDig = pontoVeCpf() ? vkCpfDig(document.getElementById('colaboradorCpf').value) : '';
     if(cpfDig && !vkCpfValido(cpfDig)){ toast('CPF inválido: confira os 11 números.','error'); return; }
     var novoColab = { nome: nome, funcao: funcao || null, departamento_id: deptoId, obra_id: obraIdC };
     if(nomeCompleto) novoColab.nome_completo = nomeCompleto;
@@ -8241,10 +8241,10 @@
       var depto = state.departamentos.find(function(d){ return d.id===c.departamentoId; });
       return '<div class="obra-card" data-id="'+c.id+'">'+
         '<div class="info"><b>'+esc(c.nome)+(!c.ativo?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">inativo</span>':'')+'</b>'+
-          '<div class="meta">'+esc(c.funcao||'Sem função')+(c.nomeCompleto ? ' · '+esc(c.nomeCompleto) : '')+(pontoPodeCorrigir() && (state.colabPriv||{})[c.id] ? ' · CPF '+esc(vkCpfFmt(state.colabPriv[c.id])) : '')+'</div>'+
+          '<div class="meta">'+esc(c.funcao||'Sem função')+(c.nomeCompleto ? ' · '+esc(c.nomeCompleto) : '')+(pontoVeCpf() && (state.colabPriv||{})[c.id] ? ' · CPF '+esc(vkCpfFmt(state.colabPriv[c.id])) : '')+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
-          '<button class="btn ghost sm" data-dados-colab="'+c.id+'">'+(pontoPodeCorrigir() ? 'Nome completo e CPF' : 'Nome completo')+'</button>'+
+          '<button class="btn ghost sm" data-dados-colab="'+c.id+'">'+(pontoVeCpf() ? 'Nome completo e CPF' : 'Nome completo')+'</button>'+
           '<select class="colab-obra-sel" data-colab-obra="'+c.id+'" aria-label="Obra de '+esc(c.nome)+'">'+colabObraOptionsHtml(c.obraId)+'</select>'+
           '<button class="btn ghost sm" data-toggle-colab="'+c.id+'">'+(c.ativo?'Marcar inativo':'Reativar')+'</button>'+
           (ehAdmin() ? '<button class="btn danger sm" data-del-colab="'+c.id+'">Excluir</button>' : '')+
@@ -11978,11 +11978,13 @@
     hist:{ colab:'', busca:'', obraId:'', modo:'mes', mes:'', de:'', ate:'', dia:'', situacao:'', linhas:null, audit:[], carregando:false } };
   var pontoRelogioTimer = null;
 
+  // v55: Engenheiro(a) de Obras e Encarregados fazem tudo no ponto; o CPF continua só para administrador e gestão.
   function pontoPodeBater(){
     var u = state.currentUser;
-    return !!(u && (u.is_admin || u.acesso_obras_gestao !== false || /encarregad/i.test(u.cargo||'')));
+    return !!(u && (u.is_admin || u.acesso_obras_gestao !== false || /encarregad|engenheir/i.test(u.cargo||'')));
   }
-  function pontoPodeCorrigir(){
+  function pontoPodeCorrigir(){ return pontoPodeBater(); }
+  function pontoVeCpf(){
     var u = state.currentUser;
     return !!(u && (u.is_admin || u.acesso_obras_gestao !== false));
   }
@@ -12090,7 +12092,7 @@
         '<div class="field"><label>Feriado</label><input type="text" id="pfDesc" maxlength="80" placeholder="Ex: Aniversário de Suzano"></div>'+
         '<div class="field"><label>Vale para</label><select id="pfObra">'+obrasOpt+'</select></div>'+
         '<button type="button" class="btn primary" id="pfAdd">Adicionar</button>'+
-      '</div>' : '<p class="hint">Só administrador e gestão incluem ou removem feriados.</p>')+
+      '</div>' : '<p class="hint">Você pode consultar os feriados; incluir ou remover fica com administrador, gestão, engenheiros e encarregados.</p>')+
       (lista.length ? Object.keys(anos).sort().map(function(y){
         return '<div class="ponto-fer-ano"><b>'+esc(y)+'</b> · '+anos[y].length+' feriado(s)</div>'+anos[y].map(function(f){
           return '<div class="ponto-fer-item"><span class="mono-num">'+esc(fmtDate(f.data))+'</span><span class="hint">'+esc(pontoDiaSemana(f.data))+'</span>'+
@@ -12140,6 +12142,7 @@
     var m = (err && (err.message || err.details)) || String(err||'erro');
     if(/ponto_feriados|colaboradores_privado|nome_completo/.test(m) && /does not exist|not find|schema cache/i.test(m)) return 'Falta instalar a atualização do ponto no banco (migration 055).';
     if(/vk_ponto_|ponto_registros|ponto_auditoria/.test(m) && /does not exist|not find|schema cache/i.test(m)) return 'O módulo de ponto ainda não foi instalado no banco (migration 054).';
+    if(/Sem permiss|permission denied|row-level security/i.test(m)) return m+' Se você é engenheiro(a) ou encarregado, peça para rodar a migration 056 no banco.';
     if(/Failed to fetch|NetworkError|network/i.test(m)) return 'Sem conexão: o ponto precisa de internet (usa o horário do servidor).';
     return m;
   }
@@ -12894,7 +12897,7 @@
     var linhas = pontoHistFiltradas();
     if(!linhas.length){ toast('Nenhuma linha para exportar com esses filtros.','error'); return; }
     var serial = function(iso){ return (Date.UTC(+iso.slice(0,4), +iso.slice(5,7)-1, +iso.slice(8,10)) - Date.UTC(1899,11,30))/86400000; };
-    var verCpf = pontoPodeCorrigir();
+    var verCpf = pontoVeCpf();
     var cab = ['Colaborador','Obra / local','Data','Dia da semana','Entrada','Saída almoço','Volta almoço','Saída','Situação','Horas trabalhadas','Intervalo','Jornada prevista','Horas extras 60%','Horas extras 100%','Horas faltantes','Observações / justificativas'];
     var aoa = [cab], tipos = [null];
     linhas.forEach(function(l){
