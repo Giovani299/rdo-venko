@@ -2005,7 +2005,7 @@
 
   /* ---------------- data loading (Postgres + Realtime) ---------------- */
   function mapObraRow(row){
-    return { id:row.id, clienteId:row.cliente_id||null, nome:row.nome, endereco:row.endereco, responsavelTecnico:row.responsavel_tecnico, dataInicio:row.data_inicio, localidade:row.localidade||'', contrato:row.contrato||'', tabelaPreco:String(row.tabela_preco||'').toUpperCase(), status:row.status, exemplo:row.exemplo, createdAt:row.created_at };
+    return { id:row.id, clienteId:row.cliente_id||null, nome:row.nome, endereco:row.endereco, responsavelTecnico:row.responsavel_tecnico, dataInicio:row.data_inicio, localidade:row.localidade||'', contrato:row.contrato||'', tabelaPreco:String(row.tabela_preco||'').toUpperCase(), responsavelRdo:row.responsavel_rdo||null, cobrarRdo:row.cobrar_rdo!==false, status:row.status, exemplo:row.exemplo, createdAt:row.created_at };
   }
   function mapClienteRow(row){
     return { id:row.id, nomeEmpresa:row.nome_empresa, cnpj:row.cnpj, email:row.email, telefone:row.telefone, tabelaPreco:String(row.tabela_preco||'').toUpperCase(), createdAt:row.created_at, updatedAt:row.updated_at };
@@ -2101,9 +2101,11 @@
         toast('Não foi possível carregar as obras.','error'); return;
       }
       state.obras = (res.data||[]).map(mapObraRow);
+      state.temRespRdo = (res.data||[]).some(function(r){ return Object.prototype.hasOwnProperty.call(r, 'responsavel_rdo'); });
       state.obras.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
       cacheSet('obras', state.obras);
       renderAll();
+      if(state.avisos && state.avisos.pushAtivo===false) notifSugerirAtivar();
     });
   }
   function loadClientes(){
@@ -2259,6 +2261,7 @@
         }
       }
       if(state.view==='users'){ renderUserList(); }
+      if(state.view==='obras' && state.temRespRdo){ renderObraList(); }
     });
   }
   // ---- Tabelas de preços por cliente --------------------------------------------------------
@@ -2778,9 +2781,10 @@
     }, function(err){ toast('Teste falhou: '+((err && err.message) || err), 'error'); })
       .then(function(){ if(bt){ bt.disabled = false; bt.textContent = 'Enviar teste'; } });
   }
-  // convite uma vez para quem é cobrado ou recebe a cobrança (encarregados e administradores)
+  // convite uma vez para quem é cobrado ou recebe a cobrança (v63: responsável pela obra, encarregados, administradores e financeiro)
+  function notifEhResponsavelRdo(u){ return !!(u && (state.obras||[]).some(function(o){ return o.responsavelRdo===u.id && o.status==='ativa'; })); }
   function notifSugerirAtivar(){
-    var u = state.currentUser; if(!u || !(u.is_admin || /encarregad/i.test(u.cargo||''))) return;
+    var u = state.currentUser; if(!u || !(u.is_admin || u.acesso_financeiro || /encarregad/i.test(u.cargo||'') || notifEhResponsavelRdo(u))) return;
     if(state.avisos.pushAtivo || document.getElementById('notifSugestao')) return;
     var visto = null; try{ visto = localStorage.getItem('vkPushSugestao'); }catch(e){}
     if(visto) return;
@@ -2789,7 +2793,7 @@
     var div = document.createElement('div');
     div.id = 'notifSugestao'; div.className = 'notif-sugestao';
     var podeAgora = notifPushSuportado();
-    div.innerHTML = '<span>🔔 '+(u.is_admin ? 'Receba no celular quando alguém não fizer o RDO até as 18h.' : 'Receba no celular o lembrete quando o RDO do dia não for enviado até as 18h.')+
+    div.innerHTML = '<span>🔔 '+((u.is_admin || u.acesso_financeiro) ? 'Receba no celular o aviso “Cobre o RDO” quando o responsável não fizer o RDO até as 18h.' : 'Receba no celular o aviso “Faça o RDO” quando o RDO da sua obra não for enviado até as 18h.')+
       (podeAgora ? '' : (isIosDevice() ? ' No iPhone, primeiro instale o app (Compartilhar → Adicionar à Tela de Início).' : ''))+'</span>'+
       (podeAgora ? '<button type="button" class="btn primary sm" data-ns="sim">Ativar</button>' : '')+
       '<button type="button" class="btn ghost sm" data-ns="nao">Agora não</button>';
@@ -5320,6 +5324,23 @@
     });
   });
 
+  // v63 — responsável pelo RDO da obra (060_rdo_responsavel.sql): recebe "Faça o RDO" às 18h
+  function obraRespRdoNome(id){ var p = id && (state.profiles||[]).find(function(x){ return x.id===id; }); return p ? p.nome : ''; }
+  function obraRespRdoMeta(o){
+    if(!state.temRespRdo) return '';
+    var u = state.currentUser;
+    if(o.responsavelRdo && u && o.responsavelRdo===u.id) return ' · Responsável pelo RDO: você';
+    var nome = obraRespRdoNome(o.responsavelRdo);
+    if(nome) return ' · Responsável pelo RDO: '+esc(nome);
+    return ehAdmin() && !o.responsavelRdo && o.status==='ativa' && o.cobrarRdo!==false ? ' · <span style="color:var(--status-rejected);">Sem responsável pelo RDO</span>' : '';
+  }
+  function obraRespRdoOptions(atual){
+    var ps = (state.profiles||[]).slice().sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+    var html = '<option value="">Responsável pelo RDO…</option>';
+    if(atual && !ps.some(function(p){ return p.id===atual; })) html += '<option value="'+esc(atual)+'" selected>(usuário removido)</option>';
+    return html + ps.map(function(p){ return '<option value="'+esc(p.id)+'"'+(p.id===atual?' selected':'')+'>'+esc(p.nome)+'</option>'; }).join('');
+  }
+
   function renderObraList(){
     popularObraTabelaSelect();
     var list = document.getElementById('obraList');
@@ -5336,10 +5357,11 @@
       var open = !!state.obraServicosOpen[o.id];
       var card = '<div class="obra-card" data-id="'+o.id+'">'+
         '<div class="info"><b>'+esc(o.nome)+(o.exemplo?'<span class="tag-example">exemplo</span>':'')+'</b>'+
-          '<div class="meta">Cliente: '+esc(clienteNomeById(o.clienteId)||'—')+' · '+esc(o.endereco||'Endereço não informado')+(o.localidade?' · '+esc(o.localidade):'')+' · Resp.: '+esc(o.responsavelTecnico||'—')+' · Planilha: '+esc(tabelaPrecoNome(tabelaDaObra(o.id))||'todas')+' · '+rdoCount+' RDO(s)'+(canServ?' · '+servCount+' serviço(s) contratado(s)':'')+'</div>'+
+          '<div class="meta">Cliente: '+esc(clienteNomeById(o.clienteId)||'—')+' · '+esc(o.endereco||'Endereço não informado')+(o.localidade?' · '+esc(o.localidade):'')+' · Resp.: '+esc(o.responsavelTecnico||'—')+' · Planilha: '+esc(tabelaPrecoNome(tabelaDaObra(o.id))||'todas')+obraRespRdoMeta(o)+' · '+rdoCount+' RDO(s)'+(canServ?' · '+servCount+' serviço(s) contratado(s)':'')+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
           '<span class="chip '+(o.status==='ativa'?'approved':'draft')+'">'+(o.status==='ativa'?'Ativa':'Concluída')+'</span>'+
+          (ehAdmin() && state.temRespRdo ? '<select data-resprdo="'+o.id+'" title="Responsável pelo RDO desta obra (recebe o aviso das 18h)" style="max-width:220px;">'+obraRespRdoOptions(o.responsavelRdo)+'</select>' : '')+
           (canGestao && tabelasPrecoCfg.db ? '<select data-tabelaobra="'+o.id+'" title="Planilha de serviços desta obra" style="max-width:200px;">'+obraTabelaOptionsHtml(o.tabelaPreco)+'</select>' : '')+
           (canServ?'<button class="btn ghost sm" data-servicos="'+o.id+'">'+(open?'Ocultar serviços':'Serviços contratados')+'</button>':'')+
           (canServ?'<button class="btn ghost sm" data-servpdf="'+o.id+'">⬇ Exportar PDF</button>':'')+
@@ -5368,6 +5390,16 @@
     list.querySelectorAll('.obra-servicos-panel [data-qtdobra]').forEach(function(inp){
       inp.addEventListener('change', function(){
         updateObraServicoQuantidade(inp.getAttribute('data-qtdobra'), inp.getAttribute('data-qtditem'), inp.value);
+      });
+    });
+    list.querySelectorAll('[data-resprdo]').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        var id = sel.getAttribute('data-resprdo');
+        supabaseClient.from('obras').update({ responsavel_rdo: sel.value || null }).eq('id', id).then(function(res){
+          if(res.error){ toast('Erro ao definir o responsável pelo RDO: '+res.error.message,'error'); loadObras(); return; }
+          toast(sel.value ? 'Responsável pelo RDO definido.' : 'Obra ficou sem responsável pelo RDO.','ok');
+          loadObras();
+        });
       });
     });
     list.querySelectorAll('[data-tabelaobra]').forEach(function(sel){
