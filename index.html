@@ -2630,50 +2630,118 @@
   state.avisos = { lista: [], uid: null, canal: null, pushAtivo: null };
   var PUSH_FUNCAO = SUPABASE_URL + '/functions/v1/enviar-push';
   function notifPushSuportado(){ return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window); }
+  // v64 — avisos: o aparelho é conferido com o SERVIDOR (não só com o navegador), contador vem do banco,
+  // marcar um aviso como lido tocando nele, e a lista se atualiza sozinha (tempo real + ao voltar para o app + a cada minuto).
   function notifIniciar(){
     var u = state.currentUser; if(!u || !supabaseClient) return;
     if(state.avisos.uid === u.id){ notifCarregar(); return; }
-    state.avisos.uid = u.id; state.avisos.lista = []; state.avisos.pushAtivo = null;
+    state.avisos.uid = u.id; state.avisos.lista = []; state.avisos.naoLidas = 0; state.avisos.pushAtivo = null;
+    state.avisos.pushErro = null; state.avisos.sincronizado = false; state.avisos.endpoint = null;
     if(state.avisos.canal){ try{ supabaseClient.removeChannel(state.avisos.canal); }catch(e){} }
     try{
       state.avisos.canal = supabaseClient.channel('avisos-'+u.id)
-        .on('postgres_changes', { event:'INSERT', schema:'public', table:'notificacoes', filter:'user_id=eq.'+u.id }, function(p){
-          notifCarregar().then(function(){ if(p && p.new && p.new.mensagem) toast('🔔 '+p.new.mensagem, 'error'); });
+        .on('postgres_changes', { event:'*', schema:'public', table:'notificacoes', filter:'user_id=eq.'+u.id }, function(p){
+          notifCarregar().then(function(){ if(p && p.eventType==='INSERT' && p.new && p.new.mensagem) toast('🔔 '+p.new.mensagem, 'error'); });
         }).subscribe();
     }catch(e){}
     notifCarregar().then(function(){
-      var nl = notifNaoLidas();
-      if(nl.length) toast(nl.length===1 ? '🔔 '+nl[0].mensagem : '🔔 Você tem '+nl.length+' avisos de RDO. Toque no sininho para ver.', 'error');
+      var n = state.avisos.naoLidas || 0, nl = notifNaoLidas();
+      if(n) toast(n===1 && nl.length ? '🔔 '+nl[0].mensagem : '🔔 Você tem '+n+' avisos de RDO. Toque no sininho para ver.', 'error');
       if(location.hash==='#avisos'){ try{ history.replaceState(null, '', location.pathname); }catch(e){} notifAbrir(); }
     });
-    notifConferirPush().then(notifSugerirAtivar);
+    notifSincronizarPush().then(notifSugerirAtivar);
   }
   function notifSair(){
     if(state.avisos.canal){ try{ supabaseClient.removeChannel(state.avisos.canal); }catch(e){} }
-    state.avisos = { lista: [], uid: null, canal: null, pushAtivo: null };
+    state.avisos = { lista: [], naoLidas: 0, uid: null, canal: null, pushAtivo: null, pushErro: null, sincronizado: false, endpoint: null };
     notifFechar(); var s = document.getElementById('notifSugestao'); if(s) s.remove();
   }
+  var notifCarregando = null, notifDeNovo = false;
   function notifCarregar(){
-    if(!supabaseClient) return Promise.resolve();
-    return Promise.resolve(supabaseClient.from('notificacoes').select('id,tipo,titulo,mensagem,obra_id,data_ref,lida_em,criado_em').order('criado_em', { ascending:false }).limit(50)).then(function(res){
+    if(!supabaseClient || !state.currentUser) return Promise.resolve();
+    if(notifCarregando){ notifDeNovo = true; return notifCarregando; }
+    var lista = Promise.resolve(supabaseClient.from('notificacoes').select('id,tipo,titulo,mensagem,obra_id,data_ref,lida_em,criado_em').order('criado_em', { ascending:false }).limit(50));
+    var conta = Promise.resolve(supabaseClient.from('notificacoes').select('id', { count:'exact', head:true }).is('lida_em', null));
+    notifCarregando = Promise.all([lista, conta]).then(function(r){
+      var res = r[0], cnt = r[1];
       if(!res || res.error) return; // migration 057 ainda não rodada ou sem internet: o sininho só fica vazio
       state.avisos.lista = res.data || [];
+      state.avisos.naoLidas = (cnt && !cnt.error && typeof cnt.count==='number') ? cnt.count : notifNaoLidas().length;
       notifBadge();
       var painel = document.getElementById('notifPainel'); if(painel) notifRenderPainel(painel);
-    }, function(){});
+    }, function(){}).then(function(){ notifCarregando = null; if(notifDeNovo){ notifDeNovo = false; return notifCarregar(); } });
+    return notifCarregando;
   }
+  // a lista também se atualiza sem depender do tempo real: ao voltar para o app e a cada minuto com a tela aberta
+  document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible' && state.currentUser) notifCarregar(); });
+  window.addEventListener('focus', function(){ if(state.currentUser) notifCarregar(); });
+  setInterval(function(){ if(document.visibilityState==='visible' && state.currentUser) notifCarregar(); }, 60000);
+  if(navigator.serviceWorker){ try{ navigator.serviceWorker.addEventListener('message', function(e){ if(e.data && e.data.tipo==='vk-aviso' && state.currentUser) notifCarregar(); }); }catch(e){} }
+
   function notifNaoLidas(){ return (state.avisos.lista||[]).filter(function(n){ return !n.lida_em; }); }
   function notifBadge(){
     var b = document.getElementById('notifBadge'); if(!b) return;
-    var n = notifNaoLidas().length;
+    var n = Math.max(state.avisos.naoLidas || 0, notifNaoLidas().length);
     b.textContent = n>9 ? '9+' : String(n); b.hidden = !n;
     var bt = document.getElementById('btnNotif'); if(bt) bt.setAttribute('aria-label', n ? 'Avisos: '+n+' não lido(s)' : 'Avisos');
   }
   function notifQuando(iso){ try{ return new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }); }catch(e){ return ''; } }
-  function notifConferirPush(){
-    if(!notifPushSuportado() || Notification.permission!=='granted'){ state.avisos.pushAtivo = false; return Promise.resolve(); }
-    return navigator.serviceWorker.getRegistration().then(function(reg){ return reg ? reg.pushManager.getSubscription() : null; })
-      .then(function(s){ state.avisos.pushAtivo = !!s; }, function(){ state.avisos.pushAtivo = false; });
+
+  // ---- inscrição do aparelho (Web Push) ----
+  var notifChaveP = null;
+  function notifChaveServidor(){
+    if(!notifChaveP){
+      notifChaveP = notifFuncao({ acao:'chave' }).then(function(j){
+        if(!j || !j.publica) throw new Error('a chave de envio não veio do servidor.');
+        return j.publica;
+      });
+      notifChaveP.catch(function(){ notifChaveP = null; });
+    }
+    return notifChaveP;
+  }
+  function notifMesmaChave(sub, chave){
+    var k = sub && sub.options && sub.options.applicationServerKey;
+    if(!k) return true; // navegador não informa: considera a mesma
+    var a = new Uint8Array(k), b = notifB64Bytes(chave);
+    if(a.length !== b.length) return false;
+    for(var i = 0; i<a.length; i++) if(a[i]!==b[i]) return false;
+    return true;
+  }
+  function notifRegistrar(sub){
+    var j = sub.toJSON();
+    return Promise.resolve(supabaseClient.rpc('vk_push_inscrever', { p_endpoint:j.endpoint, p_p256dh:j.keys.p256dh, p_auth:j.keys.auth, p_user_agent:navigator.userAgent })).then(function(res){
+      if(res && res.error) throw new Error(res.error.message);
+      state.avisos.endpoint = j.endpoint; state.avisos.pushAtivo = true; state.avisos.pushErro = null; state.avisos.sincronizado = true;
+      return true;
+    });
+  }
+  function notifInscrever(reg, refazer){
+    var espera = new Promise(function(ok, falha){ setTimeout(function(){ falha(new Error('o navegador não respondeu. Confira a internet e se o navegador permite notificações (no Brave/Samsung Internet, use o Chrome).')); }, 25000); });
+    return Promise.race([espera, notifChaveServidor().then(function(chave){
+      return reg.pushManager.getSubscription().then(function(s){
+        if(s && !refazer && notifMesmaChave(s, chave)) return s;
+        return (s ? s.unsubscribe().catch(function(){}) : Promise.resolve()).then(function(){
+          return reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: notifB64Bytes(chave) });
+        });
+      });
+    })]).then(notifRegistrar);
+  }
+  // Confere o aparelho com o servidor: se o navegador tem inscrição, ela é (re)gravada para quem está logado.
+  // Corrige o caso "✅ ativas neste aparelho" mas "nenhum aparelho seu está inscrito".
+  function notifSincronizarPush(){
+    if(!notifPushSuportado() || Notification.permission!=='granted'){ state.avisos.pushAtivo = false; return Promise.resolve(false); }
+    return navigator.serviceWorker.getRegistration().then(function(reg){
+      if(!reg) { state.avisos.pushAtivo = false; return false; }
+      return reg.pushManager.getSubscription().then(function(s){
+        if(!s){ state.avisos.pushAtivo = false; return false; }
+        return notifChaveServidor().then(function(chave){
+          return notifMesmaChave(s, chave) ? notifRegistrar(s) : notifInscrever(reg, true);
+        }, function(){ return notifRegistrar(s); });
+      });
+    }).then(function(ok){ return ok; }, function(err){
+      state.avisos.pushAtivo = false; state.avisos.pushErro = (err && err.message) || String(err);
+      return false;
+    }).then(function(ok){ var p = document.getElementById('notifPainel'); if(p) notifRenderPainel(p); return ok; });
   }
   function notifPushHtml(){
     if(!notifPushSuportado()){
@@ -2681,21 +2749,29 @@
       return '<p class="hint">Este navegador não recebe notificações. No celular, use o Chrome (Android) ou o app instalado (iPhone).</p>';
     }
     if(Notification.permission==='denied') return '<p class="hint">As notificações estão <b>bloqueadas</b> para este site. Para liberar: toque no cadeado ao lado do endereço → Notificações → Permitir. Depois volte aqui.</p>';
+    if(state.avisos.pushAtivo===null) return '<p class="hint" style="margin:0;">Conferindo as notificações deste aparelho…</p>';
     if(state.avisos.pushAtivo) return '<p class="hint" style="margin:0 0 6px;">✅ Notificações ativas neste aparelho.</p><button type="button" class="btn ghost sm" id="notifTeste">Enviar teste</button>';
-    return '<p class="hint" style="margin:0 0 6px;">Receba no celular o aviso de RDO não feito, mesmo com o sistema fechado.</p><button type="button" class="btn primary sm" id="notifAtivar">Ativar notificações neste aparelho</button>';
+    return (state.avisos.pushErro ? '<p class="hint" style="margin:0 0 6px;color:var(--status-rejected);">Este aparelho não ficou registrado no servidor: '+esc(state.avisos.pushErro)+'</p>' : '<p class="hint" style="margin:0 0 6px;">Receba no celular o aviso de RDO não feito, mesmo com o sistema fechado.</p>')+
+      '<button type="button" class="btn primary sm" id="notifAtivar">Ativar notificações neste aparelho</button>';
   }
   function notifRenderPainel(box){
     var l = state.avisos.lista || [];
-    box.innerHTML = '<div class="notif-topo"><b>Avisos</b>'+(notifNaoLidas().length ? '<button type="button" class="btn ghost sm" id="notifLerTudo">Marcar como lidos</button>' : '')+
+    var n = Math.max(state.avisos.naoLidas || 0, notifNaoLidas().length);
+    box.innerHTML = '<div class="notif-topo"><b>Avisos'+(n ? ' ('+n+' não lido'+(n===1?'':'s')+')' : '')+'</b>'+(n ? '<button type="button" class="btn ghost sm" id="notifLerTudo">Marcar como lidos</button>' : '')+
         '<button type="button" class="notif-x" id="notifFechar" aria-label="Fechar">✕</button></div>'+
-      (l.length ? '<ul class="notif-lista">'+l.map(function(n){
-        return '<li class="'+(n.lida_em ? '' : 'nova')+'"><span class="notif-tit">'+esc(n.titulo)+'</span><span class="notif-msg">'+esc(n.mensagem)+'</span><span class="notif-quando">'+esc(notifQuando(n.criado_em))+'</span></li>';
+      (l.length ? '<ul class="notif-lista">'+l.map(function(x){
+        return '<li class="'+(x.lida_em ? '' : 'nova')+'" data-notif="'+esc(x.id)+'"'+(x.lida_em ? '' : ' role="button" tabindex="0" title="Tocar para marcar como lido" style="cursor:pointer;"')+'><span class="notif-tit">'+esc(x.titulo)+(x.lida_em ? '' : ' · novo')+'</span><span class="notif-msg">'+esc(x.mensagem)+'</span><span class="notif-quando">'+esc(notifQuando(x.criado_em))+'</span></li>';
       }).join('')+'</ul>' : '<p class="empty-hint" style="margin:10px 0;">Nenhum aviso. Se um RDO não for enviado até as 18h de um dia útil, o aviso aparece aqui.</p>')+
       '<div class="notif-push">'+notifPushHtml()+'</div>';
-    var b1 = box.querySelector('#notifLerTudo'); if(b1) b1.addEventListener('click', notifMarcarLidas);
+    var b1 = box.querySelector('#notifLerTudo'); if(b1) b1.addEventListener('click', function(){ notifMarcarLidas(null); });
     var b2 = box.querySelector('#notifAtivar'); if(b2) b2.addEventListener('click', notifAtivarPush);
     var b3 = box.querySelector('#notifTeste'); if(b3) b3.addEventListener('click', notifTestePush);
     var b4 = box.querySelector('#notifFechar'); if(b4) b4.addEventListener('click', notifFechar);
+    box.querySelectorAll('li.nova[data-notif]').forEach(function(li){
+      var marcar = function(){ notifMarcarLidas(li.getAttribute('data-notif')); };
+      li.addEventListener('click', marcar);
+      li.addEventListener('keydown', function(e){ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); marcar(); } });
+    });
   }
   function notifAbrir(){
     if(document.getElementById('notifPainel')){ notifFechar(); return; }
@@ -2703,7 +2779,7 @@
     box.id = 'notifPainel'; box.className = 'notif-painel'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', 'Avisos');
     document.body.appendChild(box);
     notifRenderPainel(box);
-    notifConferirPush().then(function(){ if(document.getElementById('notifPainel')) notifRenderPainel(box); });
+    if(!state.avisos.sincronizado) notifSincronizarPush();
     notifCarregar();
     setTimeout(function(){ document.addEventListener('click', notifForaClique, true); document.addEventListener('keydown', notifEsc, true); }, 0);
   }
@@ -2716,14 +2792,18 @@
     var p = document.getElementById('notifPainel'); if(p) p.remove();
     document.removeEventListener('click', notifForaClique, true); document.removeEventListener('keydown', notifEsc, true);
   }
-  function notifMarcarLidas(){
-    var ids = notifNaoLidas().map(function(n){ return n.id; }); if(!ids.length) return;
+  // id = um aviso; null = todos os não lidos (inclusive os que não couberam na lista)
+  function notifMarcarLidas(id){
     var agora = new Date().toISOString();
-    Promise.resolve(supabaseClient.from('notificacoes').update({ lida_em: agora }).in('id', ids)).then(function(res){
-      if(res && res.error){ toast('Não deu para marcar como lidos: '+res.error.message, 'error'); return; }
-      (state.avisos.lista||[]).forEach(function(n){ if(ids.indexOf(n.id)>-1) n.lida_em = agora; });
+    var q = supabaseClient.from('notificacoes').update({ lida_em: agora }).is('lida_em', null);
+    q = id ? q.eq('id', id) : q.eq('user_id', state.currentUser.id);
+    Promise.resolve(q).then(function(res){
+      if(res && res.error){ toast('Não deu para marcar como lido: '+res.error.message, 'error'); return; }
+      (state.avisos.lista||[]).forEach(function(n){ if(!n.lida_em && (!id || n.id===id)) n.lida_em = agora; });
+      state.avisos.naoLidas = id ? Math.max(0, (state.avisos.naoLidas||1)-1) : 0;
       notifBadge(); var p = document.getElementById('notifPainel'); if(p) notifRenderPainel(p);
-    }, function(){});
+      notifCarregar();
+    }, function(){ toast('Sem conexão: tente marcar como lido de novo.', 'error'); });
   }
   function notifB64Bytes(b64){
     var s = String(b64).replace(/-/g, '+').replace(/_/g, '/'); s += '==='.slice((s.length+3)%4);
@@ -2744,7 +2824,7 @@
       return r.json().catch(function(){ return {}; }).then(function(j){
         if(r.ok) return j;
         if(r.status===404) throw new Error('a função "enviar-push" não está publicada no Supabase (Edge Functions).');
-        if(r.status===401) throw new Error('a função "enviar-push" recusou o acesso. Desligue "Verify JWT" nas configurações dela no Supabase.');
+        if(r.status===401) throw new Error(j.erro || 'a função "enviar-push" recusou o acesso. Desligue "Verify JWT" nas configurações dela no Supabase.');
         throw new Error(j.erro || j.message || ('a função de envio respondeu '+r.status+'.'));
       });
     });
@@ -2755,31 +2835,41 @@
     try{ pedido = Notification.requestPermission(); }catch(e){ pedido = null; }
     Promise.resolve(pedido || new Promise(function(r){ Notification.requestPermission(r); })).then(function(p){
       if(p!=='granted') throw new Error(p==='denied' ? 'as notificações foram bloqueadas. Para liberar: cadeado ao lado do endereço → Notificações → Permitir.' : 'a permissão não foi dada.');
-      return Promise.all([navigator.serviceWorker.ready, notifFuncao({ acao:'chave' })]);
-    }).then(function(r){
-      var reg = r[0], chave = r[1] && r[1].publica;
-      if(!chave) throw new Error('a chave de envio não veio do servidor.');
-      var espera = new Promise(function(ok, falha){ setTimeout(function(){ falha(new Error('o navegador não respondeu. Confira a internet e se o navegador permite notificações (no Brave/Samsung Internet, use o Chrome).')); }, 25000); });
-      return Promise.race([espera, reg.pushManager.getSubscription().then(function(s){ return s || reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: notifB64Bytes(chave) }); })]);
-    }).then(function(sub){
-      var j = sub.toJSON();
-      return Promise.resolve(supabaseClient.rpc('vk_push_inscrever', { p_endpoint:j.endpoint, p_p256dh:j.keys.p256dh, p_auth:j.keys.auth, p_user_agent:navigator.userAgent }));
-    }).then(function(res){
-      if(res && res.error) throw new Error(res.error.message);
-      state.avisos.pushAtivo = true;
+      return navigator.serviceWorker.ready;
+    }).then(function(reg){ return notifInscrever(reg, false); }).then(function(){
       try{ localStorage.setItem('vkPushSugestao', 'feito'); }catch(e){}
       var s = document.getElementById('notifSugestao'); if(s) s.remove();
       toast('Notificações ativadas neste aparelho. Use "Enviar teste" para conferir.', 'ok');
     }).catch(function(err){
-      toast('Não deu para ativar as notificações: '+((err && err.message) || err), 'error');
+      state.avisos.pushAtivo = false; state.avisos.pushErro = (err && err.message) || String(err);
+      toast('Não deu para ativar as notificações: '+state.avisos.pushErro, 'error');
     }).then(function(){ var p = document.getElementById('notifPainel'); if(p) notifRenderPainel(p); });
   }
+  function notifServicoNome(h){ return /apple/i.test(h||'') ? 'Apple' : (/google|fcm/i.test(h||'') ? 'Google' : (/mozilla/i.test(h||'') ? 'Mozilla' : (/windows|notify\.windows/i.test(h||'') ? 'Microsoft' : 'do navegador'))); }
   function notifTestePush(){
     var bt = document.getElementById('notifTeste'); if(bt){ bt.disabled = true; bt.textContent = 'Enviando…'; }
-    notifFuncao({ acao:'teste' }).then(function(r){
-      toast(r.enviados ? 'Teste enviado: a notificação deve chegar em alguns segundos.' : 'Nenhum aparelho seu está inscrito. Toque em "Ativar notificações neste aparelho".', r.enviados ? 'ok' : 'error');
-    }, function(err){ toast('Teste falhou: '+((err && err.message) || err), 'error'); })
-      .then(function(){ if(bt){ bt.disabled = false; bt.textContent = 'Enviar teste'; } });
+    var fim = function(){ var b = document.getElementById('notifTeste'); if(b){ b.disabled = false; b.textContent = 'Enviar teste'; } };
+    var testar = function(){ return notifFuncao({ acao:'teste', endpoint: state.avisos.endpoint || null }); };
+    var este = function(r){ return (r && r.aparelhos || []).filter(function(a){ return a.este; })[0] || null; };
+    notifSincronizarPush().then(function(ok){
+      if(!ok) throw new Error(state.avisos.pushErro || 'este aparelho não está inscrito. Toque em "Ativar notificações neste aparelho".');
+      return testar();
+    }).then(function(r){
+      var e = este(r);
+      // inscrição vencida no serviço do celular (404/410): refaz sozinho e tenta de novo
+      if(e && (e.status===404 || e.status===410)){
+        return navigator.serviceWorker.ready.then(function(reg){ return notifInscrever(reg, true); }).then(testar);
+      }
+      return r;
+    }).then(function(r){
+      var e = este(r);
+      if(e && e.status>=200 && e.status<300) toast('Teste enviado para este aparelho: a notificação deve chegar em alguns segundos.'+(r.enviados>1 ? ' (Também foi para mais '+(r.enviados-1)+' aparelho(s) seu(s).)' : ''), 'ok');
+      else if(e) toast('O serviço de notificações da '+notifServicoNome(e.servico)+' recusou o envio para este aparelho ('+e.status+(e.motivo ? ': '+e.motivo : '')+'). Toque em "Ativar notificações neste aparelho" de novo.', 'error');
+      else if(r && r.enviados) toast('Teste enviado para '+r.enviados+' aparelho(s) seu(s).', 'ok');
+      else toast('Nenhum aparelho seu está inscrito. Toque em "Ativar notificações neste aparelho".', 'error');
+    }).catch(function(err){
+      toast('Teste falhou: '+((err && err.message) || err), 'error');
+    }).then(function(){ fim(); var p = document.getElementById('notifPainel'); if(p) notifRenderPainel(p); });
   }
   // convite uma vez para quem é cobrado ou recebe a cobrança (v63: responsável pela obra, encarregados, administradores e financeiro)
   function notifEhResponsavelRdo(u){ return !!(u && (state.obras||[]).some(function(o){ return o.responsavelRdo===u.id && o.status==='ativa'; })); }
