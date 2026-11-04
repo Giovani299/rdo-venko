@@ -77,3 +77,31 @@ self.addEventListener('fetch', function(event){
       })
   );
 });
+
+// v58 — notificação no celular (aviso de RDO não feito). O texto vem cifrado do servidor da Venko.
+self.addEventListener('push', function (event) {
+  var d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = { mensagem: event.data ? event.data.text() : '' }; }
+  var titulo = d.titulo || 'RDO Venko';
+  event.waitUntil(self.registration.showNotification(titulo, {
+    body: d.mensagem || '',
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
+    tag: d.tag || 'rdo-venko',
+    renotify: true,
+    data: { link: d.link || './index.html#avisos' }
+  }));
+});
+self.addEventListener('notificationclick', function (event) {
+  event.notification.close();
+  var destino = new URL((event.notification.data && event.notification.data.link) || './index.html#avisos', self.registration.scope).href;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (lista) {
+    for (var i = 0; i < lista.length; i++) {
+      var c = lista[i];
+      if (c.url.indexOf(self.registration.scope) === 0 && 'focus' in c) {
+        return c.focus().then(function (cf) { return cf && 'navigate' in cf ? cf.navigate(destino) : cf; }).catch(function () {});
+      }
+    }
+    return self.clients.openWindow(destino);
+  }));
+});
