@@ -1223,6 +1223,7 @@
             <div class="field"><label>Função</label><select id="userCargo"></select></div>
           </div>
           <div class="checkline" style="margin-top:10px;"><input type="checkbox" id="userIsAdmin"><label for="userIsAdmin">Administrador (pode gerenciar usuários)</label></div>
+          <div class="checkline" id="userPrincipalLinha" style="margin-top:6px;display:none;"><input type="checkbox" id="userAdminPrincipal"><label for="userAdminPrincipal">Administrador principal (pode trocar a senha de qualquer usuário)</label></div>
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoFinanceiro"><label for="userAcessoFinanceiro">Acesso ao módulo Financeiro</label></div>
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoObras" checked><label for="userAcessoObras">Acesso à aba Obras</label></div>
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoObrasGestao" checked><label for="userAcessoObrasGestao">Pode cadastrar/editar/excluir clientes e obras (desmarque para deixar só visualizar e lançar serviços contratados)</label></div>
@@ -2894,6 +2895,62 @@
   populateCargoSelect();
 
   // Obras por usuário (coluna profiles.obras_ids, migration 048). NULL = todas.
+  // v61 — administrador principal: só ele troca a senha de outras pessoas (059_admin_principal_senhas.sql)
+  function ehAdminPrincipal(){ var u = state.currentUser; return !!(u && u.is_admin && u.admin_principal); }
+  function userPrincipalLinha(u){
+    var linha = document.getElementById('userPrincipalLinha'), chk = document.getElementById('userAdminPrincipal');
+    if(!linha || !chk) return;
+    linha.style.display = ehAdminPrincipal() ? '' : 'none';
+    chk.checked = !!(u && u.admin_principal);
+    var euMesmo = !!(u && state.currentUser && u.id===state.currentUser.id);
+    chk.disabled = euMesmo && chk.checked;
+    chk.title = chk.disabled ? 'Você não pode tirar o seu próprio acesso de administrador principal.' : '';
+  }
+  function openAdminSenhaModal(u){
+    if(!ehAdminPrincipal() || !u) return;
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div');
+    wrap.className = 'overlay';
+    wrap.innerHTML =
+      '<div class="modal">'+
+        '<h3>Trocar senha — '+esc(u.nome)+'</h3>'+
+        '<p class="hint" style="margin:0 0 12px;">Login: <b>'+esc(u.login)+'</b>. A senha antiga deixa de funcionar na hora. Passe a nova senha para a pessoa.</p>'+
+        '<div class="field" style="margin-bottom:10px;"><label>Nova senha</label><input type="password" id="admPass1" minlength="6" autocomplete="new-password"></div>'+
+        '<div class="field" style="margin-bottom:14px;"><label>Confirmar nova senha</label><input type="password" id="admPass2" minlength="6" autocomplete="new-password"></div>'+
+        '<div class="checkline" style="margin:0 0 12px;"><input type="checkbox" id="admPassVer"><label for="admPassVer">Mostrar senha</label></div>'+
+        '<div class="login-error" id="admPwError" style="margin:0 0 10px;"></div>'+
+        '<div class="row">'+
+          '<button class="btn ghost" data-act="cancel">Cancelar</button>'+
+          '<button class="btn primary" data-act="ok">Trocar senha</button>'+
+        '</div>'+
+      '</div>';
+    root.appendChild(wrap);
+    var p1El = wrap.querySelector('#admPass1'), p2El = wrap.querySelector('#admPass2');
+    setTimeout(function(){ p1El.focus(); }, 30);
+    wrap.querySelector('#admPassVer').addEventListener('change', function(e){ p1El.type = p2El.type = e.target.checked ? 'text' : 'password'; });
+    var enviando = false;
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap){ wrap.remove(); return; }
+      var act = e.target.getAttribute('data-act');
+      if(act==='cancel'){ wrap.remove(); return; }
+      if(act!=='ok' || enviando) return;
+      var p1 = p1El.value, p2 = p2El.value, errEl = wrap.querySelector('#admPwError');
+      if(p1.length<6){ errEl.textContent = 'A senha precisa ter pelo menos 6 caracteres.'; return; }
+      if(p1!==p2){ errEl.textContent = 'As senhas não coincidem.'; return; }
+      enviando = true; e.target.disabled = true; e.target.textContent = 'Salvando…'; errEl.textContent = '';
+      supabaseClient.rpc('vk_admin_trocar_senha', { p_user: u.id, p_senha: p1 }).then(function(res){
+        enviando = false; e.target.disabled = false; e.target.textContent = 'Trocar senha';
+        if(res.error){
+          var m = res.error.message || '';
+          errEl.textContent = (res.error.code==='PGRST202' || /could not find the function/i.test(m)) ? 'A troca de senha ainda não está instalada: rode o script 059 no Supabase (SQL Editor).' : 'Erro: '+m;
+          return;
+        }
+        wrap.remove();
+        toast('Senha de '+u.nome+' trocada.','ok');
+      });
+    });
+  }
+
   function renderUserObrasBox(obrasIds){
     var box = document.getElementById('userObrasBox');
     if(!box) return;
@@ -2925,6 +2982,7 @@
     document.getElementById('userPassField').style.display = '';
     document.getElementById('userPass').required = true;
     populateCargoSelect();
+    userPrincipalLinha(null);
     document.getElementById('userFormTitle').textContent = 'Cadastrar usuário';
     document.getElementById('userSubmitBtn').textContent = 'Cadastrar usuário';
     document.getElementById('userCancelEdit').style.display = 'none';
@@ -2944,10 +3002,13 @@
     if(!login || !nome){ toast('Preencha usuário e nome.','error'); return; }
     var obrasSel = lerUserObrasIds();
     if(!obrasSel.ok){ toast('Marque ao menos uma obra (ou “Todas as obras”).','error'); return; }
+    var chkPrincipal = document.getElementById('userAdminPrincipal');
+    if(ehAdminPrincipal() && chkPrincipal && chkPrincipal.checked && !isAdmin){ toast('Para ser administrador principal, marque também “Administrador”.','error'); return; }
 
     if(editingUserId){
       var upd = { nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao, acesso_planejamento:isPlanejamento };
       if(obrasSel.valor!==undefined) upd.obras_ids = obrasSel.valor;
+      if(ehAdminPrincipal() && !document.getElementById('userAdminPrincipal').disabled) upd.admin_principal = document.getElementById('userAdminPrincipal').checked;
       supabaseClient.from('profiles').update(upd).eq('id', editingUserId)
         .then(function(res){
           if(res.error){ toast('Erro ao salvar usuário: '+res.error.message,'error'); return; }
@@ -2978,6 +3039,7 @@
       // banco só aceita assim; sem ela, cai no jeito antigo (o novo login cria o próprio perfil).
       var perfilAdmin = { id:newId, login:login, nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao, acesso_planejamento:isPlanejamento };
       if(obrasSel.valor!==undefined) perfilAdmin.obras_ids = obrasSel.valor;
+      if(ehAdminPrincipal() && document.getElementById('userAdminPrincipal').checked) perfilAdmin.admin_principal = true;
       return supabaseClient.from('profiles').insert(perfilAdmin).then(function(resAdm){
         if(!resAdm.error) return null;
         return tempClient.from('profiles').insert({ id:newId, login:login, nome:nome, cargo:cargo, is_admin:false, acesso_financeiro:false, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao }).then(function(res2){
@@ -3003,19 +3065,27 @@
   function renderUserList(){
     var list = document.getElementById('userList');
     if(!list) return;
+    if(!editingUserId) userPrincipalLinha(null);
     if(state.profiles.length===0){ list.innerHTML = '<p class="empty-hint">Nenhum usuário cadastrado ainda.</p>'; return; }
     list.innerHTML = state.profiles.map(function(u){
       var isSelf = state.currentUser && state.currentUser.id===u.id;
       return '<div class="obra-card" data-id="'+u.id+'">'+
-        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+(u.acesso_financeiro?'<span class="tag-financeiro">Financeiro</span>':'')+(u.acesso_planejamento?'<span class="tag-financeiro">Planejamento</span>':'')+(!u.is_admin && u.obras_ids && u.obras_ids.length ? '<span class="tag-example" title="'+esc((u.obras_ids||[]).map(function(id){ var o=(state.obras||[]).find(function(x){ return x.id===id; }); return o?o.nome:'obra removida'; }).join(', '))+'">'+u.obras_ids.length+' obra'+(u.obras_ids.length===1?'':'s')+'</span>':'')+(u.acesso_obras===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Sem Obras</span>':'')+(!u.is_admin && u.acesso_obras!==false && u.acesso_obras_gestao===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Obras só visualizar</span>':'')+'</b>'+
+        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+(u.admin_principal?'<span class="tag-admin">Principal</span>':'')+(u.acesso_financeiro?'<span class="tag-financeiro">Financeiro</span>':'')+(u.acesso_planejamento?'<span class="tag-financeiro">Planejamento</span>':'')+(!u.is_admin && u.obras_ids && u.obras_ids.length ? '<span class="tag-example" title="'+esc((u.obras_ids||[]).map(function(id){ var o=(state.obras||[]).find(function(x){ return x.id===id; }); return o?o.nome:'obra removida'; }).join(', '))+'">'+u.obras_ids.length+' obra'+(u.obras_ids.length===1?'':'s')+'</span>':'')+(u.acesso_obras===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Sem Obras</span>':'')+(!u.is_admin && u.acesso_obras!==false && u.acesso_obras_gestao===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Obras só visualizar</span>':'')+'</b>'+
           '<div class="meta">'+esc(u.login)+' · '+esc(u.cargo||'—')+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
           '<button class="btn ghost sm" data-edit="'+u.id+'">Editar</button>'+
+          (ehAdminPrincipal() && !isSelf ? '<button class="btn ghost sm" data-senha="'+u.id+'">Trocar senha</button>' : '')+
           '<button class="btn danger sm" data-del="'+u.id+'"'+(isSelf?' disabled title="Você não pode remover seu próprio acesso"':'')+'>Remover acesso</button>'+
         '</div>'+
       '</div>';
     }).join('');
+    list.querySelectorAll('[data-senha]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-senha');
+        openAdminSenhaModal(state.profiles.find(function(x){ return x.id===id; }));
+      });
+    });
     list.querySelectorAll('[data-edit]').forEach(function(b){
       b.addEventListener('click', function(){
         var id = b.getAttribute('data-edit');
@@ -3030,6 +3100,7 @@
         populateCargoSelect();
         document.getElementById('userCargo').value = (CARGO_OPTS.indexOf(u.cargo)>-1) ? u.cargo : CARGO_OPTS[0];
         document.getElementById('userIsAdmin').checked = !!u.is_admin;
+        userPrincipalLinha(u);
         document.getElementById('userAcessoFinanceiro').checked = !!u.acesso_financeiro;
         document.getElementById('userAcessoObras').checked = (u.acesso_obras !== false);
         document.getElementById('userAcessoObrasGestao').checked = (u.acesso_obras_gestao !== false);
