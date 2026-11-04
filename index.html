@@ -8722,16 +8722,65 @@
 
   /* ---------------- video handling ---------------- */
   var VIDEO_MAX_COUNT = 3;
-  var VIDEO_MAX_MB = 150;
-  function uploadVideoFile(file){
+  // v57: o Supabase (plano gratuito) recusa arquivo acima de 50 MB. O limite do sistema agora é o mesmo,
+  // conferido ANTES de enviar, com aviso em português. Envio com % de progresso e nova tentativa se a internet cair.
+  var VIDEO_MAX_MB = 50;
+  function videoMb(bytes){ return (bytes/1048576).toLocaleString('pt-BR', { maximumFractionDigits: bytes<10485760 ? 1 : 0 }); }
+  function videoErroTxt(st, corpo){
+    var m = String(corpo||'');
+    if(st===413 || /maximum allowed size|too large|payload/i.test(m)) return 'o vídeo passa do limite de '+VIDEO_MAX_MB+' MB do servidor. Grave um vídeo mais curto (até uns 30 segundos).';
+    if(st===401 || /jwt|expired|token/i.test(m)) return 'sua sessão expirou. Saia e entre de novo no sistema e tente outra vez.';
+    if(st===403 || /row-level security|unauthorized|policy/i.test(m)) return 'sem permissão para enviar vídeo. Avise o administrador.';
+    if(st===0) return 'a internet caiu durante o envio. Tente de novo com um sinal melhor (Wi-Fi, se possível).';
+    if(st===408 || st===504) return 'o envio demorou demais. Tente de novo com um sinal melhor ou um vídeo mais curto.';
+    return 'erro '+(st||'')+' do servidor'+(m ? ' ('+m.slice(0,120)+')' : '')+'.';
+  }
+  function uploadVideoFile(file, aoProgresso){
     var safeName = file.name.replace(/[^a-zA-Z0-9_.-]/g,'_');
     var path = (state.currentUser ? state.currentUser.id : 'anon') + '/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '_' + safeName;
-    return supabaseClient.storage.from('rdo-videos').upload(path, file, { cacheControl:'3600', upsert:false })
-      .then(function(res){
-        if(res.error) throw res.error;
-        var pub = supabaseClient.storage.from('rdo-videos').getPublicUrl(path);
-        return { url: pub.data.publicUrl, path: path, name: file.name };
+    var urlEnvio = SUPABASE_URL + '/storage/v1/object/rdo-videos/' + path.split('/').map(encodeURIComponent).join('/');
+    var tentar = function(token, n){
+      return new Promise(function(ok, falha){
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', urlEnvio, true);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+        xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
+        xhr.setRequestHeader('x-upsert', 'false');
+        xhr.setRequestHeader('cache-control', 'max-age=3600');
+        xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
+        xhr.upload.onprogress = function(ev){ if(ev.lengthComputable && aoProgresso) aoProgresso(Math.min(99, Math.round(ev.loaded*100/ev.total))); };
+        xhr.onload = function(){
+          if(xhr.status>=200 && xhr.status<300){ ok(); return; }
+          var corpo = xhr.responseText || '';
+          try{ var j = JSON.parse(corpo); corpo = j.message || j.error || corpo; }catch(e){}
+          falha({ status:xhr.status, corpo:corpo });
+        };
+        xhr.onerror = function(){ falha({ status:0, corpo:'' }); };
+        xhr.ontimeout = function(){ falha({ status:408, corpo:'' }); };
+        xhr.timeout = 15*60*1000;
+        xhr.send(file);
+      }).catch(function(err){
+        // internet caiu ou demorou: tenta de novo (até 3 vezes), com o token renovado
+        if((err.status===0 || err.status===408 || err.status===502 || err.status===503 || err.status===504) && n<3){
+          if(aoProgresso) aoProgresso(0, 'nova tentativa '+(n+1)+' de 3');
+          return new Promise(function(r){ setTimeout(r, 2500*n); }).then(function(){ return pegarToken(); }).then(function(t){ return tentar(t, n+1); });
+        }
+        throw err;
       });
+    };
+    var pegarToken = function(){
+      return supabaseClient.auth.getSession().then(function(s){
+        var t = s && s.data && s.data.session && s.data.session.access_token;
+        if(!t) throw { status:401, corpo:'sem sessão' };
+        return t;
+      });
+    };
+    return pegarToken().then(function(t){ return tentar(t, 1); }).then(function(){
+      var pub = supabaseClient.storage.from('rdo-videos').getPublicUrl(path);
+      return { url: pub.data.publicUrl, path: path, name: file.name };
+    }, function(err){
+      var e = new Error(videoErroTxt(err && err.status, err && err.corpo)); e.status = err && err.status; throw e;
+    });
   }
   function renderVideoUI(){
     var grid = document.getElementById('videoGrid');
@@ -8739,7 +8788,7 @@
     if(!grid) return;
     grid.innerHTML = state.videos.map(function(v,i){
       return '<div class="video-thumb">'+
-        (v.uploading ? '<div style="width:168px;height:100px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;">Enviando…</div>' : '<video src="'+v.url+'" controls preload="metadata"></video>') +
+        (v.uploading ? '<div style="width:168px;height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#fff;font-size:11px;text-align:center;padding:0 8px;"><b style="font-size:16px;">'+(v.pct!=null ? v.pct+'%' : '…')+'</b><span>'+esc(v.etapa || 'Enviando')+(v.tam ? ' · '+esc(v.tam)+' MB' : '')+'</span></div>' : '<video src="'+v.url+'" controls preload="metadata"></video>') +
         '<div class="video-name">'+esc(v.name||'')+'</div>'+
         (v.uploading ? '' : '<button type="button" data-rmvideo="'+i+'">✕</button>') +
       '</div>';
@@ -8753,7 +8802,7 @@
         if(v && v.path){ supabaseClient.storage.from('rdo-videos').remove([v.path]); }
       });
     });
-    note.textContent = state.videos.length + ' vídeo(s) anexado(s) (até '+VIDEO_MAX_MB+'MB cada)';
+    note.textContent = state.videos.length + ' vídeo(s) anexado(s) · até '+VIDEO_MAX_MB+' MB cada (uns 30 segundos de gravação no celular)';
   }
 
   /* ---------------- RDO form (create / edit) ---------------- */
@@ -10044,7 +10093,7 @@
 
       '<div class="card">'+
         '<h2><span class="idx">9</span>Vídeos</h2>'+
-        '<p class="hint">Anexe vídeos curtos da obra (até '+VIDEO_MAX_MB+'MB cada).</p>'+
+        '<p class="hint">Anexe vídeos curtos da obra: até '+VIDEO_MAX_MB+' MB cada, o que dá uns 30 segundos gravando no celular. Se a câmera tiver opção de qualidade, use 720p.</p>'+
         '<div class="video-input-row">'+
           '<label class="btn primary so-celular"><input type="file" id="rdoVideosCam" accept="video/*" capture="environment" class="input-oculto">Gravar vídeo agora</label>'+
           '<label class="btn ghost"><input type="file" id="rdoVideos" accept="video/*" multiple class="input-oculto">Escolher vídeos</label>'+
@@ -10111,7 +10160,12 @@
       var tooBig = files.filter(function(f){ return f.size > maxBytes; });
       files = files.filter(function(f){ return f.size <= maxBytes; });
       if(tooBig.length){
-        toast('Vídeo(s) muito grande(s) (máx. '+VIDEO_MAX_MB+'MB): '+tooBig.map(function(f){return f.name;}).join(', '),'error');
+        toast((tooBig.length===1 ? 'Este vídeo tem '+videoMb(tooBig[0].size)+' MB' : tooBig.length+' vídeos passam do limite ('+tooBig.map(function(f){ return videoMb(f.size)+' MB'; }).join(', ')+')')+' e o limite é '+VIDEO_MAX_MB+' MB. Grave um vídeo mais curto (até uns 30 segundos) ou divida em partes.','error');
+      }
+      var vagas = VIDEO_MAX_COUNT - state.videos.length;
+      if(files.length > vagas){
+        toast(vagas>0 ? 'Cada RDO aceita até '+VIDEO_MAX_COUNT+' vídeos: só os '+vagas+' primeiro(s) serão enviados.' : 'Este RDO já tem '+VIDEO_MAX_COUNT+' vídeos (o máximo). Remova um para anexar outro.','error');
+        files = files.slice(0, Math.max(0, vagas));
       }
       e.target.value = '';
       if(!files.length) return;
@@ -10120,13 +10174,17 @@
         return;
       }
 
-      var placeholders = files.map(function(f){ return {name:f.name, uploading:true}; });
+      var placeholders = files.map(function(f){ return {name:f.name, uploading:true, pct:0, tam:videoMb(f.size)}; });
       state.videos = state.videos.concat(placeholders);
       renderVideoUI();
 
       Promise.all(files.map(function(f){
-        return uploadVideoFile(f).catch(function(err){
-          toast('Falha ao enviar vídeo "'+f.name+'": '+(err && err.message ? err.message : err),'error');
+        var ph = placeholders[files.indexOf(f)], ultimo = 0;
+        return uploadVideoFile(f, function(pct, etapa){
+          ph.pct = pct; ph.etapa = etapa || 'Enviando';
+          var agora = Date.now(); if(agora-ultimo>400 || pct===0){ ultimo = agora; renderVideoUI(); }
+        }).catch(function(err){
+          toast('Não foi possível enviar o vídeo "'+f.name+'": '+(err && err.message ? err.message : err),'error');
           return null;
         });
       })).then(function(results){
