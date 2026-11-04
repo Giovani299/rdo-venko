@@ -90,7 +90,18 @@ self.addEventListener('push', function (event) {
     tag: d.tag || 'rdo-venko',
     renotify: true,
     data: { link: d.link || './index.html#avisos' }
+  }).then(function () {
+    // v64: avisa as telas abertas do sistema para atualizarem o sininho na hora
+    return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (lista) {
+      lista.forEach(function (c) { try { c.postMessage({ tipo: 'vk-aviso' }); } catch (e) {} });
+    });
   }));
+});
+// v64: quando o navegador troca a inscrição sozinho, já refaz com a mesma chave (o sistema grava no servidor na próxima abertura)
+self.addEventListener('pushsubscriptionchange', function (event) {
+  var velha = event.oldSubscription, chave = velha && velha.options && velha.options.applicationServerKey;
+  if (!chave) return;
+  event.waitUntil(self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chave }).catch(function () {}));
 });
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
