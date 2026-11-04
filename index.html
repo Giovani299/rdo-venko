@@ -205,6 +205,26 @@
     flex:0 0 auto;margin-right:4px;transition:background .12s,border-color .12s;
   }
   .theme-toggle:hover{background:var(--surface-2);}
+  .notif-btn{position:relative;border:1px solid var(--line);background:var(--surface);color:var(--ink);width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:16px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;}
+  .notif-btn:hover{background:var(--surface-2);}
+  .notif-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px;}
+  .notif-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#C6433F;color:#fff;font-size:10.5px;font-weight:800;line-height:18px;text-align:center;font-variant-numeric:tabular-nums;}
+  .notif-badge[hidden]{display:none;}
+  .notif-painel{position:fixed;top:64px;right:12px;z-index:950;width:min(390px, calc(100vw - 24px));max-height:min(72vh, 620px);overflow:auto;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.22);padding:12px 14px;}
+  .notif-topo{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+  .notif-topo b{font-size:15px;margin-right:auto;}
+  .notif-x{border:none;background:transparent;color:var(--steel);font-size:15px;cursor:pointer;padding:4px 6px;border-radius:6px;}
+  .notif-x:hover{background:var(--surface-2);color:var(--ink);}
+  .notif-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
+  .notif-lista li{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:8px;border:1px solid var(--line-soft);}
+  .notif-lista li.nova{border-color:#E8B4B2;background:var(--status-rejected-bg);}
+  .notif-tit{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--status-rejected);}
+  .notif-lista li:not(.nova) .notif-tit{color:var(--steel);}
+  .notif-msg{font-size:13px;line-height:1.35;}
+  .notif-quando{font-size:11px;color:var(--steel);font-variant-numeric:tabular-nums;}
+  .notif-push{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);}
+  .notif-sugestao{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;margin:0 0 14px;border:1px solid var(--line);border-left:4px solid var(--venko-yellow);border-radius:8px;background:var(--surface);font-size:13px;}
+  .notif-sugestao span{flex:1 1 220px;}
 
   main{flex:1;padding:26px 22px 60px;max-width:1180px;margin:0 auto;width:100%;}
   .view{display:none;}
@@ -529,6 +549,10 @@
   .empty-hint{color:var(--steel);font-size:13px;font-style:italic;}
 
   /* ---------- Obras view ---------- */
+  .colab-filtros{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;gap:10px;align-items:end;margin-bottom:12px;}
+  .colab-filtros .field{margin:0;}
+  .colab-filtros .hint{margin:0 0 9px;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  @media (max-width:680px){ .colab-filtros{grid-template-columns:1fr;} .colab-filtros .hint{white-space:normal;margin:0;} }
   .obra-card{
     background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
     padding:14px 16px;box-shadow:var(--shadow-sm);display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:10px;flex-wrap:wrap;
@@ -1105,6 +1129,11 @@
           </div>
           <div class="form-actions"><button type="submit" class="btn primary">Salvar colaborador</button></div>
         </form>
+      </div>
+      <div class="card colab-filtros" id="colabFiltros">
+        <div class="field"><label for="colabBusca">Buscar colaborador</label><input type="search" id="colabBusca" placeholder="Nome, nome completo ou função…" autocomplete="off"></div>
+        <div class="field"><label for="colabFiltroObra">Obra</label><select id="colabFiltroObra"><option value="">Todas as obras</option></select></div>
+        <span class="hint" id="colabContagem"></span>
       </div>
       <div id="colaboradorList"></div>
     </section>
@@ -2590,7 +2619,176 @@
     var obraFormCardLogin = document.getElementById('obraFormCard'); if(obraFormCardLogin) obraFormCardLogin.style.display = podeGestaoObrasLogin ? '' : 'none';
     document.getElementById('tabClientes').style.display = podeGestaoObrasLogin ? '' : 'none';
     updateUserBox();
+    notifIniciar();
   }
+
+  // ----- v58: avisos de RDO não feito — sininho no sistema e notificação no celular (Web Push) -----
+  state.avisos = { lista: [], uid: null, canal: null, pushAtivo: null };
+  var PUSH_FUNCAO = SUPABASE_URL + '/functions/v1/enviar-push';
+  function notifPushSuportado(){ return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window); }
+  function notifIniciar(){
+    var u = state.currentUser; if(!u || !supabaseClient) return;
+    if(state.avisos.uid === u.id){ notifCarregar(); return; }
+    state.avisos.uid = u.id; state.avisos.lista = []; state.avisos.pushAtivo = null;
+    if(state.avisos.canal){ try{ supabaseClient.removeChannel(state.avisos.canal); }catch(e){} }
+    try{
+      state.avisos.canal = supabaseClient.channel('avisos-'+u.id)
+        .on('postgres_changes', { event:'INSERT', schema:'public', table:'notificacoes', filter:'user_id=eq.'+u.id }, function(p){
+          notifCarregar().then(function(){ if(p && p.new && p.new.mensagem) toast('🔔 '+p.new.mensagem, 'error'); });
+        }).subscribe();
+    }catch(e){}
+    notifCarregar().then(function(){
+      var nl = notifNaoLidas();
+      if(nl.length) toast(nl.length===1 ? '🔔 '+nl[0].mensagem : '🔔 Você tem '+nl.length+' avisos de RDO. Toque no sininho para ver.', 'error');
+      if(location.hash==='#avisos'){ try{ history.replaceState(null, '', location.pathname); }catch(e){} notifAbrir(); }
+    });
+    notifConferirPush().then(notifSugerirAtivar);
+  }
+  function notifSair(){
+    if(state.avisos.canal){ try{ supabaseClient.removeChannel(state.avisos.canal); }catch(e){} }
+    state.avisos = { lista: [], uid: null, canal: null, pushAtivo: null };
+    notifFechar(); var s = document.getElementById('notifSugestao'); if(s) s.remove();
+  }
+  function notifCarregar(){
+    if(!supabaseClient) return Promise.resolve();
+    return Promise.resolve(supabaseClient.from('notificacoes').select('id,tipo,titulo,mensagem,obra_id,data_ref,lida_em,criado_em').order('criado_em', { ascending:false }).limit(50)).then(function(res){
+      if(!res || res.error) return; // migration 057 ainda não rodada ou sem internet: o sininho só fica vazio
+      state.avisos.lista = res.data || [];
+      notifBadge();
+      var painel = document.getElementById('notifPainel'); if(painel) notifRenderPainel(painel);
+    }, function(){});
+  }
+  function notifNaoLidas(){ return (state.avisos.lista||[]).filter(function(n){ return !n.lida_em; }); }
+  function notifBadge(){
+    var b = document.getElementById('notifBadge'); if(!b) return;
+    var n = notifNaoLidas().length;
+    b.textContent = n>9 ? '9+' : String(n); b.hidden = !n;
+    var bt = document.getElementById('btnNotif'); if(bt) bt.setAttribute('aria-label', n ? 'Avisos: '+n+' não lido(s)' : 'Avisos');
+  }
+  function notifQuando(iso){ try{ return new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }); }catch(e){ return ''; } }
+  function notifConferirPush(){
+    if(!notifPushSuportado() || Notification.permission!=='granted'){ state.avisos.pushAtivo = false; return Promise.resolve(); }
+    return navigator.serviceWorker.getRegistration().then(function(reg){ return reg ? reg.pushManager.getSubscription() : null; })
+      .then(function(s){ state.avisos.pushAtivo = !!s; }, function(){ state.avisos.pushAtivo = false; });
+  }
+  function notifPushHtml(){
+    if(!notifPushSuportado()){
+      if(isIosDevice() && !isStandaloneApp()) return '<p class="hint">📱 No iPhone, para receber no celular: toque em <b>Compartilhar</b> → <b>Adicionar à Tela de Início</b>, abra o sistema pelo ícone e ative aqui.</p>';
+      return '<p class="hint">Este navegador não recebe notificações. No celular, use o Chrome (Android) ou o app instalado (iPhone).</p>';
+    }
+    if(Notification.permission==='denied') return '<p class="hint">As notificações estão <b>bloqueadas</b> para este site. Para liberar: toque no cadeado ao lado do endereço → Notificações → Permitir. Depois volte aqui.</p>';
+    if(state.avisos.pushAtivo) return '<p class="hint" style="margin:0 0 6px;">✅ Notificações ativas neste aparelho.</p><button type="button" class="btn ghost sm" id="notifTeste">Enviar teste</button>';
+    return '<p class="hint" style="margin:0 0 6px;">Receba no celular o aviso de RDO não feito, mesmo com o sistema fechado.</p><button type="button" class="btn primary sm" id="notifAtivar">Ativar notificações neste aparelho</button>';
+  }
+  function notifRenderPainel(box){
+    var l = state.avisos.lista || [];
+    box.innerHTML = '<div class="notif-topo"><b>Avisos</b>'+(notifNaoLidas().length ? '<button type="button" class="btn ghost sm" id="notifLerTudo">Marcar como lidos</button>' : '')+
+        '<button type="button" class="notif-x" id="notifFechar" aria-label="Fechar">✕</button></div>'+
+      (l.length ? '<ul class="notif-lista">'+l.map(function(n){
+        return '<li class="'+(n.lida_em ? '' : 'nova')+'"><span class="notif-tit">'+esc(n.titulo)+'</span><span class="notif-msg">'+esc(n.mensagem)+'</span><span class="notif-quando">'+esc(notifQuando(n.criado_em))+'</span></li>';
+      }).join('')+'</ul>' : '<p class="empty-hint" style="margin:10px 0;">Nenhum aviso. Se um RDO não for enviado até as 18h de um dia útil, o aviso aparece aqui.</p>')+
+      '<div class="notif-push">'+notifPushHtml()+'</div>';
+    var b1 = box.querySelector('#notifLerTudo'); if(b1) b1.addEventListener('click', notifMarcarLidas);
+    var b2 = box.querySelector('#notifAtivar'); if(b2) b2.addEventListener('click', notifAtivarPush);
+    var b3 = box.querySelector('#notifTeste'); if(b3) b3.addEventListener('click', notifTestePush);
+    var b4 = box.querySelector('#notifFechar'); if(b4) b4.addEventListener('click', notifFechar);
+  }
+  function notifAbrir(){
+    if(document.getElementById('notifPainel')){ notifFechar(); return; }
+    var box = document.createElement('div');
+    box.id = 'notifPainel'; box.className = 'notif-painel'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', 'Avisos');
+    document.body.appendChild(box);
+    notifRenderPainel(box);
+    notifConferirPush().then(function(){ if(document.getElementById('notifPainel')) notifRenderPainel(box); });
+    notifCarregar();
+    setTimeout(function(){ document.addEventListener('click', notifForaClique, true); document.addEventListener('keydown', notifEsc, true); }, 0);
+  }
+  function notifForaClique(e){
+    var p = document.getElementById('notifPainel'), b = document.getElementById('btnNotif');
+    if(p && !p.contains(e.target) && !(b && b.contains(e.target))) notifFechar();
+  }
+  function notifEsc(e){ if(e.key==='Escape') notifFechar(); }
+  function notifFechar(){
+    var p = document.getElementById('notifPainel'); if(p) p.remove();
+    document.removeEventListener('click', notifForaClique, true); document.removeEventListener('keydown', notifEsc, true);
+  }
+  function notifMarcarLidas(){
+    var ids = notifNaoLidas().map(function(n){ return n.id; }); if(!ids.length) return;
+    var agora = new Date().toISOString();
+    Promise.resolve(supabaseClient.from('notificacoes').update({ lida_em: agora }).in('id', ids)).then(function(res){
+      if(res && res.error){ toast('Não deu para marcar como lidos: '+res.error.message, 'error'); return; }
+      (state.avisos.lista||[]).forEach(function(n){ if(ids.indexOf(n.id)>-1) n.lida_em = agora; });
+      notifBadge(); var p = document.getElementById('notifPainel'); if(p) notifRenderPainel(p);
+    }, function(){});
+  }
+  function notifB64Bytes(b64){
+    var s = String(b64).replace(/-/g, '+').replace(/_/g, '/'); s += '==='.slice((s.length+3)%4);
+    var bin = atob(s), out = new Uint8Array(bin.length);
+    for(var i = 0; i<bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function notifFuncao(corpo, comLogin){
+    var cab = function(t){ var h = { 'Content-Type':'application/json', apikey: SUPABASE_ANON_KEY }; if(t) h.Authorization = 'Bearer '+t; return h; };
+    var tok = comLogin ? supabaseClient.auth.getSession().then(function(s){ return s && s.data && s.data.session ? s.data.session.access_token : null; }) : Promise.resolve(null);
+    return tok.then(function(t){ return fetch(PUSH_FUNCAO, { method:'POST', headers:cab(t), body:JSON.stringify(corpo) }); })
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ if(!r.ok) throw new Error(j.erro || ('a função de envio respondeu '+r.status+'. Confira se a função enviar-push foi publicada.')); return j; }); });
+  }
+  function notifAtivarPush(){
+    var bt = document.getElementById('notifAtivar'); if(bt){ bt.disabled = true; bt.textContent = 'Ativando…'; }
+    var pedido;
+    try{ pedido = Notification.requestPermission(); }catch(e){ pedido = null; }
+    Promise.resolve(pedido || new Promise(function(r){ Notification.requestPermission(r); })).then(function(p){
+      if(p!=='granted') throw new Error(p==='denied' ? 'as notificações foram bloqueadas. Para liberar: cadeado ao lado do endereço → Notificações → Permitir.' : 'a permissão não foi dada.');
+      return Promise.all([navigator.serviceWorker.ready, notifFuncao({ acao:'chave' })]);
+    }).then(function(r){
+      var reg = r[0], chave = r[1] && r[1].publica;
+      if(!chave) throw new Error('a chave de envio não veio do servidor.');
+      var espera = new Promise(function(ok, falha){ setTimeout(function(){ falha(new Error('o navegador não respondeu. Confira a internet e se o navegador permite notificações (no Brave/Samsung Internet, use o Chrome).')); }, 25000); });
+      return Promise.race([espera, reg.pushManager.getSubscription().then(function(s){ return s || reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: notifB64Bytes(chave) }); })]);
+    }).then(function(sub){
+      var j = sub.toJSON();
+      return Promise.resolve(supabaseClient.rpc('vk_push_inscrever', { p_endpoint:j.endpoint, p_p256dh:j.keys.p256dh, p_auth:j.keys.auth, p_user_agent:navigator.userAgent }));
+    }).then(function(res){
+      if(res && res.error) throw new Error(res.error.message);
+      state.avisos.pushAtivo = true;
+      try{ localStorage.setItem('vkPushSugestao', 'feito'); }catch(e){}
+      var s = document.getElementById('notifSugestao'); if(s) s.remove();
+      toast('Notificações ativadas neste aparelho. Use "Enviar teste" para conferir.', 'ok');
+    }).catch(function(err){
+      toast('Não deu para ativar as notificações: '+((err && err.message) || err), 'error');
+    }).then(function(){ var p = document.getElementById('notifPainel'); if(p) notifRenderPainel(p); });
+  }
+  function notifTestePush(){
+    var bt = document.getElementById('notifTeste'); if(bt){ bt.disabled = true; bt.textContent = 'Enviando…'; }
+    notifFuncao({ acao:'teste' }, true).then(function(r){
+      toast(r.enviados ? 'Teste enviado: a notificação deve chegar em alguns segundos.' : 'Nenhum aparelho seu está inscrito. Toque em "Ativar notificações neste aparelho".', r.enviados ? 'ok' : 'error');
+    }, function(err){ toast('Teste falhou: '+((err && err.message) || err), 'error'); })
+      .then(function(){ if(bt){ bt.disabled = false; bt.textContent = 'Enviar teste'; } });
+  }
+  // convite uma vez para quem é cobrado ou recebe a cobrança (encarregados e administradores)
+  function notifSugerirAtivar(){
+    var u = state.currentUser; if(!u || !(u.is_admin || /encarregad/i.test(u.cargo||''))) return;
+    if(state.avisos.pushAtivo || document.getElementById('notifSugestao')) return;
+    var visto = null; try{ visto = localStorage.getItem('vkPushSugestao'); }catch(e){}
+    if(visto) return;
+    if(notifPushSuportado() && Notification.permission==='denied') return;
+    var main = document.getElementById('main'); if(!main) return;
+    var div = document.createElement('div');
+    div.id = 'notifSugestao'; div.className = 'notif-sugestao';
+    var podeAgora = notifPushSuportado();
+    div.innerHTML = '<span>🔔 '+(u.is_admin ? 'Receba no celular quando alguém não fizer o RDO até as 18h.' : 'Receba no celular o lembrete quando o RDO do dia não for enviado até as 18h.')+
+      (podeAgora ? '' : (isIosDevice() ? ' No iPhone, primeiro instale o app (Compartilhar → Adicionar à Tela de Início).' : ''))+'</span>'+
+      (podeAgora ? '<button type="button" class="btn primary sm" data-ns="sim">Ativar</button>' : '')+
+      '<button type="button" class="btn ghost sm" data-ns="nao">Agora não</button>';
+    main.insertBefore(div, main.firstChild);
+    div.addEventListener('click', function(e){
+      var a = e.target.getAttribute && e.target.getAttribute('data-ns'); if(!a) return;
+      try{ localStorage.setItem('vkPushSugestao', a==='sim' ? 'feito' : 'dispensado'); }catch(err){}
+      div.remove();
+      if(a==='sim'){ notifAbrir(); setTimeout(function(){ var b = document.getElementById('notifAtivar'); if(b) b.click(); }, 50); }
+    });
+  }
+  window.addEventListener('hashchange', function(){ if(location.hash==='#avisos' && state.currentUser){ try{ history.replaceState(null, '', location.pathname); }catch(e){} if(!document.getElementById('notifPainel')) notifAbrir(); } });
 
   function updateUserBox(){
     var box = document.getElementById('userBox');
@@ -2598,13 +2796,17 @@
     var u = state.currentUser;
     if(!u){ box.innerHTML=''; return; }
     box.innerHTML = '<div class="who"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+'</b><span>'+esc(u.cargo||u.login)+'</span></div>'+
+      '<button type="button" class="notif-btn" id="btnNotif" aria-label="Avisos" title="Avisos">🔔<span class="notif-badge" id="notifBadge" hidden></span></button>'+
       '<button type="button" class="btn ghost sm" id="btnChangePass">Trocar senha</button>'+
       '<button type="button" class="btn ghost sm" id="btnLogout">Sair</button>';
+    document.getElementById('btnNotif').addEventListener('click', function(e){ e.stopPropagation(); notifAbrir(); });
+    notifBadge();
     document.getElementById('btnChangePass').addEventListener('click', openChangePasswordModal);
     document.getElementById('btnLogout').addEventListener('click', logout);
   }
 
   function logout(){
+    notifSair();
     supabaseClient.auth.signOut().then(function(){
       state.currentUser = null;
       state.editId = null; state.editingPendingItem = null; state.photos = []; state.videos = [];
@@ -8247,11 +8449,47 @@
     });
   });
 
+  // v59: filtro da lista de colaboradores (fica igual ao voltar para a tela)
+  state.colabFiltro = { busca:'', obra:'' };
+  function colabFiltroAtualizar(mostrados, total){
+    var sel = document.getElementById('colabFiltroObra');
+    if(sel){
+      var cont = {}, semObra = 0;
+      (state.colaboradores||[]).forEach(function(c){ if(c.obraId) cont[c.obraId] = (cont[c.obraId]||0)+1; else semObra++; });
+      var obras = (state.obras||[]).slice().sort(function(a, b2){ return String(a.nome||'').localeCompare(String(b2.nome||''), 'pt-BR'); });
+      var html = '<option value="">Todas as obras ('+(state.colaboradores||[]).length+')</option>'+
+        (semObra ? '<option value="__sem">Sem obra fixa ('+semObra+')</option>' : '')+
+        obras.map(function(o){ return '<option value="'+esc(o.id)+'">'+esc(o.nome||'')+' ('+(cont[o.id]||0)+')</option>'; }).join('');
+      if(sel.getAttribute('data-h')!==html){ sel.innerHTML = html; sel.setAttribute('data-h', html); }
+      if(sel.value!==state.colabFiltro.obra){
+        sel.value = state.colabFiltro.obra;
+        if(sel.value!==state.colabFiltro.obra){ state.colabFiltro.obra = ''; sel.value = ''; }
+      }
+    }
+    var ct = document.getElementById('colabContagem');
+    if(ct) ct.textContent = (state.colabFiltro.busca || state.colabFiltro.obra) ? mostrados+' de '+total+' colaborador(es)' : total+' colaborador(es)';
+  }
+  (function(){
+    var bi = document.getElementById('colabBusca'), so = document.getElementById('colabFiltroObra');
+    if(bi) bi.addEventListener('input', function(){ state.colabFiltro.busca = bi.value; renderColaboradorList(); });
+    if(so) so.addEventListener('change', function(){ state.colabFiltro.obra = so.value; renderColaboradorList(); });
+  })();
   function renderColaboradorList(){
     var list = document.getElementById('colaboradorList');
     if(!list) return;
-    if(state.colaboradores.length===0){ list.innerHTML = '<p class="empty-hint">Nenhum colaborador cadastrado ainda.</p>'; return; }
+    if(state.colaboradores.length===0){ list.innerHTML = '<p class="empty-hint">Nenhum colaborador cadastrado ainda.</p>'; colabFiltroAtualizar(0, 0); return; }
     var ordered = state.colaboradores.slice().sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
+    // v59: busca por nome/nome completo/função e filtro por obra
+    var F = state.colabFiltro, b = normalizarBusca(F.busca);
+    var total = ordered.length;
+    ordered = ordered.filter(function(c){
+      if(F.obra==='__sem' && c.obraId) return false;
+      if(F.obra && F.obra!=='__sem' && c.obraId!==F.obra) return false;
+      if(b && normalizarBusca([c.nome, c.nomeCompleto, c.funcao].join(' ')).indexOf(b)===-1) return false;
+      return true;
+    });
+    colabFiltroAtualizar(ordered.length, total);
+    if(!ordered.length){ list.innerHTML = '<p class="empty-hint">Nenhum colaborador encontrado com esse filtro.</p>'; return; }
     list.innerHTML = ordered.map(function(c){
       var depto = state.departamentos.find(function(d){ return d.id===c.departamentoId; });
       return '<div class="obra-card" data-id="'+c.id+'">'+
