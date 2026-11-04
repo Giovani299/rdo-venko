@@ -2727,11 +2727,23 @@
     for(var i = 0; i<bin.length; i++) out[i] = bin.charCodeAt(i);
     return out;
   }
-  function notifFuncao(corpo, comLogin){
-    var cab = function(t){ var h = { 'Content-Type':'application/json', apikey: SUPABASE_ANON_KEY }; if(t) h.Authorization = 'Bearer '+t; return h; };
-    var tok = comLogin ? supabaseClient.auth.getSession().then(function(s){ return s && s.data && s.data.session ? s.data.session.access_token : null; }) : Promise.resolve(null);
-    return tok.then(function(t){ return fetch(PUSH_FUNCAO, { method:'POST', headers:cab(t), body:JSON.stringify(corpo) }); })
-      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ if(!r.ok) throw new Error(j.erro || ('a função de envio respondeu '+r.status+'. Confira se a função enviar-push foi publicada.')); return j; }); });
+  // v60: sempre manda o login (funciona com "Verify JWT" ligado ou desligado) e explica em português quando a função não responde
+  function notifFuncao(corpo){
+    var tok = supabaseClient.auth.getSession().then(function(s){ return s && s.data && s.data.session ? s.data.session.access_token : null; }, function(){ return null; });
+    return tok.then(function(t){
+      var h = { 'Content-Type':'application/json', apikey: SUPABASE_ANON_KEY };
+      if(t) h.Authorization = 'Bearer '+t;
+      return fetch(PUSH_FUNCAO, { method:'POST', headers:h, body:JSON.stringify(corpo) }).catch(function(){
+        throw new Error(navigator.onLine ? 'o servidor de notificações não respondeu. A função "enviar-push" precisa estar publicada no Supabase (Edge Functions → Deploy).' : 'sem internet.');
+      });
+    }).then(function(r){
+      return r.json().catch(function(){ return {}; }).then(function(j){
+        if(r.ok) return j;
+        if(r.status===404) throw new Error('a função "enviar-push" não está publicada no Supabase (Edge Functions).');
+        if(r.status===401) throw new Error('a função "enviar-push" recusou o acesso. Desligue "Verify JWT" nas configurações dela no Supabase.');
+        throw new Error(j.erro || j.message || ('a função de envio respondeu '+r.status+'.'));
+      });
+    });
   }
   function notifAtivarPush(){
     var bt = document.getElementById('notifAtivar'); if(bt){ bt.disabled = true; bt.textContent = 'Ativando…'; }
@@ -2760,7 +2772,7 @@
   }
   function notifTestePush(){
     var bt = document.getElementById('notifTeste'); if(bt){ bt.disabled = true; bt.textContent = 'Enviando…'; }
-    notifFuncao({ acao:'teste' }, true).then(function(r){
+    notifFuncao({ acao:'teste' }).then(function(r){
       toast(r.enviados ? 'Teste enviado: a notificação deve chegar em alguns segundos.' : 'Nenhum aparelho seu está inscrito. Toque em "Ativar notificações neste aparelho".', r.enviados ? 'ok' : 'error');
     }, function(err){ toast('Teste falhou: '+((err && err.message) || err), 'error'); })
       .then(function(){ if(bt){ bt.disabled = false; bt.textContent = 'Enviar teste'; } });
