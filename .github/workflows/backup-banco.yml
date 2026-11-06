@@ -1,0 +1,61 @@
+# Cópia de segurança diária do banco do RDO Venko (o plano gratuito do Supabase não tem backup).
+# Roda todo dia às 03:30 de São Paulo e também pelo botão "Run workflow".
+# O arquivo sai CIFRADO (AES-256): o repositório é público, então sem a senha ninguém abre.
+# Precisa de 2 segredos em Settings → Secrets and variables → Actions:
+#   SUPABASE_DB_URL  = endereço "Session pooler" do Supabase (Connect → Session pooler), com a senha do banco
+#   BACKUP_SENHA     = uma senha longa só para os backups (guarde num lugar seguro)
+# Para abrir um backup:  openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in banco.dump.enc -out banco.dump
+#                        pg_restore --list banco.dump   (ou pg_restore -d <banco novo> banco.dump)
+name: Backup do banco (diário)
+
+on:
+  schedule:
+    - cron: '30 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Instalar o cliente do PostgreSQL 17
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Gerar o backup e cifrar
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SENHA: ${{ secrets.BACKUP_SENHA }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DB_URL:-}" ] || [ -z "${SENHA:-}" ]; then
+            echo "::error::Faltam os segredos SUPABASE_DB_URL e/ou BACKUP_SENHA (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          mkdir -p saida
+          /usr/lib/postgresql/17/bin/pg_dump "$DB_URL" --schema=public --no-owner --no-privileges --format=custom -f banco.dump
+          /usr/lib/postgresql/17/bin/pg_restore --list banco.dump > /dev/null   # confere que o arquivo abre
+          # usuários do login (auth): tenta, mas não derruba o backup se o banco não deixar
+          /usr/lib/postgresql/17/bin/pg_dump "$DB_URL" --schema=auth --data-only --table=auth.users --table=auth.identities --format=custom -f login.dump || { echo "::warning::Não foi possível copiar os usuários do login."; rm -f login.dump; }
+          for f in banco.dump login.dump; do
+            [ -f "$f" ] || continue
+            openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:SENHA -in "$f" -out "saida/$f.enc"
+            sha256sum "saida/$f.enc" >> saida/conferencia.sha256
+          done
+          rm -f banco.dump login.dump
+          ls -l saida
+
+      - name: Guardar por 30 dias
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-banco-${{ github.run_id }}
+          path: saida/
+          retention-days: 30
+          if-no-files-found: error
