@@ -11,7 +11,7 @@
 // SÃO cacheadas: sem elas o app trava ao tentar abrir sem internet, porque
 // o próprio código do site depende delas para existir (ex.: window.supabase).
 
-const CACHE_NAME = 'rdo-venko-v2';
+const CACHE_NAME = 'rdo-venko-v3';
 const APP_SHELL = [
   './',
   './index.html',
@@ -22,7 +22,7 @@ const APP_SHELL = [
 const EXTERNAL_LIBS = [
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js'
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.js'
 ];
 
 self.addEventListener('install', function(event){
