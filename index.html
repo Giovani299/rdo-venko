@@ -2055,6 +2055,15 @@
     if(u.is_admin || u.acesso_financeiro || !u.obras_ids) return true;
     return !!obraId && u.obras_ids.indexOf(obraId)>-1;
   }
+  function rdoObraPadrao(){
+    var u = state.currentUser;
+    if(!u || u.is_admin || u.acesso_financeiro) return '';
+    var ativas = vkObrasLiberadas(state.obras).filter(function(o){ return o.status==='ativa' && !o.exemplo; });
+    var minhas = ativas.filter(function(o){ return o.responsavelRdo===u.id; });
+    if(minhas.length===1) return minhas[0].id;
+    if(ativas.length===1) return ativas[0].id;
+    return '';
+  }
   function vkObrasLiberadas(lista){ return (lista||[]).filter(function(o){ return vkVeObra(o.id); }); }
   function vkRdosLiberados(lista){ return (lista||[]).filter(function(r){ return vkVeObra(r.obraId); }); }
   function loadObras(){
@@ -10546,6 +10555,11 @@
 
     populateObraSelect();
     document.getElementById('rdoObra').value = rdo.obraId||'';
+    // v67: RDO novo já vem com a obra da pessoa marcada (a obra pela qual ela é responsável, ou a única liberada para ela)
+    if(!rdo.obraId){
+      var obraPadrao = rdoObraPadrao();
+      if(obraPadrao) document.getElementById('rdoObra').value = obraPadrao;
+    }
     atualizarRdoPlanilhaInfo();
     document.getElementById('rdoObra').addEventListener('change', function(){ atualizarRdoPlanilhaInfo(); refreshEquipesDetalheUI(rdo); renderRdoColaboradores(rdo); rdoObraMudou(rdo); });
 
