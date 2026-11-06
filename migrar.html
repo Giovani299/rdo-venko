@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>RDO Venko</title><meta name="robots" content="noindex"></head>
+<body>
+<script>
+/* Recebe, do endereço antigo (construtoravenko.com.br), os RDOs salvos no aparelho que ainda não foram enviados,
+   e grava aqui na mesma fila offline do RDO. Só aceita mensagens do endereço antigo. */
+(function () {
+  var ORIGENS = ['https://construtoravenko.com.br', 'https://www.construtoravenko.com.br'];
+  if (window.parent === window) { location.replace('./'); return; }
+  function abrir() {
+    return new Promise(function (ok, falha) {
+      var r = indexedDB.open('rdoVenkoOffline', 1);
+      r.onupgradeneeded = function () {
+        var db = r.result;
+        if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'k' });
+        if (!db.objectStoreNames.contains('pendingRdos')) db.createObjectStore('pendingRdos', { keyPath: 'id', autoIncrement: true });
+      };
+      r.onsuccess = function () { ok(r.result); };
+      r.onerror = function () { falha(r.error); };
+    });
+  }
+  window.addEventListener('message', function (ev) {
+    if (ORIGENS.indexOf(ev.origin) < 0 || !ev.data || ev.data.tipo !== 'vk-migrar-pendentes') return;
+    var itens = Array.isArray(ev.data.itens) ? ev.data.itens : [];
+    abrir().then(function (db) {
+      var tx = db.transaction('pendingRdos', 'readwrite'), st = tx.objectStore('pendingRdos');
+      itens.forEach(function (it) {
+        var c = Object.assign({}, it); delete c.id;
+        c.migradoDe = ev.origin;
+        st.add(c);
+      });
+      tx.oncomplete = function () { db.close(); ev.source.postMessage({ tipo: 'vk-migrar-ok', n: itens.length }, ev.origin); };
+      tx.onerror = tx.onabort = function () { db.close(); ev.source.postMessage({ tipo: 'vk-migrar-erro' }, ev.origin); };
+    }, function () { ev.source.postMessage({ tipo: 'vk-migrar-erro' }, ev.origin); });
+  });
+  ORIGENS.forEach(function (o) { try { window.parent.postMessage({ tipo: 'vk-migrar-pronto' }, o); } catch (e) {} });
+})();
+</script>
+</body></html>
