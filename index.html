@@ -1230,9 +1230,9 @@
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoPlanejamento"><label for="userAcessoPlanejamento">Acesso ao módulo Planejamento (Matriz de Serviços, Cronograma, Acompanhamento da Obra)</label></div>
           <div class="field" id="userObrasBox" style="margin-top:12px;display:none;">
             <label>Obras que este usuário vê</label>
-            <div class="checkline"><input type="checkbox" id="userObrasTodas" checked><label for="userObrasTodas">Todas as obras (inclusive as cadastradas depois)</label></div>
+            <div class="checkline"><input type="checkbox" id="userObrasTodas"><label for="userObrasTodas">Todas as obras (inclusive as cadastradas depois)</label></div>
             <div id="userObrasLista" class="user-obras-lista"></div>
-            <p class="hint" style="margin:4px 0 0;">Desmarque “Todas” para escolher. O banco de dados só entrega a esse usuário as RDOs, mapas e projetos das obras marcadas. Administrador vê todas.</p>
+            <p class="hint" style="margin:4px 0 0;">Marque as obras em que a pessoa trabalha: ela só vê e só lança RDO dessas obras. Administrador e Financeiro veem todas.</p>
           </div>
           <div class="form-actions">
             <button type="button" class="btn ghost" id="userCancelEdit" style="display:none">Cancelar edição</button>
@@ -2048,13 +2048,23 @@
       createdAt: row.created_at, updatedAt: row.updated_at, deletedAt: row.deleted_at
     };
   }
+  // v66: RDO por obra — admin, financeiro ou "Todas as obras" no cadastro veem tudo; os demais só as obras marcadas (mesma regra do banco, 067)
+  function vkVeObra(obraId){
+    var u = state.currentUser;
+    if(!u) return false;
+    if(u.is_admin || u.acesso_financeiro || !u.obras_ids) return true;
+    return !!obraId && u.obras_ids.indexOf(obraId)>-1;
+  }
+  function vkObrasLiberadas(lista){ return (lista||[]).filter(function(o){ return vkVeObra(o.id); }); }
+  function vkRdosLiberados(lista){ return (lista||[]).filter(function(r){ return vkVeObra(r.obraId); }); }
   function loadObras(){
     return supabaseClient.from('obras').select('*').then(function(res){
       if(res.error){
-        if(looksOffline(res.error)) return cacheGet('obras').then(function(c){ if(c){ state.obras=c; renderAll(); } });
+        if(looksOffline(res.error)) return cacheGet('obras').then(function(c){ if(c){ state.obras=vkObrasLiberadas(c); state.obrasOk=true; renderAll(); } });
         toast('Não foi possível carregar as obras.','error'); return;
       }
-      state.obras = (res.data||[]).map(mapObraRow);
+      state.obras = vkObrasLiberadas((res.data||[]).map(mapObraRow));
+      state.obrasOk = true;
       state.temRespRdo = (res.data||[]).some(function(r){ return Object.prototype.hasOwnProperty.call(r, 'responsavel_rdo'); });
       state.obras.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
       cacheSet('obras', state.obras);
@@ -2143,10 +2153,10 @@
   function loadRdos(){
     return buscarTodasPaginas(function(){ return supabaseClient.from('rdos').select('*').is('deleted_at', null).order('created_at', { ascending:true }).order('id', { ascending:true }); }).then(function(res){
       if(res.error){
-        if(looksOffline(res.error)) return cacheGet('rdos').then(function(c){ if(c){ state.rdos=c; renderAll(); } refreshPendingRdos(); });
+        if(looksOffline(res.error)) return cacheGet('rdos').then(function(c){ if(c){ state.rdos=vkRdosLiberados(c); renderAll(); } refreshPendingRdos(); });
         toast('Não foi possível carregar as RDOs.','error'); return;
       }
-      state.rdos = (res.data||[]).map(mapRdoRow);
+      state.rdos = vkRdosLiberados((res.data||[]).map(mapRdoRow));
       state.rdos.sort(function(a,b){ return (b.data||'').localeCompare(a.data||'') || (new Date(b.createdAt)-new Date(a.createdAt)); });
       cacheSet('rdos', state.rdos);
       renderAll();
@@ -2209,7 +2219,7 @@
       if(res.error){ toast('Não foi possível carregar usuários.','error'); return; }
       state.profiles = (res.data||[]).sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
       state.temObrasIds = (res.data||[]).some(function(p){ return Object.prototype.hasOwnProperty.call(p, 'obras_ids'); });
-      if(!editingUserId) renderUserObrasBox(null);
+      if(!editingUserId) renderUserObrasBox([]);
       if(state.currentUser){
         var fresh = state.profiles.find(function(p){ return p.id===state.currentUser.id; });
         if(fresh){
@@ -3040,7 +3050,7 @@
   function cancelUserEdit(){
     editingUserId = null;
     document.getElementById('userForm').reset();
-    renderUserObrasBox(null);
+    renderUserObrasBox([]);
     document.getElementById('userLogin').disabled = false;
     document.getElementById('userPassField').style.display = '';
     document.getElementById('userPass').required = true;
@@ -3064,7 +3074,8 @@
     var isPlanejamento = document.getElementById('userAcessoPlanejamento').checked;
     if(!login || !nome){ toast('Preencha usuário e nome.','error'); return; }
     var obrasSel = lerUserObrasIds();
-    if(!obrasSel.ok){ toast('Marque ao menos uma obra (ou “Todas as obras”).','error'); return; }
+    if(!obrasSel.ok && (isAdmin || isFinanceiro)) obrasSel = { ok:true, valor:null };   // admin e financeiro veem todas as obras de qualquer jeito
+    if(!obrasSel.ok){ toast('Marque as obras que esta pessoa pode ver e lançar RDO (ou “Todas as obras”).','error'); return; }
     var chkPrincipal = document.getElementById('userAdminPrincipal');
     if(ehAdminPrincipal() && chkPrincipal && chkPrincipal.checked && !isAdmin){ toast('Para ser administrador principal, marque também “Administrador”.','error'); return; }
 
@@ -8395,7 +8406,9 @@
     var sel = document.getElementById('rdoObra');
     if(!sel) return;
     var current = sel.value;
-    sel.innerHTML = '<option value="">Selecione a obra…</option>' + state.obras.map(function(o){
+    var liberadas = vkObrasLiberadas(state.obras);
+    var semObra = !liberadas.length && state.obrasOk;
+    sel.innerHTML = (semObra ? '<option value="">Nenhuma obra liberada para você — fale com o administrador</option>' : '<option value="">Selecione a obra…</option>') + liberadas.map(function(o){
       return '<option value="'+o.id+'">'+esc(o.nome)+'</option>';
     }).join('');
     if(current) sel.value = current;
