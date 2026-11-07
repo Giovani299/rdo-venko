@@ -913,6 +913,77 @@
     #finPrintArea .hint{ display:none; }
     .print-only{ display:block !important; margin-bottom:14px; font-size:14px; }
   }
+
+  /* ---------- v68: Central de Ajuda ---------- */
+  .aj-fab{position:fixed;right:18px;bottom:18px;z-index:80;width:52px;height:52px;border-radius:50%;border:0;cursor:pointer;
+    background:var(--venko-yellow);color:#232320;font:700 24px/1 system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.25);
+    display:flex;align-items:center;justify-content:center;transition:transform .15s;}
+  .aj-fab:hover{transform:scale(1.06);} .aj-fab:focus-visible{outline:3px solid var(--focus);outline-offset:3px;}
+  .aj-fab[hidden]{display:none;}
+  @media (max-width:760px){ .aj-fab{bottom:14px;right:14px;width:48px;height:48px;font-size:22px;}
+    #app{padding-bottom:70px;} }   /* o fim da página (ex.: Enviar RDO) sobe acima do botão (?) */
+  body.aj-em-tour .aj-fab{display:none;}
+
+  .aj-painel{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);z-index:960;background:var(--surface);color:var(--ink);
+    border-left:1px solid var(--line);box-shadow:var(--shadow-md);display:flex;flex-direction:column;}
+  .aj-topo{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);background:var(--paper);}
+  .aj-topo b{font-size:16px;flex:1;} .aj-topo .aj-voltar,.aj-topo .aj-x{background:none;border:0;color:var(--ink);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px;}
+  .aj-topo .aj-voltar[hidden]{display:none;}
+  .aj-corpo{flex:1;overflow-y:auto;padding:14px 16px 24px;}
+  .aj-busca{display:flex;gap:8px;margin-bottom:14px;}
+  .aj-busca textarea{flex:1;min-height:44px;max-height:120px;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;}
+  .aj-sec{font:600 11px/1.2 system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--steel);margin:16px 0 8px;}
+  .aj-lista{display:flex;flex-direction:column;gap:6px;}
+  .aj-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 12px;border:1px solid var(--line);border-radius:var(--radius);
+    background:var(--surface);color:var(--ink);cursor:pointer;font:inherit;font-size:14px;}
+  .aj-item:hover{border-color:var(--venko-yellow);} .aj-item .aj-ic{width:26px;text-align:center;flex:none;font-size:17px;}
+  .aj-item small{display:block;color:var(--steel);font-size:12px;margin-top:2px;}
+  .aj-item.aj-destaque{border-color:var(--venko-yellow);background:color-mix(in srgb,var(--venko-yellow) 12%,var(--surface));}
+  .aj-chip{display:inline-block;padding:6px 10px;margin:0 6px 6px 0;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);cursor:pointer;font-size:13px;}
+  .aj-caixa{border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin:10px 0;background:var(--paper);font-size:14px;line-height:1.5;}
+  .aj-caixa ol,.aj-caixa ul{margin:6px 0 0;padding-left:20px;} .aj-caixa li{margin:4px 0;}
+  .aj-ok{color:var(--status-approved);} .aj-ruim{color:var(--status-rejected);} .aj-alerta{color:var(--status-stopped);}
+  .aj-form .field{margin-bottom:10px;} .aj-form textarea{min-height:110px;}
+  .aj-status{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;}
+  .aj-status.aberto{background:var(--status-sent-bg);color:var(--status-sent);}
+  .aj-status.em_andamento{background:var(--status-stopped-bg);color:var(--status-stopped);}
+  .aj-status.resolvido{background:var(--status-approved-bg);color:var(--status-approved);}
+  .aj-chamado{border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-bottom:10px;background:var(--surface);}
+  .aj-chamado .aj-meta{font-size:12px;color:var(--steel);margin:4px 0;}
+  .aj-chamado .aj-resp{margin-top:8px;padding:8px 10px;border-left:3px solid var(--venko-yellow);background:var(--paper);font-size:13.5px;}
+  .aj-ia{font-size:12px;color:var(--steel);margin-top:6px;}
+
+  /* passo a passo */
+  .aj-spot{position:fixed;z-index:95;border-radius:10px;border:3px solid var(--venko-yellow);pointer-events:none;
+    box-shadow:0 0 0 9999px rgba(15,14,10,.55);transition:all .2s ease;}
+  .aj-spot.aj-pulsa{animation:ajPulsa 1.4s ease-in-out infinite;}
+  @keyframes ajPulsa{0%,100%{outline:0 solid rgba(238,197,18,.6);} 50%{outline:8px solid rgba(238,197,18,0);}}
+  @media (prefers-reduced-motion:reduce){ .aj-spot,.aj-spot.aj-pulsa{animation:none;transition:none;} }
+  .aj-escuro{position:fixed;inset:0;z-index:95;background:rgba(15,14,10,.55);pointer-events:none;}
+  .aj-tip{position:fixed;z-index:980;width:min(360px,calc(100vw - 24px));background:var(--surface);color:var(--ink);border:1px solid var(--line);
+    border-radius:12px;box-shadow:var(--shadow-md);padding:14px 16px;}
+  .aj-tip .aj-passo{font:600 11px system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--steel);}
+  .aj-tip h4{margin:4px 0 6px;font-size:16px;} .aj-tip p{margin:0 0 8px;font-size:14px;line-height:1.5;}
+  .aj-tip .aj-nota{font-size:12.5px;color:var(--status-stopped);}
+  .aj-tip .aj-acoes{display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:10px;flex-wrap:wrap;}
+  .aj-tip .aj-acoes div{display:flex;gap:8px;}
+  @media (max-width:640px){ .aj-tip{left:12px !important;right:12px;width:auto;bottom:12px !important;top:auto !important;}
+    .aj-tip.aj-cima{top:12px !important;bottom:auto !important;} }
+
+  /* painel do administrador */
+  .aj-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
+  .aj-kpi{border:1px solid var(--line);border-radius:var(--radius);padding:12px;background:var(--surface);}
+  .aj-kpi b{display:block;font-size:26px;font-variant-numeric:tabular-nums;} .aj-kpi span{font-size:12px;color:var(--steel);}
+  .aj-barras div{display:grid;grid-template-columns:minmax(120px,1fr) 2fr 40px;gap:8px;align-items:center;font-size:13px;margin:4px 0;}
+  .aj-barras i{display:block;height:10px;border-radius:5px;background:var(--venko-yellow);}
+  .aj-barras em{font-style:normal;text-align:right;font-variant-numeric:tabular-nums;}
+  .aj-abas{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+  .aj-abas button.ativo,.aj-abas .btn.ghost.ativo,.aj-abas .btn.ghost.ativo:hover{background:var(--venko-yellow);color:#232320;border-color:var(--venko-yellow);}
+  .aj-passo-ed{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--paper);}
+  .aj-passo-ed .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  @media (max-width:560px){ .aj-passo-ed .grid2{grid-template-columns:1fr;} .aj-barras div{grid-template-columns:1fr 1fr 32px;} }
+  .aj-chamado select[data-st]{padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px;min-height:34px;}
+  .aj-chamado select[data-st]:focus-visible{outline:2px solid var(--focus);outline-offset:2px;}
 </style>
 <script>
   (function(){
@@ -961,6 +1032,7 @@
       <button class="tab-btn" data-view="tabelaprecos" id="tabTabelaPrecos" style="display:none">Tabela de Preços</button>
       <button class="tab-btn" data-view="planejamento" id="tabPlanejamento" style="display:none">Planejamento</button>
       <button class="tab-btn" data-view="users" id="tabUsers" style="display:none">Usuários</button>
+      <button class="tab-btn" data-view="ajuda" id="tabAjuda" style="display:none">Central de Ajuda</button>
     </nav>
     <div class="user-box" id="userBox"></div>
   </header>
@@ -1204,6 +1276,16 @@
         <button class="btn ghost" data-goto="dashboard">← Voltar ao painel</button>
       </div>
       <div id="detailContent"></div>
+    </section>
+
+    <section id="view-ajuda" class="view">
+      <div class="page-head">
+        <div>
+          <h1>Central de Ajuda</h1>
+          <p>Solicitações de ajuda, dúvidas mais frequentes e tutoriais do sistema.</p>
+        </div>
+      </div>
+      <div id="ajudaAdmin"></div>
     </section>
 
     <section id="view-users" class="view">
@@ -1876,6 +1958,7 @@
     var btn = e.target.closest('.tab-btn'); if(!btn) return;
     var view = btn.getAttribute('data-view');
     if(view==='users' && !(state.currentUser && state.currentUser.is_admin)) return;
+    if(view==='ajuda' && !(state.currentUser && state.currentUser.is_admin)) return;
     if(view==='financeiro'||view==='financeiro-obra'||view==='tabelaprecos') return;   // módulos retirados do menu
     if(view==='obras' && !(state.currentUser && (state.currentUser.is_admin || state.currentUser.acesso_obras !== false))) return;
     if((view==='mapa'||view==='mapa-obra') && !obrasCanAccess()) return;
@@ -2612,6 +2695,7 @@
     document.getElementById('tabClientes').style.display = podeGestaoObrasLogin ? '' : 'none';
     updateUserBox();
     notifIniciar();
+    ajudaIniciar();
   }
 
   // ----- v58: avisos de RDO não feito — sininho no sistema e notificação no celular (Web Push) -----
@@ -2748,15 +2832,19 @@
     box.innerHTML = '<div class="notif-topo"><b>Avisos'+(n ? ' ('+n+' não lido'+(n===1?'':'s')+')' : '')+'</b>'+(n ? '<button type="button" class="btn ghost sm" id="notifLerTudo">Marcar como lidos</button>' : '')+
         '<button type="button" class="notif-x" id="notifFechar" aria-label="Fechar">✕</button></div>'+
       (l.length ? '<ul class="notif-lista">'+l.map(function(x){
-        return '<li class="'+(x.lida_em ? '' : 'nova')+'" data-notif="'+esc(x.id)+'"'+(x.lida_em ? '' : ' role="button" tabindex="0" title="Tocar para marcar como lido" style="cursor:pointer;"')+'><span class="notif-tit">'+esc(x.titulo)+(x.lida_em ? '' : ' · novo')+'</span><span class="notif-msg">'+esc(x.mensagem)+'</span><span class="notif-quando">'+esc(notifQuando(x.criado_em))+'</span></li>';
+        var ehAjuda = /^ajuda/.test(String(x.tipo||''));
+        return '<li class="'+(x.lida_em ? '' : 'nova')+'" data-notif="'+esc(x.id)+'"'+(ehAjuda ? ' data-notifajuda="1"' : '')+((x.lida_em && !ehAjuda) ? '' : ' role="button" tabindex="0" title="'+(ehAjuda ? 'Tocar para abrir a Central de Ajuda' : 'Tocar para marcar como lido')+'" style="cursor:pointer;"')+'><span class="notif-tit">'+esc(x.titulo)+(x.lida_em ? '' : ' · novo')+'</span><span class="notif-msg">'+esc(x.mensagem)+'</span><span class="notif-quando">'+esc(notifQuando(x.criado_em))+'</span></li>';
       }).join('')+'</ul>' : '<p class="empty-hint" style="margin:10px 0;">Nenhum aviso. Se um RDO não for enviado até as 18h de um dia útil, o aviso aparece aqui.</p>')+
       '<div class="notif-push">'+notifPushHtml()+'</div>';
     var b1 = box.querySelector('#notifLerTudo'); if(b1) b1.addEventListener('click', function(){ notifMarcarLidas(null); });
     var b2 = box.querySelector('#notifAtivar'); if(b2) b2.addEventListener('click', notifAtivarPush);
     var b3 = box.querySelector('#notifTeste'); if(b3) b3.addEventListener('click', notifTestePush);
     var b4 = box.querySelector('#notifFechar'); if(b4) b4.addEventListener('click', notifFechar);
-    box.querySelectorAll('li.nova[data-notif]').forEach(function(li){
-      var marcar = function(){ notifMarcarLidas(li.getAttribute('data-notif')); };
+    box.querySelectorAll('li.nova[data-notif], li[data-notifajuda]').forEach(function(li){
+      var marcar = function(){
+        if(li.classList.contains('nova')) notifMarcarLidas(li.getAttribute('data-notif'));
+        if(li.hasAttribute('data-notifajuda')){ notifFechar(); ajAbrirPorAviso(); }   // v68: aviso da Central de Ajuda abre a ajuda
+      };
       li.addEventListener('click', marcar);
       li.addEventListener('keydown', function(e){ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); marcar(); } });
     });
@@ -2902,6 +2990,7 @@
 
   function logout(){
     notifSair();
+    ajudaSair();
     supabaseClient.auth.signOut().then(function(){
       state.currentUser = null;
       state.editId = null; state.editingPendingItem = null; state.photos = []; state.videos = [];
@@ -4998,6 +5087,7 @@
     if(state.view==='planejamento'){ renderPlanejamentoObraList(); }
     if(state.view==='planejamento-obra' && state.planejamentoObraId){ renderPlanejamentoObra(); }
     if(state.view==='ponto'){ renderPonto(); }
+    if(state.view==='ajuda'){ ajAdminRender(); }
   }
 
   function renderKpis(){
@@ -13592,6 +13682,895 @@
       showIosInstallTip();
     });
   }
+
+  // =====================================================================
+  // v68 — Central de Ajuda: botão (?), passo a passo que destaca a tela real,
+  // perguntas em texto livre, diagnóstico de problemas, solicitações de suporte
+  // e painel do administrador. Tabelas: 068_central_ajuda.sql.
+  // =====================================================================
+  var AJ = { aberto:false, pilha:[], tutDb:[], tutDbOk:false, erros:[], tour:null, iaAtiva:null, semBanco:false };
+
+  // Elementos reais da tela que os tutoriais podem destacar (o admin escolhe desta lista; nada inventado)
+  var AJ_ALVOS = [
+    { id:'menu', nome:'Menu principal (abas)', sel:'#tabs' },
+    { id:'aba-dashboard', nome:'Aba Painel', sel:'.tab-btn[data-view="dashboard"]' },
+    { id:'aba-novo', nome:'Aba Nova RDO', sel:'.tab-btn[data-view="novo"]' },
+    { id:'aba-obras', nome:'Aba Obras', sel:'.tab-btn[data-view="obras"]' },
+    { id:'aba-colaboradores', nome:'Aba Colaboradores', sel:'.tab-btn[data-view="colaboradores"]' },
+    { id:'aba-ponto', nome:'Aba Ponto', sel:'.tab-btn[data-view="ponto"]' },
+    { id:'aba-planejamento', nome:'Aba Planejamento', sel:'.tab-btn[data-view="planejamento"]' },
+    { id:'aba-mapa', nome:'Aba Mapeamento', sel:'.tab-btn[data-view="mapa"]' },
+    { id:'aba-users', nome:'Aba Usuários', sel:'.tab-btn[data-view="users"]' },
+    { id:'sininho', nome:'Sininho de avisos', sel:'#btnNotif' },
+    { id:'usuario', nome:'Seu nome / Sair', sel:'#userBox' },
+    { id:'btn-nova-rdo', nome:'Botão + Nova RDO (Painel)', sel:'#view-dashboard [data-goto="novo"]' },
+    { id:'filtros', nome:'Filtros do Painel', sel:'#filterBar' },
+    { id:'f-obra', nome:'Filtro Obra', sel:'#fObra' },
+    { id:'f-datas', nome:'Filtro De/Até', sel:'#fDe' },
+    { id:'f-status', nome:'Filtro Status', sel:'#fStatus' },
+    { id:'f-busca', nome:'Filtro Buscar', sel:'#fBusca' },
+    { id:'lixeira', nome:'Botão Lixeira', sel:'#fTrash' },
+    { id:'lista-rdos', nome:'Lista de RDOs', sel:'#rdoTableBody' },
+    { id:'linha-rdo', nome:'Primeiro RDO da lista', sel:'#rdoTableBody tr[data-id]' },
+    { id:'medicao', nome:'Botão Medição (Excel/CDM)', sel:'#btnExportCdm' },
+    { id:'rdo-obra', nome:'RDO — campo Obra', sel:'#rdoObra' },
+    { id:'rdo-data', nome:'RDO — campo Data', sel:'#rdoData' },
+    { id:'rdo-clima', nome:'RDO — Clima', sel:'#rdoClimaManhaTempo' },
+    { id:'rdo-equipes', nome:'RDO — Equipes e colaboradores', sel:'#rdoColabCard' },
+    { id:'rdo-servicos', nome:'RDO — Serviços do dia (planilha)', sel:'#rdoServicosCard' },
+    { id:'rdo-semprod', nome:'RDO — Nenhum serviço atribuído', sel:'#rdoSemProducao' },
+    { id:'rdo-fotos', nome:'RDO — Fotos', sel:'#rdoFotos' },
+    { id:'rdo-responsavel', nome:'RDO — Responsável', sel:'#rdoResponsavel' },
+    { id:'rdo-declaracao', nome:'RDO — Confirmação', sel:'#rdoDeclaracao' },
+    { id:'rdo-rascunho', nome:'RDO — Salvar rascunho', sel:'#btnSaveDraft' },
+    { id:'rdo-enviar', nome:'RDO — Enviar RDO', sel:'#btnSubmitRdo' },
+    { id:'detalhe-editar', nome:'RDO aberto — Editar', sel:'#btnEditRdo' },
+    { id:'detalhe-pdf', nome:'RDO aberto — Exportar PDF', sel:'#btnExportPdf' },
+    { id:'colab-form', nome:'Colaboradores — formulário', sel:'#colaboradorForm' },
+    { id:'colab-nome', nome:'Colaboradores — Nome', sel:'#colaboradorNome' },
+    { id:'colab-funcao', nome:'Colaboradores — Função', sel:'#colaboradorFuncaoSel' },
+    { id:'colab-obra', nome:'Colaboradores — Obra', sel:'#colaboradorObra' },
+    { id:'colab-salvar', nome:'Colaboradores — Salvar', sel:'#colaboradorForm button[type="submit"]' },
+    { id:'colab-busca', nome:'Colaboradores — Buscar', sel:'#colabFiltros' },
+    { id:'ponto-abas', nome:'Ponto — Bater ponto', sel:'[data-pontoaba="dia"]' },
+    { id:'ponto-dia', nome:'Ponto — escolher o dia', sel:'[data-pontodia="hoje"]' },
+    { id:'ponto-bater', nome:'Ponto — botão de registro', sel:'[data-pontobater]' },
+    { id:'ponto-falta', nome:'Ponto — Falta', sel:'[data-pontofalta]' },
+    { id:'ponto-corrigir', nome:'Ponto — Corrigir', sel:'[data-pontocorrigir]' },
+    { id:'ponto-historico', nome:'Ponto — Histórico', sel:'[data-pontoaba="historico"]' },
+    { id:'plan-obras', nome:'Planejamento — lista de obras', sel:'#planejamentoObraList' },
+    { id:'obras-servpdf', nome:'Obras — Exportar PDF dos serviços', sel:'[data-servpdf]' },
+    { id:'ajuda', nome:'Botão de ajuda (?)', sel:'#ajFab' }
+  ];
+  var AJ_TELAS = { '':'(a tela em que a pessoa estiver)', dashboard:'Painel', novo:'Nova RDO', detail:'RDO aberto', colaboradores:'Colaboradores',
+    ponto:'Ponto', planejamento:'Planejamento', obras:'Obras', mapa:'Mapeamento', equipamentos:'Equipamentos', clientes:'Clientes', users:'Usuários' };
+  var AJ_CATEGORIAS = ['Primeiros passos', 'RDO', 'Equipes e colaboradores', 'Produção', 'Consultas e relatórios', 'Planejamento', 'Ponto', 'Avisos', 'Problemas'];
+
+  // ---------- Base de conhecimento "de fábrica" (descreve só o que existe nesta versão do RDO) ----------
+  var AJ_FABRICA = [
+    { slug:'usar-sistema', icone:'🧭', categoria:'Primeiros passos', titulo:'Como utilizar o sistema',
+      resumo:'Um passeio rápido pelas partes principais do RDO.',
+      palavras:'como usar sistema começar inicio primeiro acesso novo usuario menu abas onde fica tudo tour apresentacao',
+      passos:[
+        { titulo:'O menu', texto:'Estas são as abas do sistema. Você só vê as que estão liberadas para o seu usuário.', alvo:'#tabs' },
+        { titulo:'Painel', texto:'No Painel ficam os RDOs já lançados das suas obras, com filtros para encontrar qualquer um.', tela:'dashboard', alvo:'.tab-btn[data-view="dashboard"]' },
+        { titulo:'Nova RDO', texto:'Aqui você preenche o relatório do dia.', alvo:'.tab-btn[data-view="novo"]' },
+        { titulo:'Avisos', texto:'O sininho mostra avisos, por exemplo quando o RDO do dia ainda não foi enviado.', alvo:'#btnNotif' },
+        { titulo:'Seu usuário', texto:'Aqui aparece o seu nome. Por aqui você troca a sua senha e sai do sistema.', alvo:'#userBox' },
+        { titulo:'Ajuda sempre à mão', texto:'Sempre que precisar, toque neste botão (?) para ver um passo a passo ou pedir ajuda.', alvo:'#ajFab' }
+      ] },
+    { slug:'rdo-preencher', icone:'📝', categoria:'RDO', titulo:'Preciso de ajuda para preencher um RDO',
+      resumo:'Do começo ao envio do relatório do dia.',
+      palavras:'preencher rdo criar rdo novo rdo fazer rdo lancar relatorio diario como faço o rdo enviar rdo salvar rdo nao consigo criar',
+      passos:[
+        { titulo:'Abrir a Nova RDO', texto:'Toque na aba Nova RDO.', alvo:'.tab-btn[data-view="novo"]', acao:'clique' },
+        { titulo:'1 · Obra', texto:'Confira a obra. Se você trabalha em uma obra só, ela já vem marcada.', tela:'novo', alvo:'#rdoObra' },
+        { titulo:'1 · Data', texto:'Confira a data do relatório (vem com a data de hoje).', tela:'novo', alvo:'#rdoData' },
+        { titulo:'2 · Clima', texto:'Informe o tempo e a condição de trabalho de manhã e à tarde.', tela:'novo', alvo:'#rdoClimaManhaTempo' },
+        { titulo:'3 · Equipes e colaboradores', texto:'Marque as equipes que trabalharam hoje (EQ1, EQ2…) e, em cada uma, toque nos colaboradores presentes. Este item é obrigatório.', tela:'novo', alvo:'#rdoColabCard' },
+        { titulo:'4 · Serviços do dia', texto:'Na planilha da obra, lance o que cada equipe executou e a quantidade. Se não houve produção, marque "Nenhum serviço atribuído" e explique o motivo. Este item é obrigatório.', tela:'novo', alvo:'#rdoServicosCard' },
+        { titulo:'Fotos e vídeos', texto:'Tire ou escolha fotos e vídeos do serviço.', tela:'novo', alvo:'#rdoFotos' },
+        { titulo:'10 · Responsável', texto:'Confira o seu nome e marque a confirmação de que as informações estão corretas.', tela:'novo', alvo:'#rdoResponsavel' },
+        { titulo:'Salvar ou enviar', texto:'"Salvar rascunho" guarda para continuar depois (ainda não conta como enviado). "Enviar RDO" envia o relatório do dia.', tela:'novo', alvo:'#btnSubmitRdo' }
+      ] },
+    { slug:'equipes', icone:'👷', categoria:'Equipes e colaboradores', titulo:'Como cadastrar ou selecionar uma equipe',
+      resumo:'Onde as equipes aparecem no RDO e o que fazer se nenhuma aparecer.',
+      palavras:'equipe equipes selecionar equipe minha equipe nao aparece eq1 eq2 turma cadastrar equipe escolher equipe',
+      passos:[
+        { titulo:'Abrir a Nova RDO', texto:'As equipes são escolhidas dentro do RDO. Toque em Nova RDO.', alvo:'.tab-btn[data-view="novo"]', acao:'clique' },
+        { titulo:'Item 3 do RDO', texto:'Primeiro confira a obra no item 1. Depois, aqui no item 3, marque as equipes que trabalharam hoje e toque nos colaboradores de cada uma (toque de novo para desmarcar). Essa composição vale só para este RDO.', tela:'novo', alvo:'#rdoColabCard' },
+        { titulo:'Nenhuma equipe aparece?', texto:'As equipes (EQ1, EQ2…) são cadastradas pelo administrador. Se a lista estiver vazia, peça ao administrador ou use "Não consegui resolver" aqui na ajuda.' }
+      ] },
+    { slug:'colaboradores', icone:'🧑‍🔧', categoria:'Equipes e colaboradores', titulo:'Como registrar colaboradores',
+      resumo:'Cadastrar a pessoa para ela aparecer no RDO da obra.',
+      palavras:'colaborador colaboradores cadastrar colaborador registrar funcionario pessoa trabalhador novo colaborador nao aparece no rdo',
+      passos:[
+        { titulo:'Aba Colaboradores', texto:'Toque na aba Colaboradores.', alvo:'.tab-btn[data-view="colaboradores"]', acao:'clique' },
+        { titulo:'Nome', texto:'Escreva o nome como deve aparecer no RDO.', tela:'colaboradores', alvo:'#colaboradorNome' },
+        { titulo:'Função', texto:'Escolha a função da pessoa.', tela:'colaboradores', alvo:'#colaboradorFuncaoSel' },
+        { titulo:'Obra', texto:'Escolha a obra. O colaborador só aparece no RDO desta obra.', tela:'colaboradores', alvo:'#colaboradorObra' },
+        { titulo:'Salvar', texto:'Toque em "Salvar colaborador". Depois ele já aparece no item 3 do RDO da obra.', tela:'colaboradores', alvo:'#colaboradorForm button[type="submit"]' }
+      ] },
+    { slug:'producao', icone:'📊', categoria:'Produção', titulo:'Como registrar a produção diária',
+      resumo:'Lançar no RDO o que foi executado no dia.',
+      palavras:'producao produção diaria lancar producao quantidade servico executado planilha medicao metros registrar producao nao consigo registrar',
+      passos:[
+        { titulo:'Abrir a Nova RDO', texto:'A produção é lançada dentro do RDO do dia. Toque em Nova RDO.', alvo:'.tab-btn[data-view="novo"]', acao:'clique' },
+        { titulo:'Obra certa', texto:'A planilha de serviços vem da obra escolhida aqui.', tela:'novo', alvo:'#rdoObra' },
+        { titulo:'Equipes do dia', texto:'Marque antes as equipes que trabalharam (item 3): a produção é lançada por equipe.', tela:'novo', alvo:'#rdoColabCard' },
+        { titulo:'Planilha da obra', texto:'Aqui você marca cada serviço executado, a equipe que executou e a quantidade.', tela:'novo', alvo:'#rdoServicosCard' },
+        { titulo:'Dia sem produção', texto:'Se não houve produção, marque "Nenhum serviço atribuído" e explique o motivo.', tela:'novo', alvo:'#rdoSemProducao' },
+        { titulo:'Enviar', texto:'No fim, toque em "Enviar RDO".', tela:'novo', alvo:'#btnSubmitRdo' }
+      ] },
+    { slug:'consultar', icone:'🔎', categoria:'Consultas e relatórios', titulo:'Como consultar RDOs anteriores',
+      resumo:'Encontrar e abrir um RDO já lançado.',
+      palavras:'consultar rdo anterior antigo ver rdo achar rdo procurar buscar historico rdos lancados onde fica o rdo recuperar rdo excluido lixeira',
+      passos:[
+        { titulo:'Painel', texto:'Toque em Painel.', alvo:'.tab-btn[data-view="dashboard"]', acao:'clique' },
+        { titulo:'Filtros', texto:'Filtre por obra, período (De/Até), responsável, status ou escreva um texto em Buscar.', tela:'dashboard', alvo:'#filterBar' },
+        { titulo:'Abrir um RDO', texto:'Toque na linha do RDO para abrir.', tela:'dashboard', alvo:'#rdoTableBody tr[data-id]' },
+        { titulo:'RDO excluído?', texto:'Os RDOs excluídos ficam na Lixeira, de onde podem ser restaurados.', tela:'dashboard', alvo:'#fTrash' }
+      ] },
+    { slug:'corrigir', icone:'✏️', categoria:'RDO', titulo:'Como corrigir uma informação de um RDO',
+      resumo:'Editar um RDO já lançado.',
+      palavras:'corrigir editar alterar mudar informacao errada rdo errado consertar arrumar rdo modificar',
+      passos:[
+        { titulo:'Painel', texto:'Toque em Painel.', alvo:'.tab-btn[data-view="dashboard"]', acao:'clique' },
+        { titulo:'Abrir o RDO', texto:'Encontre o RDO (use os filtros se precisar) e toque na linha dele.', tela:'dashboard', alvo:'#rdoTableBody tr[data-id]', acao:'clique' },
+        { titulo:'Editar', texto:'Toque em "Editar", corrija e salve. Um RDO já enviado ou aprovado mantém o status ao ser salvo.', tela:'detail', alvo:'#btnEditRdo' }
+      ] },
+    { slug:'exportar', icone:'⬇️', categoria:'Consultas e relatórios', titulo:'Como exportar relatórios',
+      resumo:'PDF do RDO e medição.',
+      palavras:'exportar relatorio pdf imprimir baixar gerar pdf excel medicao cdm relatorio financeiro planilha enviar cliente',
+      passos:[
+        { titulo:'Painel', texto:'Toque em Painel.', alvo:'.tab-btn[data-view="dashboard"]', acao:'clique' },
+        { titulo:'Abrir o RDO', texto:'Toque no RDO que quer exportar.', tela:'dashboard', alvo:'#rdoTableBody tr[data-id]', acao:'clique' },
+        { titulo:'Exportar PDF', texto:'Toque em "⬇ Exportar PDF" para gerar o PDF do RDO.', tela:'detail', alvo:'#btnExportPdf' },
+        { titulo:'Medição (Excel / CDM)', texto:'Quem tem acesso à medição encontra no Painel o botão "⬇ Medição (Excel / CDM)". Se ele não aparece para você, o seu usuário não tem esse acesso.', tela:'dashboard', alvo:'#btnExportCdm' }
+      ] },
+    { slug:'planejamento', icone:'🗓️', categoria:'Planejamento', titulo:'Como utilizar o planejamento da obra',
+      resumo:'Ver e organizar os serviços planejados de cada obra.',
+      palavras:'planejamento planejar cronograma servicos planejados importar servicos planejamento erro mapa projeto',
+      passos:[
+        { titulo:'Aba Planejamento', texto:'Toque em Planejamento.', alvo:'.tab-btn[data-view="planejamento"]', acao:'clique' },
+        { titulo:'Escolha a obra', texto:'Toque na obra para abrir o planejamento dela: os serviços planejados, a situação de cada um e os projetos.', tela:'planejamento', alvo:'#planejamentoObraList' },
+        { titulo:'Dentro da obra', texto:'Na obra aberta você cadastra e edita os serviços planejados, importa uma lista de serviços e exporta para Excel. Se algo der erro, use "Não consegui resolver" e descreva o que apareceu.' }
+      ] },
+    { slug:'ponto', icone:'⏱️', categoria:'Ponto', titulo:'Como utilizar o controle de ponto',
+      resumo:'Registrar entrada, almoço e saída da equipe.',
+      palavras:'ponto bater ponto registrar ponto entrada saida almoco falta corrigir ponto horas extras historico ponto feriado',
+      passos:[
+        { titulo:'Aba Ponto', texto:'Toque em Ponto.', alvo:'.tab-btn[data-view="ponto"]', acao:'clique' },
+        { titulo:'Bater ponto', texto:'A aba "Bater ponto" mostra os colaboradores das suas obras.', tela:'ponto', alvo:'[data-pontoaba="dia"]' },
+        { titulo:'Dia', texto:'Use ◀ ▶ para mudar o dia ou "Hoje" para voltar ao dia atual.', tela:'ponto', alvo:'[data-pontodia="hoje"]' },
+        { titulo:'Registrar', texto:'Toque no botão de cada colaborador para registrar a próxima marcação (entrada, saída e volta do almoço, saída).', tela:'ponto', alvo:'[data-pontobater]' },
+        { titulo:'Falta e correção', texto:'"Falta" registra a ausência do dia; "Corrigir" ajusta um horário registrado errado.', tela:'ponto', alvo:'[data-pontocorrigir]' },
+        { titulo:'Histórico', texto:'Em "Histórico de ponto" você consulta os registros anteriores.', tela:'ponto', alvo:'[data-pontoaba="historico"]' }
+      ] },
+    { slug:'avisos', icone:'🔔', categoria:'Avisos', titulo:'Como funcionam os avisos (sininho)',
+      resumo:'Avisos de RDO e notificações no celular.',
+      palavras:'aviso avisos sininho notificacao notificacoes celular nao recebo notificacao alerta lembrete',
+      passos:[
+        { titulo:'Sininho', texto:'Toque no sininho para ver os seus avisos. Tocar em um aviso marca como lido.', alvo:'#btnNotif', acao:'clique' },
+        { titulo:'No celular', texto:'Dentro do painel de avisos há a opção de ativar as notificações neste aparelho e de enviar um teste.' }
+      ] }
+  ];
+
+  // Problemas: verificações automáticas + orientações (nada é corrigido sozinho)
+  var AJ_PROBLEMAS = [
+    { slug:'rdo-nao-salva', titulo:'Não consigo salvar ou enviar o RDO', categoria:'Problemas',
+      palavras:'nao consigo salvar nao salva erro ao salvar nao envia enviar rdo nao vai rdo travado nao consigo criar um rdo nao consigo criar rdo',
+      verif:['conexao','sessao','obras','formRdo','pendentes','erros'], tutorial:'rdo-preencher',
+      dicas:['Os itens 3 (Equipes e colaboradores) e 4 (Serviços do dia) são obrigatórios — confira se estão preenchidos.', 'Marque a confirmação no item 10 antes de enviar.', 'Sem internet o RDO fica guardado no aparelho e é enviado quando a conexão voltar.'] },
+    { slug:'equipe-nao-aparece', titulo:'Minha equipe não aparece', categoria:'Problemas',
+      palavras:'equipe nao aparece minha equipe sumiu nao acho equipe lista de equipes vazia',
+      verif:['conexao','obras'], tutorial:'equipes',
+      dicas:['Confira se a obra certa está escolhida no item 1 do RDO.', 'As equipes (EQ1, EQ2…) são cadastradas pelo administrador. Se a lista estiver vazia, peça a ele.'] },
+    { slug:'colaborador-nao-aparece', titulo:'O colaborador não aparece no RDO', categoria:'Problemas',
+      palavras:'colaborador nao aparece funcionario nao aparece pessoa nao aparece no rdo nao consigo cadastrar colaborador',
+      verif:['conexao','obras'], tutorial:'colaboradores',
+      dicas:['O colaborador só aparece no RDO da obra em que foi cadastrado — confira a obra no cadastro dele (aba Colaboradores).', 'Colaborador marcado como inativo não aparece no RDO.'] },
+    { slug:'obra-nao-aparece', titulo:'A obra não aparece para mim', categoria:'Problemas',
+      palavras:'obra nao aparece nao vejo a obra sumiu obra nenhuma obra liberada obra errada',
+      verif:['conexao','obras'],
+      dicas:['Cada pessoa só vê as obras liberadas no cadastro dela. Se faltar uma obra, peça ao administrador para liberar em Usuários.'] },
+    { slug:'producao-erro', titulo:'Não consigo registrar a produção', categoria:'Problemas',
+      palavras:'nao consigo registrar a producao planilha vazia nao aparece servico sem servicos quantidade nao salva',
+      verif:['conexao','obras','formRdo'], tutorial:'producao',
+      dicas:['A planilha depende da obra escolhida e dos serviços contratados dela. Se aparecer que a obra não tem planilha, o administrador precisa definir em Obras.', 'Marque antes as equipes do dia (item 3).'] },
+    { slug:'lento-offline', titulo:'O sistema está lento, sem conexão ou não atualiza', categoria:'Problemas',
+      palavras:'lento travando nao carrega sem internet offline nao atualiza tela branca demora erro de conexao',
+      verif:['conexao','sessao','pendentes','erros'],
+      dicas:['Feche e abra o app de novo (ou recarregue a página).', 'Verifique o sinal de internet do aparelho.'] },
+    { slug:'financeiro', titulo:'Onde encontro os relatórios financeiros?', categoria:'Consultas e relatórios',
+      palavras:'relatorio financeiro financeiro valores medicao quanto vale faturamento',
+      verif:['acessoFin'], tutorial:'exportar',
+      dicas:['A medição em Excel/CDM fica no Painel, no botão "⬇ Medição (Excel / CDM)", para quem tem acesso.', 'O antigo módulo Financeiro foi retirado do menu do sistema.'] }
+  ];
+
+  var AJ_SINONIMOS = { rdo:['relatorio','diario'], colaborador:['funcionario','pessoa','trabalhador','peao'], producao:['produzido','executado','quantidade','metragem'],
+    salvar:['gravar','enviar','mandar'], erro:['problema','falha','bug','travou'], ponto:['marcacao','horario','batida'], exportar:['baixar','imprimir','pdf'] };
+  var AJ_PARADAS = ' a o e de da do das dos um uma para pra por com sem no na nos nas em que como eu meu minha me se ao os as nao sim faco fazer consigo esta estou tem ter onde qual quando ja mais isso esse essa '.split(' ');
+
+  function ajNorm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim(); }
+  function ajTokens(s){ return ajNorm(s).split(' ').filter(function(t){ return t.length>1 && AJ_PARADAS.indexOf(t)<0; }); }
+
+  // ---------- Permissões: o tutorial só aparece se as telas dele estão liberadas para a pessoa ----------
+  function ajTelaLiberada(tela){
+    if(!tela || tela==='dashboard' || tela==='novo' || tela==='detail') return true;
+    var b = document.querySelector('.tab-btn[data-view="'+tela+'"]');
+    return !!(b && b.style.display!=='none' && getComputedStyle(b).display!=='none');
+  }
+  function ajTutLiberado(t){
+    if(!t || t.ativo===false) return false;
+    if(t.soAdmin && !(state.currentUser && state.currentUser.is_admin)) return false;
+    return (t.passos||[]).every(function(p){
+      if(p.tela && !ajTelaLiberada(p.tela)) return false;
+      var m = p.alvo && /data-view="([a-z-]+)"/.exec(p.alvo);
+      return !(m && !ajTelaLiberada(m[1]));
+    });
+  }
+  function ajTutoriais(){
+    var porSlug = {};
+    AJ_FABRICA.forEach(function(t){ porSlug[t.slug] = Object.assign({ origem:'fabrica' }, t); });
+    AJ.tutDb.forEach(function(r){
+      var base = porSlug[r.slug];
+      porSlug[r.slug] = { slug:r.slug, titulo:r.titulo, categoria:r.categoria, palavras:r.palavras||'', resumo:r.resumo||'', passos:Array.isArray(r.passos)?r.passos:[],
+        ativo:r.ativo!==false, ordem:r.ordem, icone:(base && base.icone) || '📘', origem: base ? 'editado' : 'novo', dbId:r.id };
+    });
+    return Object.keys(porSlug).map(function(k){ return porSlug[k]; });
+  }
+  function ajTutPorSlug(slug){ return ajTutoriais().filter(function(t){ return t.slug===slug; })[0] || null; }
+  function ajCarregarTutoriais(){
+    if(!supabaseClient || !state.currentUser) return Promise.resolve();
+    return Promise.resolve(supabaseClient.from('ajuda_tutoriais').select('*').order('ordem')).then(function(res){
+      if(res.error){ if(/ajuda_tutoriais|relation|schema cache/i.test(res.error.message||'')) AJ.semBanco = true; return; }
+      AJ.tutDb = res.data || []; AJ.tutDbOk = true;
+    }, function(){});
+  }
+  function ajLog(tipo, topico, texto, achou){
+    if(!supabaseClient || !state.currentUser || AJ.semBanco) return;
+    var row = { tipo:tipo, topico:topico||null, texto: texto ? String(texto).slice(0,500) : null, tela:state.view||null };
+    if(achou===true || achou===false) row.achou = achou;
+    Promise.resolve(supabaseClient.from('ajuda_eventos').insert(row)).then(function(res){ if(res && res.error && /ajuda_eventos|relation/i.test(res.error.message||'')) AJ.semBanco = true; }, function(){});
+  }
+
+  // ---------- Erros recentes (para diagnóstico e para anexar à solicitação) ----------
+  function ajGuardarErro(txt){
+    txt = String(txt||'').slice(0,300); if(!txt) return;
+    AJ.erros.push({ quando:new Date().toISOString(), tela:state.view||'', texto:txt });
+    if(AJ.erros.length>12) AJ.erros.shift();
+  }
+  window.addEventListener('error', function(e){ ajGuardarErro((e && e.message) || 'Erro na tela'); });
+  window.addEventListener('unhandledrejection', function(e){ var r = e && e.reason; ajGuardarErro((r && (r.message || r.error_description)) || String(r||'')); });
+  var ajToastOriginal = toast;
+  toast = function(msg, kind){ if(kind==='error' && !/^🔔/.test(String(msg))) ajGuardarErro(msg); return ajToastOriginal(msg, kind); };
+
+  // ---------- Botão flutuante ----------
+  function ajudaIniciar(){
+    if(!document.getElementById('ajFab')){
+      var b = document.createElement('button');
+      b.type = 'button'; b.id = 'ajFab'; b.className = 'aj-fab'; b.title = 'Ajuda'; b.setAttribute('aria-label', 'Abrir a Central de Ajuda');
+      b.textContent = '?';
+      b.addEventListener('click', function(){ AJ.aberto ? ajFechar() : ajAbrir(); });
+      document.body.appendChild(b);
+    }
+    document.getElementById('ajFab').hidden = false;
+    var tab = document.getElementById('tabAjuda'); if(tab) tab.style.display = (state.currentUser && state.currentUser.is_admin) ? '' : 'none';
+    ajCarregarTutoriais();
+    if(location.hash==='#ajuda') setTimeout(ajAbrirPorAviso, 600);
+  }
+  function ajudaSair(){
+    ajTourFim(true); ajFechar();
+    var b = document.getElementById('ajFab'); if(b) b.hidden = true;
+    AJ.tutDb = []; AJ.tutDbOk = false; AJ.semBanco = false;
+  }
+  function ajAbrirPorAviso(){
+    try{ history.replaceState(null, '', location.pathname); }catch(e){}
+    if(!state.currentUser) return;
+    if(state.currentUser.is_admin){ goto('ajuda'); return; }
+    ajAbrir(); ajMinhas();
+  }
+  window.addEventListener('hashchange', function(){ if(location.hash==='#ajuda' && state.currentUser) ajAbrirPorAviso(); });
+
+  // ---------- Painel lateral ----------
+  function ajAbrir(){
+    if(!document.getElementById('ajPainel')){
+      var p = document.createElement('aside');
+      p.id = 'ajPainel'; p.className = 'aj-painel aj-root'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Central de Ajuda');
+      p.innerHTML = '<div class="aj-topo"><button type="button" class="aj-voltar" id="ajVoltar" aria-label="Voltar" hidden>←</button><b id="ajTitulo">Central de Ajuda</b><button type="button" class="aj-x" id="ajFechar" aria-label="Fechar">✕</button></div><div class="aj-corpo" id="ajCorpo"></div>';
+      document.body.appendChild(p);
+      p.querySelector('#ajFechar').addEventListener('click', ajFechar);
+      p.querySelector('#ajVoltar').addEventListener('click', ajVoltar);
+      document.addEventListener('keydown', ajEsc, true);
+    }
+    AJ.aberto = true; AJ.pilha = [];
+    ajInicio();
+  }
+  function ajFechar(){
+    var p = document.getElementById('ajPainel'); if(p) p.remove();
+    AJ.aberto = false; document.removeEventListener('keydown', ajEsc, true);
+  }
+  function ajEsc(e){ if(e.key==='Escape' && !AJ.tour){ ajFechar(); } }
+  function ajTela(titulo, html, semVoltar){
+    var corpo = document.getElementById('ajCorpo'); if(!corpo) return null;
+    document.getElementById('ajTitulo').textContent = titulo;
+    document.getElementById('ajVoltar').hidden = !!semVoltar || !AJ.pilha.length;
+    corpo.innerHTML = html; corpo.scrollTop = 0;
+    return corpo;
+  }
+  function ajIr(fn){ AJ.pilha.push(AJ.atual); AJ.atual = fn; fn(); }
+  function ajVoltar(){ var fn = AJ.pilha.pop(); AJ.atual = fn || ajInicio; (fn || ajInicio)(); }
+
+  function ajItemHtml(attr, ic, titulo, sub, extra){
+    return '<button type="button" class="aj-item'+(extra||'')+'" '+attr+'><span class="aj-ic">'+ic+'</span><span>'+esc(titulo)+(sub ? '<small>'+esc(sub)+'</small>' : '')+'</span></button>';
+  }
+  function ajInicio(){
+    AJ.atual = ajInicio; AJ.pilha = [];
+    var tuts = ajTutoriais().filter(ajTutLiberado).sort(function(a,b){ return (a.ordem||AJ_FABRICA.indexOf(a)) - (b.ordem||AJ_FABRICA.indexOf(b)); });
+    var contexto = ajSugestaoContexto(tuts);
+    var corpo = ajTela('Central de Ajuda',
+      '<div class="aj-busca"><textarea id="ajPergunta" placeholder="Escreva sua dúvida. Ex.: minha equipe não aparece" aria-label="Escreva sua dúvida"></textarea><button type="button" class="btn primary" id="ajPerguntar">Perguntar</button></div>'+
+      (contexto ? '<div class="aj-sec">Para esta tela</div><div class="aj-lista">'+ajItemHtml('data-tut="'+esc(contexto.slug)+'"', contexto.icone||'📘', contexto.titulo, 'Passo a passo nesta tela', ' aj-destaque')+'</div>' : '')+
+      '<div class="aj-sec">Passo a passo</div><div class="aj-lista">'+tuts.map(function(t){ return ajItemHtml('data-tut="'+esc(t.slug)+'"', t.icone||'📘', t.titulo, t.resumo); }).join('')+'</div>'+
+      '<div class="aj-sec">Problemas</div><div class="aj-lista">'+
+        ajItemHtml('data-ir="problemas"', '🛠️', 'Estou com um problema no sistema', 'Verificações automáticas e o que fazer')+
+        ajItemHtml('data-ir="perguntar"', '💬', 'Quero fazer uma pergunta', 'Escreva com as suas palavras')+
+        ajItemHtml('data-ir="chamado"', '🆘', 'Não consegui resolver meu problema', 'Enviar uma solicitação ao suporte')+
+        ajItemHtml('data-ir="minhas"', '📨', 'Minhas solicitações', 'Acompanhar as respostas')+
+      '</div>'+
+      (state.currentUser && state.currentUser.is_admin ? '<div class="aj-sec">Administração</div><div class="aj-lista">'+ajItemHtml('data-ir="admin"', '⚙️', 'Administrar a Central de Ajuda', 'Solicitações, tutoriais e estatísticas')+'</div>' : ''), true);
+    if(!corpo) return;
+    ajLigarItens(corpo);
+    var ta = corpo.querySelector('#ajPergunta');
+    corpo.querySelector('#ajPerguntar').addEventListener('click', function(){ ajPerguntar(ta.value); });
+    ta.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); ajPerguntar(ta.value); } });
+  }
+  function ajLigarItens(corpo){
+    corpo.querySelectorAll('[data-tut]').forEach(function(b){ b.addEventListener('click', function(){ var t = ajTutPorSlug(b.getAttribute('data-tut')); if(t) ajIr(function(){ ajVerTutorial(t); }); }); });
+    corpo.querySelectorAll('[data-prob]').forEach(function(b){ b.addEventListener('click', function(){ var p = AJ_PROBLEMAS.filter(function(x){ return x.slug===b.getAttribute('data-prob'); })[0]; if(p) ajIr(function(){ ajVerProblema(p); }); }); });
+    corpo.querySelectorAll('[data-ir]').forEach(function(b){ b.addEventListener('click', function(){
+      var ir = b.getAttribute('data-ir');
+      if(ir==='problemas') ajIr(ajListaProblemas);
+      else if(ir==='perguntar') { var ta = document.getElementById('ajPergunta'); if(ta){ ta.focus(); } else ajIr(ajInicio); }
+      else if(ir==='chamado') ajIr(function(){ ajChamado({}); });
+      else if(ir==='minhas') ajIr(ajMinhas);
+      else if(ir==='admin'){ ajFechar(); goto('ajuda'); }
+    }); });
+  }
+  function ajSugestaoContexto(tuts){
+    var mapa = { novo:'rdo-preencher', dashboard:'consultar', detail:'corrigir', colaboradores:'colaboradores', ponto:'ponto', planejamento:'planejamento', 'planejamento-obra':'planejamento' };
+    var slug = mapa[state.view]; if(!slug) return null;
+    return tuts.filter(function(t){ return t.slug===slug; })[0] || null;
+  }
+
+  function ajVerTutorial(t){
+    ajLog('tutorial', t.slug);
+    var corpo = ajTela(t.titulo,
+      (t.resumo ? '<p style="margin:0 0 10px;">'+esc(t.resumo)+'</p>' : '')+
+      '<div class="aj-caixa"><b>Passo a passo</b><ol>'+(t.passos||[]).map(function(p){ return '<li><b>'+esc(p.titulo||'')+'</b> — '+esc(p.texto||'')+'</li>'; }).join('')+'</ol></div>'+
+      '<button type="button" class="btn primary" id="ajComecar" style="width:100%;margin-top:6px;">▶ Me mostre na tela</button>'+
+      '<p class="hint" style="margin:8px 0 0;">O sistema vai destacar cada lugar onde você precisa tocar. Você pode avançar, voltar ou sair quando quiser.</p>');
+    if(corpo) corpo.querySelector('#ajComecar').addEventListener('click', function(){ ajTourIniciar(t); });
+  }
+
+  // ---------- Perguntas em texto livre ----------
+  function ajItensBusca(){
+    var tuts = ajTutoriais().filter(ajTutLiberado).map(function(t){ return { tipo:'tut', slug:t.slug, titulo:t.titulo, icone:t.icone||'📘', categoria:t.categoria, chave:t.titulo+' '+t.palavras+' '+(t.resumo||'') }; });
+    var probs = AJ_PROBLEMAS.filter(function(p){ return !p.tutorial || ajTutLiberado(ajTutPorSlug(p.tutorial)||{}); })
+      .map(function(p){ return { tipo:'prob', slug:p.slug, titulo:p.titulo, icone:'🛠️', categoria:p.categoria, chave:p.titulo+' '+p.palavras }; });
+    return probs.concat(tuts);
+  }
+  function ajPontuar(pergunta, item){
+    var q = ajNorm(pergunta), qt = ajTokens(pergunta), chave = ajNorm(item.chave), ct = ajTokens(item.chave);
+    var exp = qt.slice(); qt.forEach(function(t){ Object.keys(AJ_SINONIMOS).forEach(function(k){ if(AJ_SINONIMOS[k].indexOf(t)>-1) exp.push(k); }); });
+    var pts = 0;
+    exp.forEach(function(t){ if(ct.indexOf(t)>-1) pts += 1; else if(t.length>4 && ct.some(function(c){ return c.indexOf(t.slice(0,5))===0; })) pts += 0.6; });
+    ajNorm(item.titulo).split(' ').length>1 && q.indexOf(ajNorm(item.titulo))>-1 && (pts += 3);
+    // frases das palavras-chave ditas por inteiro valem mais
+    if(/nao|n /.test(' '+q+' ') && item.tipo==='prob') pts += 0.5;
+    return pts;
+  }
+  function ajPerguntar(texto){
+    texto = String(texto||'').trim();
+    if(texto.length<3){ toast('Escreva a sua dúvida com algumas palavras.', 'error'); return; }
+    var res = ajItensBusca().map(function(i){ return { i:i, p:ajPontuar(texto, i) }; }).filter(function(x){ return x.p>=1.5; })
+      .sort(function(a,b){ return b.p-a.p; }).slice(0,4);
+    // assunto que existe no sistema mas não está liberado para este usuário (ex.: Planejamento)
+    var bloqueado = null;
+    if(!res.length){
+      var melhor = ajTutoriais().filter(function(t){ return t.ativo!==false && !ajTutLiberado(t); })
+        .map(function(t){ return { t:t, p:ajPontuar(texto, { tipo:'tut', titulo:t.titulo, chave:t.titulo+' '+t.palavras+' '+(t.resumo||'') }) }; })
+        .sort(function(a,b){ return b.p-a.p; })[0];
+      if(melhor && melhor.p>=1.5) bloqueado = melhor.t;
+    }
+    ajLog('pergunta', res.length ? res[0].i.slug : (bloqueado ? bloqueado.slug : null), texto, res.length>0);
+    ajIr(function(){ ajRespostas(texto, res, bloqueado); });
+  }
+  function ajRespostas(texto, res, bloqueado){
+    var html = '<div class="aj-caixa"><b>Sua dúvida:</b> '+esc(texto)+'</div>';
+    if(bloqueado) html += '<div class="aj-caixa"><b>'+esc(bloqueado.categoria||bloqueado.titulo)+'</b> não está liberado para o seu usuário, por isso não aparece no seu menu. Se você precisa usar, peça ao administrador para liberar o acesso.</div>';
+    if(res.length){
+      html += '<div class="aj-sec">Encontrei isto</div><div class="aj-lista">'+res.map(function(x, k){
+        return ajItemHtml(x.i.tipo==='tut' ? 'data-tut="'+esc(x.i.slug)+'"' : 'data-prob="'+esc(x.i.slug)+'"', x.i.icone, x.i.titulo, x.i.tipo==='tut' ? 'Passo a passo' : 'Verificar o problema', k===0 ? ' aj-destaque' : '');
+      }).join('')+'</div>'+
+      '<div id="ajIa"></div>'+
+      '<p class="hint" style="margin:12px 0 6px;">Não era isso?</p>'+ajCategoriasHtml()+
+      '<div class="aj-lista" style="margin-top:8px;">'+ajItemHtml('data-ir="chamado"', '🆘', 'Não consegui resolver meu problema', 'Enviar ao suporte')+'</div>';
+    } else {
+      html += (bloqueado ? '<p class="hint" style="margin:10px 0 6px;">Se a dúvida for sobre outra parte do sistema, escolha abaixo:</p>' : '<div class="aj-caixa">Não encontrei uma resposta certa para essa dúvida no manual do RDO. <b>Sobre qual parte do sistema ela é?</b></div>')+ajCategoriasHtml()+
+        '<div id="ajIa"></div>'+
+        '<div class="aj-lista" style="margin-top:10px;">'+ajItemHtml('data-ir="chamado"', '🆘', 'Não consegui resolver meu problema', 'Enviar a dúvida ao suporte')+'</div>';
+    }
+    var corpo = ajTela('Resposta', html);
+    if(!corpo) return;
+    ajLigarItens(corpo); ajLigarCategorias(corpo);
+    AJ.ultimaPergunta = texto;
+    ajPerguntarIa(texto);
+  }
+  function ajCategoriasHtml(){
+    var usadas = {}; ajItensBusca().forEach(function(i){ usadas[i.categoria] = 1; });
+    return '<div>'+AJ_CATEGORIAS.filter(function(c){ return usadas[c]; }).map(function(c){ return '<button type="button" class="aj-chip" data-cat="'+esc(c)+'">'+esc(c)+'</button>'; }).join('')+'</div>';
+  }
+  function ajLigarCategorias(corpo){
+    corpo.querySelectorAll('[data-cat]').forEach(function(b){ b.addEventListener('click', function(){
+      var c = b.getAttribute('data-cat');
+      var itens = ajItensBusca().filter(function(i){ return i.categoria===c; });
+      ajIr(function(){
+        var cp = ajTela(c, '<div class="aj-lista">'+itens.map(function(i){ return ajItemHtml(i.tipo==='tut' ? 'data-tut="'+esc(i.slug)+'"' : 'data-prob="'+esc(i.slug)+'"', i.icone, i.titulo, ''); }).join('')+'</div>'+
+          '<div class="aj-lista" style="margin-top:10px;">'+ajItemHtml('data-ir="chamado"', '🆘', 'Não consegui resolver meu problema', '')+'</div>');
+        if(cp) ajLigarItens(cp);
+      });
+    }); });
+  }
+  // IA opcional: só responde se a função "ajuda-ia" estiver publicada e com chave no servidor; usa só o manual do RDO
+  function ajPerguntarIa(texto){
+    if(AJ.iaAtiva===false || !supabaseClient) return;
+    var box = document.getElementById('ajIa'); if(!box) return;
+    var manual = ajTutoriais().filter(ajTutLiberado).map(function(t){ return { id:t.slug, titulo:t.titulo, passos:(t.passos||[]).map(function(p){ return (p.titulo||'')+': '+(p.texto||''); }) }; })
+      .concat(AJ_PROBLEMAS.map(function(p){ return { id:p.slug, titulo:p.titulo, passos:p.dicas }; }));
+    var ctrl = window.AbortController ? new AbortController() : null; var t = setTimeout(function(){ if(ctrl) ctrl.abort(); }, 12000);
+    supabaseClient.auth.getSession().then(function(s){
+      var tok = s && s.data && s.data.session && s.data.session.access_token; if(!tok) return null;
+      return fetch(SUPABASE_URL+'/functions/v1/ajuda-ia', { method:'POST', signal: ctrl ? ctrl.signal : undefined,
+        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+tok, 'apikey':SUPABASE_ANON_KEY },
+        body: JSON.stringify({ pergunta:texto, tela:AJ_TELAS[state.view]||state.view||'', manual:manual }) });
+    }).then(function(r){
+      clearTimeout(t);
+      if(!r || r.status===404){ AJ.iaAtiva = false; return null; }
+      return r.json();
+    }).then(function(j){
+      if(!j) return;
+      if(j.ativo===false){ AJ.iaAtiva = false; return; }
+      AJ.iaAtiva = true;
+      var b = document.getElementById('ajIa'); if(!b || !j.resposta) return;
+      var ids = (j.ids||[]).filter(function(id){ return ajTutPorSlug(id) || AJ_PROBLEMAS.some(function(p){ return p.slug===id; }); });
+      b.innerHTML = '<div class="aj-caixa">'+esc(j.resposta).replace(/\n/g,'<br>')+'<div class="aj-ia">Resposta do assistente, com base no manual do RDO.</div></div>'+
+        (ids.length ? '<div class="aj-lista">'+ids.map(function(id){ var tt = ajTutPorSlug(id); return tt ? ajItemHtml('data-tut="'+esc(id)+'"', tt.icone||'📘', tt.titulo, 'Passo a passo') : ajItemHtml('data-prob="'+esc(id)+'"', '🛠️', (AJ_PROBLEMAS.filter(function(p){ return p.slug===id; })[0]||{}).titulo, 'Verificar'); }).join('')+'</div>' : '');
+      ajLigarItens(b);
+    }).catch(function(){ clearTimeout(t); if(AJ.iaAtiva!==true) AJ.iaAtiva = false; });
+  }
+
+  // ---------- Problemas: verificações automáticas ----------
+  function ajListaProblemas(){
+    var corpo = ajTela('Estou com um problema', '<p style="margin:0 0 10px;">Escolha o que está acontecendo. Eu confiro o que dá para conferir automaticamente e mostro o que fazer.</p><div class="aj-lista">'+
+      AJ_PROBLEMAS.map(function(p){ return ajItemHtml('data-prob="'+esc(p.slug)+'"', '🛠️', p.titulo, ''); }).join('')+'</div>'+
+      '<div class="aj-lista" style="margin-top:10px;">'+ajItemHtml('data-ir="chamado"', '🆘', 'Não consegui resolver meu problema', 'Enviar ao suporte')+'</div>');
+    if(corpo) ajLigarItens(corpo);
+  }
+  function ajVerProblema(p){
+    ajLog('problema', p.slug);
+    var corpo = ajTela(p.titulo, '<div class="aj-caixa" id="ajVerif"><b>Conferindo…</b></div>'+
+      '<div class="aj-caixa"><b>O que fazer</b><ul>'+p.dicas.map(function(d){ return '<li>'+esc(d)+'</li>'; }).join('')+'</ul></div>'+
+      '<div class="aj-lista">'+(p.tutorial && ajTutPorSlug(p.tutorial) && ajTutLiberado(ajTutPorSlug(p.tutorial)) ? ajItemHtml('data-tut="'+esc(p.tutorial)+'"', '▶', 'Ver o passo a passo', ajTutPorSlug(p.tutorial).titulo) : '')+
+      ajItemHtml('data-ir="chamado"', '🆘', 'Não consegui resolver meu problema', 'Enviar ao suporte com estas verificações')+'</div>');
+    if(!corpo) return;
+    ajLigarItens(corpo);
+    ajDiagnostico(p.verif).then(function(linhas){
+      AJ.ultimoDiag = { problema:p.titulo, linhas:linhas };
+      var b = document.getElementById('ajVerif'); if(!b) return;
+      b.innerHTML = '<b>Verificações</b><ul>'+linhas.map(function(l){ return '<li class="'+(l.ok===true?'aj-ok':(l.ok===false?'aj-ruim':'aj-alerta'))+'">'+(l.ok===true?'✔ ':(l.ok===false?'✖ ':'• '))+esc(l.texto)+'</li>'; }).join('')+'</ul>';
+    });
+  }
+  function ajDiagnostico(lista){
+    var u = state.currentUser || {}, linhas = [], esperas = [];
+    (lista||[]).forEach(function(k){
+      if(k==='conexao') linhas.push(navigator.onLine ? { ok:true, texto:'O aparelho está com internet.' } : { ok:false, texto:'O aparelho está SEM internet agora. O que você salvar fica guardado e é enviado quando a conexão voltar.' });
+      if(k==='sessao') esperas.push(supabaseClient.auth.getSession().then(function(s){
+        linhas.push(s && s.data && s.data.session ? { ok:true, texto:'Você está conectado ao sistema com o seu usuário.' } : { ok:false, texto:'A sua sessão expirou. Saia e entre de novo.' });
+      }, function(){ linhas.push({ ok:null, texto:'Não deu para conferir a sua sessão.' }); }));
+      if(k==='obras'){
+        var lib = vkObrasLiberadas(state.obras||[]);
+        linhas.push(lib.length ? { ok:true, texto:'Obras liberadas para você: '+lib.map(function(o){ return o.nome; }).slice(0,6).join(', ')+(lib.length>6?'…':'')+'.' } : { ok:false, texto:'Nenhuma obra está liberada para o seu usuário. O administrador precisa liberar em Usuários.' });
+      }
+      if(k==='formRdo'){
+        if(state.view!=='novo') linhas.push({ ok:null, texto:'Para conferir os campos do RDO, abra a Nova RDO (ou o RDO que está editando) e abra esta ajuda de novo.' });
+        else {
+          var ob = document.getElementById('rdoObra');
+          linhas.push(ob && ob.value ? { ok:true, texto:'Obra escolhida.' } : { ok:false, texto:'A obra (item 1) não está escolhida.' });
+          var dt = document.getElementById('rdoData');
+          linhas.push(dt && dt.value ? { ok:true, texto:'Data preenchida.' } : { ok:false, texto:'A data (item 1) está vazia.' });
+          var dc = document.getElementById('rdoDeclaracao');
+          if(dc) linhas.push(dc.checked ? { ok:true, texto:'Confirmação do item 10 marcada.' } : { ok:null, texto:'A confirmação do item 10 ainda não está marcada (precisa para enviar).' });
+          var sp = document.getElementById('rdoSemProducao');
+          var temServ = !!document.querySelector('#rdoServicosBox input[type="number"]');
+          if(sp && !sp.checked && !temServ) linhas.push({ ok:null, texto:'Nenhum serviço lançado no item 4 e "Nenhum serviço atribuído" não está marcado.' });
+        }
+      }
+      if(k==='pendentes' && typeof pendingGetAll==='function') esperas.push(pendingGetAll().then(function(itens){
+        linhas.push(itens.length ? { ok:null, texto:itens.length+' RDO(s) guardado(s) neste aparelho esperando envio. Com internet, confirme o envio no aviso do Painel.' } : { ok:true, texto:'Nenhum RDO preso neste aparelho.' });
+      }, function(){}));
+      if(k==='erros') linhas.push(AJ.erros.length ? { ok:null, texto:'Últimas mensagens de erro: '+AJ.erros.slice(-3).map(function(e){ return '"'+e.texto+'"'; }).join(' · ') } : { ok:true, texto:'Nenhuma mensagem de erro registrada nesta sessão.' });
+      if(k==='acessoFin') linhas.push((u.is_admin || u.acesso_financeiro || (typeof cdmCanAccess==='function' && cdmCanAccess())) ? { ok:true, texto:'Seu usuário tem acesso à Medição (Excel / CDM) no Painel.' } : { ok:null, texto:'Seu usuário não tem acesso à medição. Se precisar, peça ao administrador.' });
+    });
+    return Promise.all(esperas).then(function(){ return linhas; }, function(){ return linhas; });
+  }
+
+  // ---------- Passo a passo na tela real ----------
+  function ajIrParaTela(tela){
+    if(!tela || state.view===tela) return;
+    if(tela==='detail') return;   // precisa que a pessoa abra um RDO (passo anterior)
+    var b = document.querySelector('.tab-btn[data-view="'+tela+'"]');
+    if(b && ajTelaLiberada(tela)) b.click(); else if(tela==='dashboard' || tela==='novo') goto(tela);
+  }
+  function ajAchar(sel){
+    if(!sel) return null;
+    var lista; try{ lista = document.querySelectorAll(sel); }catch(e){ return null; }
+    for(var i=0;i<lista.length;i++){ var r = lista[i].getBoundingClientRect(); if((r.width>0 || r.height>0) && getComputedStyle(lista[i]).visibility!=='hidden') return lista[i]; }
+    return null;
+  }
+  function ajTourIniciar(t){
+    ajFechar(); ajTourFim(true);
+    AJ.tour = { t:t, i:0 }; document.body.classList.add('aj-em-tour');
+    window.addEventListener('resize', ajTourPosicionar); window.addEventListener('scroll', ajTourPosicionar, true);
+    document.addEventListener('keydown', ajTourTecla, true);
+    var mr = document.getElementById('modal-root');
+    if(mr && window.MutationObserver){ AJ.tourObs = new MutationObserver(function(){ if(AJ.tour){ ajTourDesenhar(); ajTourPosicionar(); } }); AJ.tourObs.observe(mr, { childList:true }); }
+    ajTourPasso();
+  }
+  function ajTourTecla(e){
+    if(!AJ.tour) return;
+    if(e.key==='Escape'){ e.preventDefault(); ajTourFim(); }
+    if(e.key==='ArrowRight' && !/INPUT|TEXTAREA|SELECT/.test((e.target||{}).tagName||'')) ajTourMover(1);
+    if(e.key==='ArrowLeft' && !/INPUT|TEXTAREA|SELECT/.test((e.target||{}).tagName||'')) ajTourMover(-1);
+  }
+  function ajTourPasso(){
+    var tr = AJ.tour; if(!tr) return;
+    var p = tr.t.passos[tr.i] || {};
+    document.body.classList.toggle('aj-em-tour', p.alvo!=='#ajFab');   // o (?) some durante o passo a passo, menos quando é ele o destacado
+    ajIrParaTela(p.tela);
+    if(tr.ouvinte){ tr.ouvinte.el.removeEventListener('click', tr.ouvinte.fn, true); tr.ouvinte = null; }
+    tr.alvo = null; tr.naoAchou = false;
+    ajTourDesenhar();
+    if(!p.alvo){ ajTourPosicionar(); return; }
+    var tentativas = 0, minhaVez = tr.i;
+    (function procurar(){
+      if(!AJ.tour || AJ.tour.i!==minhaVez) return;
+      var el = ajAchar(p.alvo);
+      if(!el && tentativas++<16){ setTimeout(procurar, 250); return; }
+      if(!el){ tr.naoAchou = true; ajTourDesenhar(); ajTourPosicionar(); return; }
+      tr.alvo = el;
+      try{ el.scrollIntoView({ block:'center', inline:'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }catch(e){ el.scrollIntoView(); }
+      if(p.acao==='clique'){
+        var fn = function(){ setTimeout(function(){ if(AJ.tour && AJ.tour.i===minhaVez) ajTourMover(1); }, 450); };
+        el.addEventListener('click', fn, true); tr.ouvinte = { el:el, fn:fn };
+      }
+      ajTourDesenhar(); setTimeout(ajTourPosicionar, 380); ajTourPosicionar();
+    })();
+  }
+  function ajTourDesenhar(){
+    var tr = AJ.tour; if(!tr) return;
+    var p = tr.t.passos[tr.i] || {}, n = tr.t.passos.length, ultimo = tr.i===n-1;
+    var tip = document.getElementById('ajTip');
+    if(!tip){ tip = document.createElement('div'); tip.id = 'ajTip'; tip.className = 'aj-tip aj-root'; tip.setAttribute('role', 'dialog'); tip.setAttribute('aria-live', 'polite'); document.body.appendChild(tip); }
+    var nota = tr.naoAchou ? '<p class="aj-nota">Não encontrei este item na sua tela agora'+(p.tela==='detail' ? ' — abra um RDO da lista primeiro.' : ' (ele pode não estar liberado para o seu usuário ou depender de um passo anterior).')+'</p>' : '';
+    if([].some.call(document.querySelectorAll('#modal-root .overlay'), function(o){ return o.offsetParent!==null || getComputedStyle(o).display!=='none' && o.getClientRects().length; })) nota += '<p class="aj-nota">Primeiro responda a janela aberta na tela; depois continue aqui.</p>';
+    tip.innerHTML = '<div class="aj-passo">'+esc(tr.t.titulo)+' · passo '+(tr.i+1)+' de '+n+'</div><h4>'+esc(p.titulo||'')+'</h4><p>'+esc(p.texto||'')+'</p>'+nota+
+      (p.acao==='clique' && tr.alvo ? '<p class="hint" style="margin:0;">Toque no item destacado para continuar.</p>' : '')+
+      '<div class="aj-acoes"><button type="button" class="btn ghost sm" data-aj="sair">Encerrar</button><div>'+
+      (tr.i>0 ? '<button type="button" class="btn ghost sm" data-aj="voltar">← Voltar</button>' : '')+
+      '<button type="button" class="btn primary sm" data-aj="'+(ultimo?'fim':'proximo')+'">'+(ultimo ? 'Concluir' : (p.acao==='clique' && tr.alvo ? 'Pular →' : 'Próximo →'))+'</button></div></div>';
+    tip.querySelectorAll('[data-aj]').forEach(function(b){ b.addEventListener('click', function(){
+      var a = b.getAttribute('data-aj');
+      if(a==='sair') ajTourFim(); else if(a==='voltar') ajTourMover(-1); else if(a==='proximo') ajTourMover(1); else ajTourConcluir();
+    }); });
+    var spot = document.getElementById('ajSpot');
+    if(tr.alvo){
+      var esc0 = document.getElementById('ajEscuro'); if(esc0) esc0.remove();
+      if(!spot){ spot = document.createElement('div'); spot.id = 'ajSpot'; spot.className = 'aj-spot aj-pulsa aj-root'; document.body.appendChild(spot); }
+    } else {
+      if(spot) spot.remove();
+      if(!document.getElementById('ajEscuro')){ var d = document.createElement('div'); d.id = 'ajEscuro'; d.className = 'aj-escuro aj-root'; document.body.appendChild(d); }
+    }
+    var foco = tip.querySelector('[data-aj="proximo"],[data-aj="fim"]'); if(foco) try{ foco.focus({ preventScroll:true }); }catch(e){}
+  }
+  var ajRaf = 0;
+  function ajTourPosicionar(){
+    if(ajRaf) return;
+    ajRaf = requestAnimationFrame(function(){
+      ajRaf = 0;
+      var tr = AJ.tour; if(!tr) return;
+      var tip = document.getElementById('ajTip'), spot = document.getElementById('ajSpot'); if(!tip) return;
+      var vw = window.innerWidth, vh = window.innerHeight;
+      if(!tr.alvo || !document.body.contains(tr.alvo)){
+        tip.style.left = Math.max(12, (vw - tip.offsetWidth)/2)+'px'; tip.style.top = Math.max(12, (vh - tip.offsetHeight)/2)+'px'; return;
+      }
+      var r = tr.alvo.getBoundingClientRect(), pad = 6;
+      if(spot){ spot.style.left = (r.left-pad)+'px'; spot.style.top = (r.top-pad)+'px'; spot.style.width = (r.width+pad*2)+'px'; spot.style.height = (r.height+pad*2)+'px'; }
+      if(vw<=640){   // no celular a explicação fica fixa embaixo — ou em cima, quando o item destacado está lá embaixo
+        var cima = r.bottom + pad > vh - tip.offsetHeight - 20 && r.top - pad > tip.offsetHeight + 20;
+        tip.classList.toggle('aj-cima', cima); return;
+      }
+      var tw = tip.offsetWidth, th = tip.offsetHeight;
+      var top = r.bottom + 14; if(top + th > vh - 10) top = r.top - th - 14; if(top < 10) top = Math.min(vh - th - 10, Math.max(10, r.top + 10));
+      var left = Math.min(vw - tw - 12, Math.max(12, r.left + r.width/2 - tw/2));
+      tip.style.top = top+'px'; tip.style.left = left+'px';
+    });
+  }
+  function ajTourMover(d){
+    var tr = AJ.tour; if(!tr) return;
+    var i = tr.i + d; if(i<0 || i>=tr.t.passos.length) return;
+    tr.i = i; ajTourPasso();
+  }
+  function ajTourConcluir(){
+    var t = AJ.tour && AJ.tour.t;
+    ajTourFim(true);
+    if(!t) return;
+    ajLog('tutorial_fim', t.slug);
+    ajAbrir();
+    var corpo = ajTela('Pronto!', '<div class="aj-caixa"><b>Você concluiu: '+esc(t.titulo)+'.</b><br>Deu certo?</div><div class="aj-lista">'+
+      ajItemHtml('data-fim="sim"', '👍', 'Sim, resolvi', '')+ajItemHtml('data-tut="'+esc(t.slug)+'"', '🔁', 'Quero ver de novo', '')+ajItemHtml('data-ir="chamado"', '🆘', 'Não consegui resolver meu problema', 'Enviar ao suporte')+'</div>', true);
+    if(!corpo) return;
+    ajLigarItens(corpo);
+    corpo.querySelector('[data-fim]').addEventListener('click', function(){ toast('Que bom! A ajuda fica sempre no botão (?).', 'ok'); ajFechar(); });
+  }
+  function ajTourFim(silencioso){
+    var tr = AJ.tour;
+    if(tr && tr.ouvinte){ tr.ouvinte.el.removeEventListener('click', tr.ouvinte.fn, true); }
+    AJ.tour = null; document.body.classList.remove('aj-em-tour');
+    if(AJ.tourObs){ AJ.tourObs.disconnect(); AJ.tourObs = null; }
+    ['ajTip','ajSpot','ajEscuro'].forEach(function(id){ var e = document.getElementById(id); if(e) e.remove(); });
+    window.removeEventListener('resize', ajTourPosicionar); window.removeEventListener('scroll', ajTourPosicionar, true);
+    document.removeEventListener('keydown', ajTourTecla, true);
+  }
+
+  // ---------- Solicitação de suporte ----------
+  function ajFuncionalidadeAtual(){
+    var m = { dashboard:'Painel / consultar RDOs', novo:'Preencher RDO', detail:'RDO aberto', colaboradores:'Colaboradores', ponto:'Ponto', planejamento:'Planejamento', 'planejamento-obra':'Planejamento', obras:'Obras', mapa:'Mapeamento', 'mapa-obra':'Mapeamento', equipamentos:'Equipamentos', users:'Usuários', clientes:'Clientes' };
+    return m[state.view] || 'Outro';
+  }
+  function ajChamado(pre){
+    var obras = vkObrasLiberadas(state.obras||[]).filter(function(o){ return !o.exemplo; });
+    var obraAtual = (document.getElementById('rdoObra')||{}).value || (obras.length===1 ? obras[0].id : '');
+    var funcs = ['Preencher RDO','Painel / consultar RDOs','RDO aberto','Equipes','Colaboradores','Produção / planilha','Ponto','Planejamento','Obras','Mapeamento','Exportar / relatórios','Avisos / notificações','Acesso / senha','Outro'];
+    var atual = ajFuncionalidadeAtual(), agora = new Date();
+    var diag = AJ.ultimoDiag;
+    var corpo = ajTela('Não consegui resolver',
+      (AJ.semBanco ? '<div class="aj-caixa aj-ruim">A área de solicitações ainda não foi instalada no banco (068). Avise o administrador.</div>' : '')+
+      '<form class="aj-form" id="ajFormChamado">'+
+      '<div class="field"><label>Seu nome</label><input type="text" value="'+esc((state.currentUser||{}).nome||'')+'" disabled></div>'+
+      '<div class="field"><label for="ajChObra">Obra relacionada</label><select id="ajChObra"><option value="">Não se aplica</option>'+obras.map(function(o){ return '<option value="'+esc(o.id)+'"'+(o.id===obraAtual?' selected':'')+'>'+esc(o.nome)+'</option>'; }).join('')+'</select></div>'+
+      '<div class="field"><label for="ajChFunc">Onde aconteceu</label><select id="ajChFunc">'+funcs.map(function(f){ return '<option'+(f===atual||(atual==='Outro'&&f==='Outro')?' selected':'')+'>'+esc(f)+'</option>'; }).join('')+'</select></div>'+
+      '<div class="field"><label for="ajChDesc">Descreva o problema</label><textarea id="ajChDesc" maxlength="4000" required placeholder="O que você estava fazendo, o que esperava e o que aconteceu.">'+esc(pre.texto || AJ.ultimaPergunta || '')+'</textarea></div>'+
+      (AJ.erros.length ? '<div class="checkline"><input type="checkbox" id="ajChErros" checked><label for="ajChErros">Anexar as mensagens de erro desta sessão ('+AJ.erros.length+')</label></div>' : '')+
+      '<div class="checkline"><input type="checkbox" id="ajChPrint"><label for="ajChPrint">Anexar uma captura da tela atual</label></div>'+
+      '<p class="hint" style="margin:6px 0 12px;">Também vão junto: a tela em que você está ('+esc(AJ_TELAS[state.view]||state.view||'—')+'), a data e o horário ('+agora.toLocaleString('pt-BR')+')'+(diag ? ' e as verificações de "'+esc(diag.problema)+'"' : '')+'.</p>'+
+      '<button type="submit" class="btn primary" id="ajChEnviar" style="width:100%;">Enviar solicitação</button></form>');
+    if(!corpo) return;
+    corpo.querySelector('#ajFormChamado').addEventListener('submit', function(e){ e.preventDefault(); ajEnviarChamado(); });
+  }
+  function ajCarregarHtml2canvas(){
+    if(window.html2canvas) return Promise.resolve(window.html2canvas);
+    return new Promise(function(ok, falha){
+      var s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/html2canvas-pro@1.5.12/dist/html2canvas-pro.min.js';
+      s.onload = function(){ ok(window.html2canvas); }; s.onerror = falha; document.head.appendChild(s);
+    });
+  }
+  function ajCapturar(){
+    var painel = document.getElementById('ajPainel'); if(painel) painel.style.visibility = 'hidden';
+    return ajCarregarHtml2canvas().then(function(h2c){
+      return h2c(document.body, { scale: Math.min(1, 1400/Math.max(1, window.innerWidth)), useCORS:true, logging:false, x:window.scrollX, y:window.scrollY,
+        width:window.innerWidth, height:window.innerHeight, ignoreElements:function(el){ return el.classList && (el.classList.contains('aj-root') || el.classList.contains('aj-fab')); } });
+    }).then(function(canvas){
+      if(painel) painel.style.visibility = '';
+      return new Promise(function(ok){ canvas.toBlob(function(b){ ok(b); }, 'image/jpeg', 0.72); });
+    }, function(e){ if(painel) painel.style.visibility = ''; throw e; });
+  }
+  function ajUuid(){ return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){ var r = Math.random()*16|0; return (c==='x'?r:(r&3|8)).toString(16); }); }
+  function ajEnviarChamado(){
+    var desc = (document.getElementById('ajChDesc').value||'').trim();
+    if(desc.length<5){ toast('Descreva o problema com um pouco mais de detalhe.', 'error'); return; }
+    var btn = document.getElementById('ajChEnviar'); btn.disabled = true; btn.textContent = 'Enviando…';
+    var id = ajUuid(), uid = state.currentUser.id;
+    var erros = (document.getElementById('ajChErros') && document.getElementById('ajChErros').checked) ? AJ.erros.slice() : [];
+    if(AJ.ultimoDiag) erros.push({ quando:new Date().toISOString(), tela:state.view||'', texto:'Verificações ('+AJ.ultimoDiag.problema+'): '+AJ.ultimoDiag.linhas.map(function(l){ return (l.ok===true?'OK ':(l.ok===false?'FALHA ':'')) + l.texto; }).join(' | ').slice(0,900) });
+    var row = { id:id, obra_id:document.getElementById('ajChObra').value || null, funcionalidade:document.getElementById('ajChFunc').value,
+      tela:AJ_TELAS[state.view]||state.view||null, descricao:desc, erros:erros, aparelho:(navigator.userAgent||'').slice(0,200) };
+    var comPrint = document.getElementById('ajChPrint').checked;
+    var passo = comPrint ? ajCapturar().then(function(blob){
+      if(!blob) return null;
+      var caminho = uid+'/'+id+'.jpg';
+      return supabaseClient.storage.from('ajuda-prints').upload(caminho, blob, { contentType:'image/jpeg', upsert:false }).then(function(r){ if(r.error){ toast('A captura não foi anexada: '+r.error.message, 'error'); return null; } return caminho; });
+    }).catch(function(e){ try{ console.warn('[ajuda] captura da tela', e); }catch(x){} toast('Não deu para capturar a tela; a solicitação vai sem a imagem.', 'error'); return null; }) : Promise.resolve(null);
+    passo.then(function(caminho){
+      if(caminho) row.print_path = caminho;
+      return supabaseClient.from('ajuda_chamados').insert(row);
+    }).then(function(res){
+      if(res.error){ btn.disabled = false; btn.textContent = 'Enviar solicitação'; toast('Não deu para enviar: '+res.error.message, 'error'); return; }
+      ajLog('chamado', row.funcionalidade, desc.slice(0,200));
+      AJ.ultimoDiag = null;
+      ajTela('Solicitação enviada', '<div class="aj-caixa aj-ok"><b>✔ Sua solicitação foi enviada ao suporte.</b><br>Quando ela for respondida, você recebe um aviso no sininho. Acompanhe em "Minhas solicitações".</div><div class="aj-lista">'+ajItemHtml('data-ir="minhas"', '📨', 'Minhas solicitações', '')+'</div>', true);
+      ajLigarItens(document.getElementById('ajCorpo'));
+    }, function(){ btn.disabled = false; btn.textContent = 'Enviar solicitação'; toast('Sem conexão: tente enviar de novo.', 'error'); });
+  }
+  var AJ_STATUS = { aberto:'Aberta', em_andamento:'Em andamento', resolvido:'Resolvida' };
+  function ajMinhas(){
+    var corpo = ajTela('Minhas solicitações', '<p class="hint">Carregando…</p>');
+    if(!corpo) return;
+    Promise.resolve(supabaseClient.from('ajuda_chamados').select('id,funcionalidade,descricao,status,resposta,respondido_por_nome,respondido_em,criado_em,obra_id').eq('user_id', state.currentUser.id).order('criado_em', { ascending:false }).limit(30)).then(function(res){
+      var c = document.getElementById('ajCorpo'); if(!c) return;
+      if(res.error){ c.innerHTML = '<div class="aj-caixa aj-ruim">Não deu para carregar: '+esc(res.error.message)+'</div>'; return; }
+      var l = res.data || [];
+      c.innerHTML = l.length ? l.map(ajChamadoHtml).join('') : '<p class="empty-hint">Você ainda não enviou nenhuma solicitação.</p>';
+    });
+  }
+  function ajObraNome(id){ var o = (state.obras||[]).filter(function(x){ return x.id===id; })[0]; return o ? o.nome : ''; }
+  function ajChamadoHtml(ch){
+    return '<div class="aj-chamado"><span class="aj-status '+esc(ch.status)+'">'+esc(AJ_STATUS[ch.status]||ch.status)+'</span> <b>'+esc(ch.funcionalidade)+'</b>'+
+      '<div class="aj-meta">'+esc(new Date(ch.criado_em).toLocaleString('pt-BR'))+(ch.obra_id ? ' · '+esc(ajObraNome(ch.obra_id)) : '')+'</div>'+
+      '<div style="font-size:14px;white-space:pre-wrap;">'+esc(ch.descricao)+'</div>'+
+      (ch.resposta ? '<div class="aj-resp"><b>Resposta'+(ch.respondido_por_nome ? ' de '+esc(ch.respondido_por_nome) : '')+':</b><br>'+esc(ch.resposta).replace(/\n/g,'<br>')+'</div>' : '<div class="aj-meta">Aguardando resposta.</div>')+'</div>';
+  }
+
+  // ---------- Painel do administrador (aba "Central de Ajuda") ----------
+  var AJA = { aba:'chamados', filtro:'pendentes' };
+  function ajAdminRender(){
+    var box = document.getElementById('ajudaAdmin'); if(!box) return;
+    if(!(state.currentUser && state.currentUser.is_admin)){ box.innerHTML = '<p class="empty-hint">Somente administradores.</p>'; return; }
+    box.innerHTML = '<div class="aj-kpis" id="ajKpis"><div class="aj-kpi"><b>…</b><span>carregando</span></div></div>'+
+      '<div class="aj-abas">'+[['chamados','Solicitações'],['duvidas','Dúvidas mais frequentes'],['tutoriais','Tutoriais']].map(function(a){ return '<button type="button" class="btn ghost sm'+(AJA.aba===a[0]?' ativo':'')+'" data-ajaba="'+a[0]+'">'+a[1]+'</button>'; }).join('')+'</div>'+
+      '<div id="ajAdminCorpo"></div>';
+    box.querySelectorAll('[data-ajaba]').forEach(function(b){ b.addEventListener('click', function(){ AJA.aba = b.getAttribute('data-ajaba'); ajAdminRender(); }); });
+    supabaseClient.rpc('vk_ajuda_estatisticas', { p_dias:30 }).then(function(res){
+      var k = document.getElementById('ajKpis'); if(!k) return;
+      if(res.error){ k.innerHTML = '<div class="aj-caixa aj-ruim" style="grid-column:1/-1;">A Central de Ajuda ainda não está instalada no banco (rode o 068): '+esc(res.error.message)+'</div>'; return; }
+      AJA.est = res.data || {};
+      var e = AJA.est;
+      k.innerHTML = [['abertos','Solicitações abertas'],['em_andamento','Em andamento'],['resolvidos','Resolvidas'],['perguntas','Perguntas (30 dias)'],['sem_resposta','Perguntas sem resposta'],['tutoriais_concluidos','Tutoriais concluídos']]
+        .map(function(x){ return '<div class="aj-kpi"><b>'+(Number(e[x[0]])||0)+'</b><span>'+x[1]+'</span></div>'; }).join('');
+      if(AJA.aba==='duvidas') ajAdminDuvidas();
+    });
+    if(AJA.aba==='chamados') ajAdminChamados();
+    if(AJA.aba==='tutoriais'){ ajCarregarTutoriais().then(ajAdminTutoriais); }
+  }
+  function ajAdminChamados(){
+    var c = document.getElementById('ajAdminCorpo'); if(!c) return;
+    c.innerHTML = '<div class="aj-abas">'+[['pendentes','Pendentes'],['resolvido','Resolvidas'],['todas','Todas']].map(function(f){ return '<button type="button" class="aj-chip'+(AJA.filtro===f[0]?' ativo':'')+'" data-ajfiltro="'+f[0]+'" style="'+(AJA.filtro===f[0]?'background:var(--venko-yellow);color:#232320;':'')+'">'+f[1]+'</button>'; }).join('')+'</div><div id="ajAdminLista"><p class="hint">Carregando…</p></div>';
+    c.querySelectorAll('[data-ajfiltro]').forEach(function(b){ b.addEventListener('click', function(){ AJA.filtro = b.getAttribute('data-ajfiltro'); ajAdminChamados(); }); });
+    var q = supabaseClient.from('ajuda_chamados').select('*').order('criado_em', { ascending:false }).limit(100);
+    if(AJA.filtro==='pendentes') q = q.in('status', ['aberto','em_andamento']); else if(AJA.filtro==='resolvido') q = q.eq('status', 'resolvido');
+    Promise.resolve(q).then(function(res){
+      var l = document.getElementById('ajAdminLista'); if(!l) return;
+      if(res.error){ l.innerHTML = '<div class="aj-caixa aj-ruim">'+esc(res.error.message)+'</div>'; return; }
+      var itens = res.data || [];
+      if(!itens.length){ l.innerHTML = '<p class="empty-hint">Nenhuma solicitação aqui.</p>'; return; }
+      l.innerHTML = itens.map(function(ch){
+        var erros = Array.isArray(ch.erros) ? ch.erros : [];
+        return '<div class="aj-chamado" data-ch="'+esc(ch.id)+'"><span class="aj-status '+esc(ch.status)+'">'+esc(AJ_STATUS[ch.status]||ch.status)+'</span> <b>'+esc(ch.user_nome||'—')+'</b> · '+esc(ch.funcionalidade)+
+          '<div class="aj-meta">'+esc(new Date(ch.criado_em).toLocaleString('pt-BR'))+(ch.obra_id ? ' · '+esc(ajObraNome(ch.obra_id)||'obra') : '')+(ch.tela ? ' · tela: '+esc(ch.tela) : '')+'</div>'+
+          '<div style="white-space:pre-wrap;font-size:14px;">'+esc(ch.descricao)+'</div>'+
+          (erros.length ? '<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:13px;">Mensagens de erro e verificações ('+erros.length+')</summary><ul style="font-size:12.5px;margin:6px 0 0;padding-left:18px;">'+erros.map(function(e){ return '<li>'+esc(e.texto||'')+(e.tela ? ' <span style="color:var(--steel);">('+esc(e.tela)+')</span>' : '')+'</li>'; }).join('')+'</ul></details>' : '')+
+          (ch.print_path ? '<button type="button" class="btn ghost sm" data-print="'+esc(ch.print_path)+'" style="margin-top:6px;">🖼 Ver captura da tela</button>' : '')+
+          (ch.aparelho ? '<div class="aj-meta">Aparelho: '+esc(ch.aparelho.slice(0,90))+'</div>' : '')+
+          '<div class="field" style="margin-top:8px;"><label>Resposta para '+esc((ch.user_nome||'').split(' ')[0]||'a pessoa')+'</label><textarea data-resp rows="3" maxlength="3000">'+esc(ch.resposta||'')+'</textarea></div>'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><select data-st>'+Object.keys(AJ_STATUS).map(function(s){ return '<option value="'+s+'"'+(s===ch.status?' selected':'')+'>'+AJ_STATUS[s]+'</option>'; }).join('')+'</select>'+
+          '<button type="button" class="btn primary sm" data-salvarch>Salvar e avisar</button>'+(ch.respondido_por_nome ? '<span class="aj-meta">Respondida por '+esc(ch.respondido_por_nome)+'</span>' : '')+'</div></div>';
+      }).join('');
+      l.querySelectorAll('[data-print]').forEach(function(b){ b.addEventListener('click', function(){
+        supabaseClient.storage.from('ajuda-prints').createSignedUrl(b.getAttribute('data-print'), 300).then(function(r){ if(r.error){ toast('Não deu para abrir a captura: '+r.error.message, 'error'); return; } window.open(r.data.signedUrl, '_blank', 'noopener'); });
+      }); });
+      l.querySelectorAll('[data-salvarch]').forEach(function(b){ b.addEventListener('click', function(){
+        var card = b.closest('[data-ch]'), resp = card.querySelector('[data-resp]').value.trim(), st = card.querySelector('[data-st]').value;
+        var upd = { status:st }; if(resp) upd.resposta = resp;
+        b.disabled = true;
+        supabaseClient.from('ajuda_chamados').update(upd).eq('id', card.getAttribute('data-ch')).then(function(r){
+          b.disabled = false;
+          if(r.error){ toast('Não deu para salvar: '+r.error.message, 'error'); return; }
+          toast('Salvo. A pessoa recebe um aviso no sininho.', 'ok'); ajAdminRender();
+        });
+      }); });
+    });
+  }
+  function ajBarras(lista, rotulo){
+    if(!lista || !lista.length) return '<p class="empty-hint">Ainda sem dados.</p>';
+    var max = Math.max.apply(null, lista.map(function(x){ return Number(x.n)||0; })) || 1;
+    return '<div class="aj-barras">'+lista.map(function(x){ return '<div><span>'+esc(rotulo(x))+'</span><i style="width:'+Math.max(4, Math.round((Number(x.n)||0)/max*100))+'%"></i><em>'+(Number(x.n)||0)+'</em></div>'; }).join('')+'</div>';
+  }
+  function ajNomeTopico(slug){ var t = ajTutPorSlug(slug); if(t) return t.titulo; var p = AJ_PROBLEMAS.filter(function(x){ return x.slug===slug; })[0]; return p ? p.titulo : ((!slug || slug==='(sem assunto)') ? 'Dúvidas que o manual não respondeu' : slug); }
+  function ajAdminDuvidas(){
+    var c = document.getElementById('ajAdminCorpo'); if(!c) return;
+    var e = AJA.est;
+    if(!e){ c.innerHTML = '<p class="hint">Carregando…</p>'; return; }
+    c.innerHTML = '<div class="card"><h2>Funcionalidades que mais geram dúvidas (30 dias)</h2>'+ajBarras(e.por_topico, function(x){ return ajNomeTopico(x.topico); })+'</div>'+
+      '<div class="card"><h2>Solicitações por funcionalidade</h2>'+ajBarras(e.chamados_por_funcionalidade, function(x){ return x.funcionalidade; })+'</div>'+
+      '<div class="card"><h2>Perguntas mais escritas (30 dias)</h2>'+((e.perguntas_frequentes||[]).length ? '<ul style="margin:0;padding-left:18px;">'+e.perguntas_frequentes.map(function(x){ return '<li>'+esc(x.texto)+' <span class="aj-meta">('+x.n+'×'+(x.achou ? '' : ' · <b class="aj-ruim">sem resposta no manual</b>')+')</span></li>'; }).join('')+'</ul><p class="hint">Perguntas sem resposta são boas candidatas para um tutorial novo.</p>' : '<p class="empty-hint">Ainda sem perguntas.</p>')+'</div>';
+  }
+  function ajAdminTutoriais(){
+    var c = document.getElementById('ajAdminCorpo'); if(!c) return;
+    var tuts = ajTutoriais().sort(function(a,b){ return (a.categoria||'').localeCompare(b.categoria||'') || (a.titulo||'').localeCompare(b.titulo||''); });
+    var orig = { fabrica:'do sistema', editado:'do sistema · editado', novo:'criado aqui' };
+    c.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><p class="hint" style="margin:0;">Edite um tutorial do sistema ou crie um novo. Os passos só podem destacar itens reais da tela.</p><button type="button" class="btn primary sm" id="ajNovoTut">+ Novo tutorial</button></div>'+
+      tuts.map(function(t){
+        return '<div class="aj-chamado"><b>'+esc(t.titulo)+'</b> '+(t.ativo===false ? '<span class="aj-status aberto">desativado</span>' : '')+
+          '<div class="aj-meta">'+esc(t.categoria||'')+' · '+(t.passos||[]).length+' passo(s) · '+orig[t.origem]+'</div>'+
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"><button type="button" class="btn ghost sm" data-testar="'+esc(t.slug)+'">▶ Testar</button><button type="button" class="btn ghost sm" data-editar="'+esc(t.slug)+'">✎ Editar</button>'+
+          (t.dbId ? '<button type="button" class="btn ghost sm" data-remover="'+esc(t.dbId)+'">'+(t.origem==='editado' ? 'Voltar ao original' : 'Excluir')+'</button>' : '')+'</div></div>';
+      }).join('');
+    c.querySelector('#ajNovoTut').addEventListener('click', function(){ ajEditorTutorial(null); });
+    c.querySelectorAll('[data-testar]').forEach(function(b){ b.addEventListener('click', function(){ var t = ajTutPorSlug(b.getAttribute('data-testar')); if(t) ajTourIniciar(t); }); });
+    c.querySelectorAll('[data-editar]').forEach(function(b){ b.addEventListener('click', function(){ ajEditorTutorial(ajTutPorSlug(b.getAttribute('data-editar'))); }); });
+    c.querySelectorAll('[data-remover]').forEach(function(b){ b.addEventListener('click', function(){
+      confirmModal({ title:'Remover tutorial', msg:'Remover esta versão? Se for um tutorial do sistema, ele volta ao texto original.', okLabel:'Remover', danger:true }).then(function(ok){
+        if(!ok) return;
+        supabaseClient.from('ajuda_tutoriais').delete().eq('id', b.getAttribute('data-remover')).then(function(r){ if(r.error){ toast(r.error.message, 'error'); return; } toast('Removido.', 'ok'); ajCarregarTutoriais().then(ajAdminTutoriais); });
+      });
+    }); });
+  }
+  function ajSlug(s){ return ajNorm(s).replace(/ /g,'-').slice(0,60) || ('tutorial-'+Date.now()); }
+  function ajEditorTutorial(t){
+    var novo = !t;
+    var ed = { slug: t ? t.slug : '', titulo: t ? t.titulo : '', categoria: t ? t.categoria : 'RDO', palavras: t ? t.palavras : '', resumo: t ? t.resumo : '', ativo: t ? t.ativo!==false : true,
+      passos: t ? JSON.parse(JSON.stringify(t.passos||[])) : [{ titulo:'', texto:'', tela:'', alvo:'', acao:'' }] };
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div'); wrap.className = 'overlay';
+    var alvoOpts = function(sel){ var achou = AJ_ALVOS.some(function(a){ return a.sel===sel; });
+      return '<option value="">(sem destaque — só explicação)</option>'+AJ_ALVOS.map(function(a){ return '<option value="'+esc(a.sel)+'"'+(a.sel===sel?' selected':'')+'>'+esc(a.nome)+'</option>'; }).join('')+(sel && !achou ? '<option value="'+esc(sel)+'" selected>Personalizado: '+esc(sel)+'</option>' : ''); };
+    var telaOpts = function(v){ return Object.keys(AJ_TELAS).map(function(k){ return '<option value="'+k+'"'+(k===(v||'')?' selected':'')+'>'+esc(AJ_TELAS[k])+'</option>'; }).join(''); };
+    function desenhar(){
+      wrap.innerHTML = '<div class="modal" role="dialog" aria-modal="true" style="max-width:720px;"><h3>'+(novo ? 'Novo tutorial' : 'Editar tutorial')+'</h3>'+
+        '<div class="aj-form"><div class="field"><label>Título</label><input type="text" id="ajEdTit" maxlength="120" value="'+esc(ed.titulo)+'"></div>'+
+        '<div class="aj-passo-ed grid2" style="border:0;padding:0;background:none;"><div class="field"><label>Categoria</label><select id="ajEdCat">'+AJ_CATEGORIAS.map(function(c){ return '<option'+(c===ed.categoria?' selected':'')+'>'+esc(c)+'</option>'; }).join('')+'</select></div>'+
+        '<div class="field"><label>Ativo</label><select id="ajEdAtivo"><option value="1"'+(ed.ativo?' selected':'')+'>Sim, aparece para todos</option><option value="0"'+(!ed.ativo?' selected':'')+'>Não (escondido)</option></select></div></div>'+
+        '<div class="field"><label>Resumo (uma frase)</label><input type="text" id="ajEdRes" maxlength="200" value="'+esc(ed.resumo)+'"></div>'+
+        '<div class="field"><label>Palavras que as pessoas usam ao perguntar (ajuda a encontrar este tutorial)</label><input type="text" id="ajEdPal" maxlength="600" value="'+esc(ed.palavras)+'" placeholder="ex.: equipe nao aparece, selecionar equipe"></div>'+
+        '<div class="aj-sec">Passos</div><div id="ajEdPassos">'+ed.passos.map(function(p, i){
+          return '<div class="aj-passo-ed" data-i="'+i+'"><div class="grid2"><div class="field"><label>Passo '+(i+1)+' — título</label><input type="text" data-k="titulo" maxlength="80" value="'+esc(p.titulo||'')+'"></div>'+
+            '<div class="field"><label>Tela</label><select data-k="tela">'+telaOpts(p.tela)+'</select></div></div>'+
+            '<div class="field"><label>Explicação</label><textarea data-k="texto" rows="2" maxlength="500">'+esc(p.texto||'')+'</textarea></div>'+
+            '<div class="grid2"><div class="field"><label>O que destacar</label><select data-k="alvo">'+alvoOpts(p.alvo||'')+'</select></div>'+
+            '<div class="field"><label>Avançar</label><select data-k="acao"><option value="">Com o botão Próximo</option><option value="clique"'+(p.acao==='clique'?' selected':'')+'>Quando a pessoa tocar no item</option></select></div></div>'+
+            '<div style="display:flex;gap:6px;"><button type="button" class="btn ghost sm" data-mv="-1"'+(i===0?' disabled':'')+'>↑</button><button type="button" class="btn ghost sm" data-mv="1"'+(i===ed.passos.length-1?' disabled':'')+'>↓</button><button type="button" class="btn ghost sm" data-rm>Remover passo</button></div></div>';
+        }).join('')+'</div><button type="button" class="btn ghost sm" id="ajEdAdd">+ Adicionar passo</button></div>'+
+        '<div class="row" style="margin-top:14px;"><button type="button" class="btn ghost" data-act="cancelar">Cancelar</button><button type="button" class="btn ghost" data-act="testar">▶ Testar</button><button type="button" class="btn primary" data-act="salvar">Salvar</button></div></div>';
+      wrap.querySelector('#ajEdAdd').addEventListener('click', function(){ ler(); ed.passos.push({ titulo:'', texto:'', tela:'', alvo:'', acao:'' }); desenhar(); });
+      wrap.querySelectorAll('[data-rm]').forEach(function(b){ b.addEventListener('click', function(){ ler(); ed.passos.splice(+b.closest('[data-i]').getAttribute('data-i'), 1); desenhar(); }); });
+      wrap.querySelectorAll('[data-mv]').forEach(function(b){ b.addEventListener('click', function(){ ler(); var i = +b.closest('[data-i]').getAttribute('data-i'), j = i + (+b.getAttribute('data-mv')); var x = ed.passos[i]; ed.passos[i] = ed.passos[j]; ed.passos[j] = x; desenhar(); }); });
+      wrap.querySelector('[data-act="cancelar"]').addEventListener('click', function(){ wrap.remove(); });
+      wrap.querySelector('[data-act="testar"]').addEventListener('click', function(){ ler(); var v = validar(); if(!v) return; wrap.style.display = 'none'; ajTourIniciar(v); var volta = setInterval(function(){ if(!AJ.tour){ clearInterval(volta); wrap.style.display = ''; } }, 400); });
+      wrap.querySelector('[data-act="salvar"]').addEventListener('click', function(){ ler(); var v = validar(); if(!v) return; salvar(v); });
+    }
+    function ler(){
+      ed.titulo = wrap.querySelector('#ajEdTit').value.trim(); ed.categoria = wrap.querySelector('#ajEdCat').value; ed.resumo = wrap.querySelector('#ajEdRes').value.trim();
+      ed.palavras = wrap.querySelector('#ajEdPal').value.trim(); ed.ativo = wrap.querySelector('#ajEdAtivo').value==='1';
+      wrap.querySelectorAll('[data-i]').forEach(function(d){ var p = ed.passos[+d.getAttribute('data-i')]; d.querySelectorAll('[data-k]').forEach(function(f){ p[f.getAttribute('data-k')] = f.value.trim(); }); });
+    }
+    function validar(){
+      if(ed.titulo.length<4){ toast('Dê um título ao tutorial.', 'error'); return null; }
+      var passos = ed.passos.filter(function(p){ return p.titulo || p.texto; }).map(function(p){ var o = { titulo:p.titulo, texto:p.texto }; if(p.tela) o.tela = p.tela; if(p.alvo) o.alvo = p.alvo; if(p.acao) o.acao = p.acao; return o; });
+      if(!passos.length){ toast('Escreva pelo menos um passo.', 'error'); return null; }
+      return { slug: ed.slug || ajSlug(ed.titulo), titulo:ed.titulo, categoria:ed.categoria, palavras:ed.palavras, resumo:ed.resumo, ativo:ed.ativo, passos:passos };
+    }
+    function salvar(v){
+      var b = wrap.querySelector('[data-act="salvar"]'); b.disabled = true;
+      supabaseClient.from('ajuda_tutoriais').upsert({ slug:v.slug, titulo:v.titulo, categoria:v.categoria, palavras:v.palavras, resumo:v.resumo, ativo:v.ativo, passos:v.passos }, { onConflict:'slug' }).then(function(r){
+        b.disabled = false;
+        if(r.error){ toast('Não deu para salvar: '+r.error.message, 'error'); return; }
+        toast('Tutorial salvo. Já vale para todos.', 'ok'); wrap.remove(); ajCarregarTutoriais().then(ajAdminTutoriais);
+      });
+    }
+    root.appendChild(wrap); desenhar();
+  }
+
 })();
 </script>
 <script>
