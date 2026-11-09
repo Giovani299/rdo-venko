@@ -1739,6 +1739,7 @@
           : supabaseClient.from('rdos').insert(Object.assign({exemplo:false}, item.payload));
       });
       return op.then(function(res){
+        if(res.error && !item.isEdit && rdoJaGravado(res.error)) res = { error:null };   // v69: já tinha chegado ao servidor
         if(res.error){
           if(looksAuthError(res.error)) return {ok:false, reason:'auth'};
           if(looksOffline(res.error)) return {ok:false, reason:'offline'};
@@ -1882,7 +1883,7 @@
   function openPendingRdoForEdit(item){
     var mapped = pendingAsRdoRows([item])[0];
     mapped.status = 'rascunho'; // uma RDO pendente nunca foi enviada de verdade — sempre pode ser editada livremente
-    state.editingPendingItem = { id:item.id, isEdit:!!item.isEdit, rdoId:item.rdoId||null };
+    state.editingPendingItem = { id:item.id, isEdit:!!item.isEdit, rdoId:item.rdoId||null, payloadId:(item.payload&&item.payload.id)||null };
     state.editId = mapped.id;
     goto('novo');
     renderRdoForm(mapped);
@@ -2128,7 +2129,7 @@
       fotos: row.fotos||[], videos: row.videos||[], responsavel: row.responsavel, status: row.status,
       assinatura: row.assinatura, aprovacao: row.aprovacao, exemplo: row.exemplo,
       assinaturas: (row.assinaturas && row.assinaturas.length) ? row.assinaturas : legacySignatures,
-      createdAt: row.created_at, updatedAt: row.updated_at, deletedAt: row.deleted_at
+      createdAt: row.created_at, updatedAt: row.updated_at, deletedAt: row.deleted_at, criadoPor: row.criado_por||null
     };
   }
   // v66: RDO por obra — admin, financeiro ou "Todas as obras" no cadastro veem tudo; os demais só as obras marcadas (mesma regra do banco, 067)
@@ -2297,8 +2298,9 @@
     if(!obrasGestaoCanAccess()) return;
     confirmModal({ title:'Excluir definitivamente', msg:'Esta RDO será apagada permanentemente do banco de dados, junto com fotos e vídeos anexados, e não poderá ser recuperada. Deseja continuar?', okLabel:'Excluir definitivamente', danger:true }).then(function(ok){
       if(!ok) return;
-      supabaseClient.from('rdos').delete().eq('id', id).then(function(res){
+      supabaseClient.from('rdos').delete().eq('id', id).select('id').then(function(res){
         if(res.error){ toast('Não foi possível excluir definitivamente a RDO.','error'); return; }
+        if(!res.data || !res.data.length){ toast('Sem permissão para excluir esta RDO.','error'); return; }
         var idx = state.rdosExcluidas.findIndex(function(r){ return r.id===id; });
         if(idx>-1) state.rdosExcluidas.splice(idx,1);
         toast('RDO excluída definitivamente.','success');
@@ -3196,36 +3198,21 @@
     var dupe = state.profiles.find(function(p){ return normalizeLogin(p.login)===login; });
     if(dupe){ toast('Já existe um usuário com esse login.','error'); return; }
 
-    // Cliente descartável: cria o novo login sem derrubar a sessão do admin atual.
-    var tempClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession:false, autoRefreshToken:false, storageKey:'sb-temp-admin-create-'+Date.now() }
-    });
-    tempClient.auth.signUp({ email: toAuthEmail(login), password: senha }).then(function(res){
-      if(res.error){ toast('Erro ao criar usuário: '+res.error.message,'error'); return Promise.reject(res.error); }
-      if(!res.data.session){
-        toast('Conta criada, mas sem sessão ativa — verifique se "Confirm email" está DESLIGADO em Authentication > Providers > Email no Supabase.','error');
-        return Promise.reject(new Error('sem sessão'));
-      }
-      var newId = res.data.user.id;
+    // v69: o login é criado no servidor (função "criar-usuario"), que só aceita administrador.
+    // Assim o cadastro aberto do Supabase pode ficar desligado. Se a função ainda não estiver
+    // publicada, usa o jeito antigo (cadastro aberto) para não travar o cadastro.
+    usuarioCriarLogin(toAuthEmail(login), senha).then(function(newId){
       // Perfil criado pelo ADMIN (com as permissões de uma vez). Com a migration 048 o
       // banco só aceita assim; sem ela, cai no jeito antigo (o novo login cria o próprio perfil).
       var perfilAdmin = { id:newId, login:login, nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao, acesso_planejamento:isPlanejamento };
       if(obrasSel.valor!==undefined) perfilAdmin.obras_ids = obrasSel.valor;
       if(ehAdminPrincipal() && document.getElementById('userAdminPrincipal').checked) perfilAdmin.admin_principal = true;
+      // v69: o perfil é sempre gravado pelo administrador (o banco não aceita perfil criado pela própria conta)
       return supabaseClient.from('profiles').insert(perfilAdmin).then(function(resAdm){
         if(!resAdm.error) return null;
-        return tempClient.from('profiles').insert({ id:newId, login:login, nome:nome, cargo:cargo, is_admin:false, acesso_financeiro:false, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao }).then(function(res2){
-        if(res2.error){ toast('Usuário criado, mas houve erro ao salvar o perfil: '+res2.error.message,'error'); return Promise.reject(res2.error); }
-        // acesso_financeiro (assim como is_admin) nunca pode ser definido pelo próprio novo
-        // usuário no insert acima — só o admin que está criando a conta, com seu próprio
-        // client autenticado, pode elevar esses dois campos logo em seguida (o banco também
-        // exige isso: ver trigger trg_protect_acesso_financeiro em 021_financeiro.sql).
-        var updates = {};
-        if(isAdmin) updates.is_admin = true;
-        if(isFinanceiro) updates.acesso_financeiro = true;
-        if(isPlanejamento) updates.acesso_planejamento = true;
-        if(Object.keys(updates).length){ return supabaseClient.from('profiles').update(updates).eq('id', newId); }
-        });
+        usuarioDesfazerLogin(newId);   // não deixa sobrar login sem cadastro
+        toast('Não foi possível salvar o cadastro: '+resAdm.error.message,'error');
+        return Promise.reject(resAdm.error);
       });
     }).then(function(){
       toast('Usuário cadastrado.','ok');
@@ -3325,6 +3312,50 @@
   }
   // Excluir RDO (vai para a lixeira): admin, quem tem gestão de obras e Engenheiro(a) de Obras
   // (o cargo vale mesmo quando o usuário está marcado como "Obras só visualizar").
+  // v69 — quem pode editar um RDO (o banco confere a mesma regra):
+  // admin; responsável da obra (Obras ▸ Responsável); o autor enquanto é rascunho.
+  function rdoPodeEditar(r){
+    var u = state.currentUser; if(!u || !r) return false;
+    if(u.is_admin) return true;
+    var o = (state.obras||[]).find(function(x){ return x.id===r.obraId; });
+    if(o && o.responsavelRdo && o.responsavelRdo===u.id) return true;
+    if(r.status!=='rascunho') return false;
+    if(r.criadoPor) return r.criadoPor===u.id;
+    return String(r.responsavel||'').trim().toLowerCase()===String(u.nome||'').trim().toLowerCase();
+  }
+  function usuarioFuncao(corpo){
+    return supabaseClient.auth.getSession().then(function(s){
+      var tok = s && s.data && s.data.session && s.data.session.access_token;
+      if(!tok) throw new Error('Sessão expirada. Saia e entre de novo.');
+      return fetch(SUPABASE_URL + '/functions/v1/criar-usuario', { method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+tok, 'apikey':SUPABASE_ANON_KEY }, body: JSON.stringify(corpo) });
+    });
+  }
+  function usuarioCriarLogin(email, senha){
+    return usuarioFuncao({ acao:'criar', email:email, senha:senha }).then(function(r){
+      if(r.status===404) return usuarioCriarLoginAntigo(email, senha);
+      return r.json().catch(function(){ return {}; }).then(function(j){
+        if(!r.ok || !j.id){ var m = j.erro || ('erro '+r.status); toast('Erro ao criar usuário: '+m,'error'); throw new Error(m); }
+        return j.id;
+      });
+    });
+  }
+  function usuarioCriarLoginAntigo(email, senha){
+    var tempClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession:false, autoRefreshToken:false, storageKey:'sb-temp-admin-create-'+Date.now() }
+    });
+    return tempClient.auth.signUp({ email: email, password: senha }).then(function(res){
+      if(res.error){ toast('Erro ao criar usuário: '+res.error.message,'error'); throw res.error; }
+      if(!res.data || !res.data.user){ toast('Erro ao criar usuário.','error'); throw new Error('sem usuário'); }
+      return res.data.user.id;
+    });
+  }
+  function usuarioDesfazerLogin(id){ usuarioFuncao({ acao:'desfazer', id:id }).catch(function(){}); }
+  function rdoNovoId(){
+    if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){ var r = Math.random()*16|0; return (c==='x'?r:(r&3|8)).toString(16); });
+  }
+  function rdoJaGravado(err){ return !!(err && (err.code==='23505' || /duplicate key/i.test(err.message||''))); }
   function rdoCanDelete(){
     var u = state.currentUser;
     return !!(u && (u.is_admin || u.acesso_obras_gestao !== false || /engenheir/i.test(u.cargo||'')));
@@ -5536,7 +5567,7 @@
           (canServ?'<button class="btn ghost sm" data-servpdf="'+o.id+'">⬇ Exportar PDF</button>':'')+
           (canServ?'<button class="btn ghost sm" data-mapa="'+o.id+'">🗺 Mapeamento</button>':'')+
           (canGestao?'<button class="btn ghost sm" data-toggle="'+o.id+'">'+(o.status==='ativa'?'Marcar concluída':'Reativar')+'</button>':'')+
-          (canGestao?'<button class="btn danger sm" data-del="'+o.id+'">Excluir</button>':'')+
+          (ehAdmin()?'<button class="btn danger sm" data-del="'+o.id+'">Excluir</button>':'')+
         '</div>'+
       '</div>';
       var panel = (canServ && open) ? ('<div class="card obra-servicos-panel" id="obraServicosPanel-'+o.id+'" style="margin-top:-6px;">'+renderObraServicosChecklist(o.id)+'</div>') : '';
@@ -5605,8 +5636,9 @@
         confirmModal({ title:'Excluir obra', msg:'Isso remove a obra do cadastro. RDOs já registradas para ela permanecem no histórico. Deseja continuar?', okLabel:'Excluir', danger:true })
           .then(function(ok){
             if(!ok) return;
-            supabaseClient.from('obras').delete().eq('id', id).then(function(res){
+            supabaseClient.from('obras').delete().eq('id', id).select('id').then(function(res){
               if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
+              if(!res.data || !res.data.length){ toast('Só um administrador pode excluir obras.','error'); return; }
               toast('Obra removida.','ok'); loadObras();
             });
           });
@@ -9306,13 +9338,39 @@
       var e = new Error(videoErroTxt(err && err.status, err && err.corpo)); e.status = err && err.status; throw e;
     });
   }
+  // v69 — a pasta de vídeos deixou de ser pública: o vídeo abre com um link temporário (1 hora)
+  var videoLinks = {};   // caminho -> { url, ate }
+  function videoCaminho(v){
+    if(!v) return null; if(v.path) return v.path;
+    var m = /\/object\/(?:public|sign|authenticated)\/rdo-videos\/([^?#]+)/.exec(v.url||'');
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+  function videoSrc(v){
+    var c = videoCaminho(v); if(!c) return (v && v.url) || '';
+    var l = videoLinks[c]; return (l && l.ate > Date.now()) ? l.url : '';
+  }
+  function videoAssinar(lista){
+    var faltam = (lista||[]).map(videoCaminho).filter(function(c){ return c && !(videoLinks[c] && videoLinks[c].ate > Date.now()); });
+    if(!faltam.length || !supabaseClient) return Promise.resolve(0);
+    return Promise.resolve(supabaseClient.storage.from('rdo-videos').createSignedUrls(faltam, 3600)).then(function(res){
+      var n = 0;
+      ((res && res.data) || []).forEach(function(x){ if(x && x.signedUrl && x.path){ videoLinks[x.path] = { url:x.signedUrl, ate: Date.now() + 50*60*1000 }; n++; } });
+      return n;
+    }, function(){ return 0; });
+  }
+  function videoAtualizarTela(raiz){
+    (raiz || document).querySelectorAll('video[data-video-path]').forEach(function(el){
+      var u = videoSrc({ path: el.getAttribute('data-video-path') });
+      if(u && el.getAttribute('src')!==u) el.setAttribute('src', u);
+    });
+  }
   function renderVideoUI(){
     var grid = document.getElementById('videoGrid');
     var note = document.getElementById('videoNote');
     if(!grid) return;
     grid.innerHTML = state.videos.map(function(v,i){
       return '<div class="video-thumb">'+
-        (v.uploading ? '<div style="width:168px;height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#fff;font-size:11px;text-align:center;padding:0 8px;"><b style="font-size:16px;">'+(v.pct!=null ? v.pct+'%' : '…')+'</b><span>'+esc(v.etapa || 'Enviando')+(v.tam ? ' · '+esc(v.tam)+' MB' : '')+'</span></div>' : '<video src="'+v.url+'" controls preload="metadata"></video>') +
+        (v.uploading ? '<div style="width:168px;height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#fff;font-size:11px;text-align:center;padding:0 8px;"><b style="font-size:16px;">'+(v.pct!=null ? v.pct+'%' : '…')+'</b><span>'+esc(v.etapa || 'Enviando')+(v.tam ? ' · '+esc(v.tam)+' MB' : '')+'</span></div>' : '<video src="'+esc(videoSrc(v))+'"'+(videoCaminho(v) ? ' data-video-path="'+esc(videoCaminho(v))+'"' : '')+' controls preload="metadata"></video>') +
         '<div class="video-name">'+esc(v.name||'')+'</div>'+
         (v.uploading ? '' : '<button type="button" data-rmvideo="'+i+'">✕</button>') +
       '</div>';
@@ -9327,6 +9385,7 @@
       });
     });
     note.textContent = state.videos.length + ' vídeo(s) anexado(s) · até '+VIDEO_MAX_MB+' MB cada (uns 30 segundos de gravação no celular)';
+    videoAssinar(state.videos.filter(function(v){ return !v.uploading; })).then(function(n){ if(n) videoAtualizarTela(grid); });
   }
 
   /* ---------------- RDO form (create / edit) ---------------- */
@@ -10748,8 +10807,9 @@
               return;
             }
             if(!navigator.onLine){ toast('Excluir exige conexão com a internet. Tente novamente quando estiver online.','error'); return; }
-            supabaseClient.from('rdos').delete().eq('id', rdo.id).then(function(res){
+            supabaseClient.from('rdos').delete().eq('id', rdo.id).select('id').then(function(res){
               if(res.error){ toast('Erro: '+res.error.message,'error'); return; }
+              if(!res.data || !res.data.length){ toast('Sem permissão para excluir este rascunho.','error'); return; }
               toast('Rascunho excluído.','ok'); state.editId=null;
               loadRdos().then(function(){ goto('dashboard'); });
             });
@@ -10877,11 +10937,14 @@
         equipamentos: rdo.equipamentos.filter(function(r){ return r.nome; }),
         ocorrencias: rdo.ocorrencias.filter(function(r){ return r.texto; }).concat(rdo.semProducao ? [{ tipo:RDO_SEM_SERVICO, texto:String(rdo.semProducao.motivo||'').trim(), acao:'' }] : []),
         fotos: state.photos.map(function(p){ return p.path ? {path: p.path, legenda: (p.legenda||'').trim()} : {url: p.dataUrl, legenda: (p.legenda||'').trim()}; }),
-        videos: state.videos.map(function(v){ return {url:v.url, name:v.name||''}; }),
+        videos: state.videos.map(function(v){ var c = videoCaminho(v); return c ? {url:v.url, path:c, name:v.name||''} : {url:v.url, name:v.name||''}; }),
         responsavel: responsavel,
         status: isLockedEdit ? (rdo.status==='enviado' ? 'aprovado' : rdo.status) : (wantsSend ? 'aprovado' : 'rascunho'),
         updated_at: new Date().toISOString()
       };
+      // v69: RDO novo já sai daqui com a identificação dele — se a internet cair no meio do envio e a
+      // pessoa mandar de novo, o banco reconhece que é o mesmo RDO e não cria outro.
+      if(!(pendingEditItem ? pendingEditItem.isEdit : editing)) payload.id = (pendingEditItem && pendingEditItem.payloadId) || rdoNovoId();
       if(payload.status==='aprovado' && !(rdo.aprovacao && rdo.aprovacao.status==='aprovado')){
         payload.aprovacao = { status:'aprovado', automatico:true, nome:'Aprovação automática no envio', timestamp: Date.now() };
       }
@@ -10924,6 +10987,7 @@
       });
 
       promise.then(function(res){
+        if(res.error && !effIsEdit && rdoJaGravado(res.error)) res = { error:null, data:{ id: payload.id } };   // v69: já tinha chegado ao servidor
         if(res.error){
           // Sessão expirada (token venceu, ex.: dispositivo ficou muito tempo sem internet) é
           // tratada igual a "sem conexão": a RDO fica salva neste dispositivo e a pessoa poderá
@@ -11057,7 +11121,7 @@
         '<div class="detail-title"><h1>'+esc(r.obraNome)+(r.exemplo?'<span class="tag-example">exemplo</span>':'')+'</h1>'+
           '<div class="sub">'+fmtDate(r.data)+' · Preenchido por '+esc(r.responsavel||'—')+' '+statusChip(r.status)+'</div></div>'+
         '<div class="detail-actions">'+
-          '<button class="btn ghost sm" id="btnEditRdo">Editar</button>' +
+          (rdoPodeEditar(r) ? '<button class="btn ghost sm" id="btnEditRdo">Editar</button>' : '<span class="hint" style="font-size:12px;align-self:center;" title="Depois de enviado, só o responsável da obra ou um administrador edita.">Só o responsável da obra edita</span>') +
           '<button class="btn ghost sm" id="btnExportPdf">⬇ Exportar PDF</button>'+
         '</div>'+
       '</div>'+
@@ -11072,6 +11136,7 @@
       if(!n) return;
       document.querySelectorAll('#detailGallery img[data-foto-path]').forEach(function(img){ var u = fotoSrc({path:img.getAttribute('data-foto-path')}); if(u) img.src = u; });
     });
+    videoAssinar((r.videos||[]).map(function(v){ return (typeof v==='string') ? {url:v} : v; })).then(function(n){ if(n) videoAtualizarTela(el); });
     var editBtn = document.getElementById('btnEditRdo');
     if(editBtn) editBtn.addEventListener('click', function(){ state.editId=r.id; state.editingPendingItem=null; goto('novo'); renderRdoForm(r); });
     document.getElementById('btnExportPdf').addEventListener('click', function(){ exportRdoPdf(r); });
@@ -11390,7 +11455,7 @@
 
       (videosList.length ? rdoCard(rdoCardHead('Vídeos', videosList.length) + (opts.print ?
         '<div style="padding:10px 14px;">'+videosList.map(function(v){ return '<div style="padding:3px 0;">🎬 '+esc(v.name||'vídeo anexado')+'</div>'; }).join('')+'</div>' :
-        '<div class="video-gallery" style="padding:10px 14px;">'+videosList.map(function(v){ return '<div class="video-thumb" style="margin-bottom:8px;"><video src="'+v.url+'" controls preload="metadata" style="max-width:100%;border-radius:6px;"></video>'+(v.name?'<div class="video-name" style="font-size:11px;color:'+RDO_MUTED+';margin-top:2px;">'+esc(v.name)+'</div>':'')+'</div>'; }).join('')+'</div>'
+        '<div class="video-gallery" style="padding:10px 14px;">'+videosList.map(function(v){ return '<div class="video-thumb" style="margin-bottom:8px;"><video src="'+esc(videoSrc(v))+'"'+(videoCaminho(v) ? ' data-video-path="'+esc(videoCaminho(v))+'"' : '')+' controls preload="metadata" style="max-width:100%;border-radius:6px;"></video>'+(v.name?'<div class="video-name" style="font-size:11px;color:'+RDO_MUTED+';margin-top:2px;">'+esc(v.name)+'</div>':'')+'</div>'; }).join('')+'</div>'
       )) : '') +
 
       sigBlock;
@@ -13817,7 +13882,7 @@
       passos:[
         { titulo:'Painel', texto:'Toque em Painel.', alvo:'.tab-btn[data-view="dashboard"]', acao:'clique' },
         { titulo:'Abrir o RDO', texto:'Encontre o RDO (use os filtros se precisar) e toque na linha dele.', tela:'dashboard', alvo:'#rdoTableBody tr[data-id]', acao:'clique' },
-        { titulo:'Editar', texto:'Toque em "Editar", corrija e salve. Um RDO já enviado ou aprovado mantém o status ao ser salvo.', tela:'detail', alvo:'#btnEditRdo' }
+        { titulo:'Editar', texto:'Toque em "Editar", corrija e salve. Rascunho: quem criou edita. Depois de enviado, só o responsável da obra (Obras ▸ Responsável) ou um administrador edita — se o botão não aparecer para você, peça a eles.', tela:'detail', alvo:'#btnEditRdo' }
       ] },
     { slug:'exportar', icone:'⬇️', categoria:'Consultas e relatórios', titulo:'Como exportar relatórios',
       resumo:'PDF do RDO e medição.',
