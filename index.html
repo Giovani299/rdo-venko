@@ -1325,7 +1325,7 @@
           <h1>Obras</h1>
           <p>Cadastro dos canteiros acompanhados pela Venko — toda obra pertence a um cliente.</p>
         </div>
-        <a class="btn ghost sm" id="btnPainelTv" href="tv.html" target="_blank" rel="noopener" style="display:none" title="Abre o painel das TVs do escritório (valor do dia e % da meta de cada obra)">📺 Painel da TV</a>
+        <a class="btn ghost sm" id="btnPainelTv" href="tv.html" target="_blank" rel="noopener" style="display:none" title="Abre o painel das TVs do escritório (previsto, atingido, % e maior dia de cada obra)">📺 Painel da TV</a>
       </div>
       <div class="card" id="obraFormCard">
         <h2><span class="idx">+</span>Cadastrar obra</h2>
@@ -1528,7 +1528,7 @@
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoObras" checked><label for="userAcessoObras">Acesso à aba Obras</label></div>
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoObrasGestao" checked><label for="userAcessoObrasGestao">Pode cadastrar/editar/excluir clientes e obras (desmarque para deixar só visualizar e lançar serviços contratados)</label></div>
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoPlanejamento"><label for="userAcessoPlanejamento">Acesso ao módulo Planejamento (Matriz de Serviços, Cronograma, Acompanhamento da Obra)</label></div>
-          <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userPainelTv"><label for="userPainelTv">Conta do painel da TV — usada só nas TVs do escritório: não vê nada do sistema, só o painel com o valor do dia e a % da meta das obras</label></div>
+          <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userPainelTv"><label for="userPainelTv">Conta do painel da TV — usada só nas TVs do escritório: não vê nada do sistema, só o painel com o previsto, o atingido, a % e o maior dia das obras</label></div>
           <div class="field" id="userObrasBox" style="margin-top:12px;display:none;">
             <label>Obras que este usuário vê</label>
             <div class="checkline"><input type="checkbox" id="userObrasTodas"><label for="userObrasTodas">Todas as obras (inclusive as cadastradas depois)</label></div>
@@ -5822,8 +5822,8 @@
             '<select id="tv-'+o.id+'" data-paineltv="'+o.id+'" title="Em qual TV do escritório esta obra aparece">'+
               ['', '1', '2'].map(function(v){ return '<option value="'+v+'"'+(String(o.painelTv||'')===v?' selected':'')+'>'+(v ? 'TV '+v : 'Não aparece na TV')+'</option>'; }).join('')+
             '</select>'+
-            '<span class="ob2-meta-in"><span>Meta do mês R$</span><input type="text" inputmode="decimal" data-metaobra="'+o.id+'" value="'+(o.metaMensal!=null ? esc(fmtMetaObra(o.metaMensal)) : '')+'" placeholder="ex.: 150.000" aria-label="Meta do mês em reais"></span>'+
-          '</div><small>Na TV aparecem o valor medido no dia e a % da meta do mês atingida.</small></div>' : '')+
+            '<span class="ob2-meta-in"><span>Previsto do mês R$</span><input type="text" inputmode="decimal" data-metaobra="'+o.id+'" value="'+(o.metaMensal!=null ? esc(fmtMetaObra(o.metaMensal)) : '')+'" placeholder="ex.: 150.000" aria-label="Valor previsto do mês em reais"></span>'+
+          '</div><small>Na TV aparecem o previsto do mês, o atingido até agora (soma dos RDOs), a % e o maior dia.</small></div>' : '')+
         '</div>' : '')+
         '<div class="ob2-acoes">'+
           '<div class="ob2-princ">'+
@@ -5886,10 +5886,10 @@
       inp.addEventListener('change', function(){
         var id = inp.getAttribute('data-metaobra');
         var v = lerMetaObra(inp.value);
-        if(v===false){ toast('Meta inválida. Escreva só o valor em reais, ex.: 150.000 ou 150000,50.','error'); return; }
+        if(v===false){ toast('Valor previsto inválido. Escreva só o valor em reais, ex.: 150.000 ou 150000,50.','error'); return; }
         supabaseClient.from('obras').update({ meta_mensal: v }).eq('id', id).then(function(res){
-          if(res.error){ toast('Erro ao salvar a meta: '+res.error.message,'error'); loadObras(); return; }
-          toast(v==null ? 'Meta do mês removida.' : 'Meta do mês salva: R$ '+fmtMetaObra(v)+'.','ok');
+          if(res.error){ toast('Erro ao salvar o valor previsto: '+res.error.message,'error'); loadObras(); return; }
+          toast(v==null ? 'Valor previsto do mês removido.' : 'Previsto do mês salvo: R$ '+fmtMetaObra(v)+'.','ok');
           loadObras();
         });
       });
