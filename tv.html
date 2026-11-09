@@ -132,11 +132,34 @@
   .escolha-tv button[aria-pressed="true"]{background:var(--amarelo);color:#111;border-color:var(--amarelo);}
   #erro{color:#F08A84;font-size:14px;min-height:1em;}
   #entrada .bt.ouro{padding:12px;font-size:15px;}
+  /* ---------- vincular esta TV (código) ---------- */
+  #vincular{position:fixed;inset:0;display:grid;place-items:center;padding:calc(var(--u)*2);text-align:center;
+    background:radial-gradient(60vw 50vh at 50% 0%, rgba(255,202,0,.10), transparent 70%), var(--fundo);}
+  #vincular .caixa{display:grid;justify-items:center;gap:calc(var(--u)*1.2);max-width:calc(var(--u)*60);}
+  #vincular img{height:calc(var(--u)*2.6);}
+  #vincular h1{font-size:calc(var(--u)*2.2);font-weight:900;letter-spacing:.02em;text-transform:uppercase;margin-top:calc(var(--u)*.8);}
+  #vincular .codigo{font-size:calc(var(--u)*7.5);font-weight:900;letter-spacing:.12em;color:var(--amarelo);line-height:1;padding:calc(var(--u)*1.2) calc(var(--u)*2.4);
+    border:2px solid rgba(255,202,0,.35);border-radius:calc(var(--u)*1.4);background:rgba(255,202,0,.05);font-variant-numeric:tabular-nums;white-space:nowrap;}
+  #vincular .passo{font-size:calc(var(--u)*1.25);color:var(--cinza-2);line-height:1.5;}
+  #vincular .passo b{color:var(--branco);}
+  #vincular .mini{font-size:calc(var(--u)*.85);color:#737373;}
+  #vincular .bt{font-size:14px;}
   [hidden]{display:none !important;}
   @media (prefers-reduced-motion: reduce){ .trilho i{transition:none;} }
 </style>
 </head>
 <body>
+
+<div id="vincular" hidden>
+  <div class="caixa">
+    <img data-logo alt="Venko">
+    <h1>Vincular esta TV</h1>
+    <div class="codigo" id="codigoTv">······</div>
+    <p class="passo">No computador, abra o sistema RDO ▸ <b>Obras</b> ▸ <b>📺 Vincular TV</b><br>e digite o código acima.</p>
+    <p class="mini" id="vincularInfo">O código troca sozinho a cada 10 minutos.</p>
+    <button class="bt" type="button" id="btUsarSenha">Entrar com usuário e senha</button>
+  </div>
+</div>
 
 <div id="entrada" hidden>
   <form id="formEntrada" autocomplete="on">
@@ -148,6 +171,7 @@
     <div><label>Esta tela é a</label><div class="escolha-tv" id="escolhaTv"></div></div>
     <div id="erro" role="alert"></div>
     <button class="bt ouro" type="submit" id="btEntrar">Entrar</button>
+    <button class="bt" type="button" id="btUsarCodigo">Vincular com código (sem senha)</button>
   </form>
 </div>
 
@@ -193,6 +217,10 @@
   guarda.set('vk_tv', String(tv));
 
   var dados = null, ultimaOk = null, pagina = 0, timerDados = null, timerPagina = null;
+  // TV vinculada por código: a chave fica só neste aparelho; o banco guarda apenas o hash dela
+  var chaveTv = guarda.get('vk_tv_chave'), modoAparelho = false, timerVinc = null, timerCodigo = null;
+  function novaChave(){ var b = new Uint8Array(32); crypto.getRandomValues(b); return Array.prototype.map.call(b, function(x){ return ('0'+x.toString(16)).slice(-2); }).join(''); }
+  function hashHex(t){ return crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)).then(function(h){ return Array.prototype.map.call(new Uint8Array(h), function(x){ return ('0'+x.toString(16)).slice(-2); }).join(''); }); }
 
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function reais(v){ return 'R$ ' + Math.round(Number(v)||0).toLocaleString('pt-BR'); }
@@ -222,6 +250,7 @@
     });
   }
   function mostraEntrada(msg){
+    pararVinculo(); $('vincular').hidden = true;
     $('painel').hidden = true; $('menu').hidden = true; $('entrada').hidden = false;
     montaEscolhaTv(); $('erro').textContent = msg || '';
     pararTimers();
@@ -242,7 +271,9 @@
 
   // ---------- painel ----------
   function iniciaPainel(){
+    pararVinculo(); $('vincular').hidden = true;
     $('entrada').hidden = true; $('painel').hidden = false; $('menu').hidden = false;
+    $('btTroca').hidden = modoAparelho; $('btSair').hidden = modoAparelho;
     $('tvNome').textContent = 'TV ' + tv;
     document.title = 'Painel das Obras - TV ' + tv;
     $('btTroca').textContent = 'Trocar para TV ' + (tv % TVS + 1);
@@ -256,6 +287,15 @@
   function pararTimers(){ clearInterval(timerDados); clearInterval(timerPagina); }
 
   function buscar(){
+    if(modoAparelho){
+      sb.rpc('vk_painel_tv_aparelho', { p_token: chaveTv }).then(function(res){
+        if(res.error){ estado(false); return; }
+        if(!res.data || !res.data.vinculada){ modoAparelho = false; mostraVincular(); return; }   // desvinculada no sistema
+        if(res.data.tv && res.data.tv !== tv){ tv = res.data.tv; guarda.set('vk_tv', String(tv)); $('tvNome').textContent = 'TV ' + tv; document.title = 'Painel das Obras - TV ' + tv; }
+        dados = res.data; ultimaOk = new Date(); estado(true); desenha();
+      }, function(){ estado(false); });
+      return;
+    }
     sb.rpc('vk_painel_tv', { p_tv: tv }).then(function(res){
       if(res.error){
         if(res.error.code === '42501') { mostraEntrada('Esta conta não tem acesso ao painel. Peça ao administrador para marcar a conta como "conta do painel da TV".'); sb.auth.signOut(); return; }
@@ -376,8 +416,36 @@
   setTimeout(function(){ location.reload(); }, 6 * 60 * 60 * 1000);
   relogio(); setInterval(relogio, 5000);
 
+  // ---------- vincular esta TV com código ----------
+  function pararVinculo(){ clearInterval(timerVinc); clearInterval(timerCodigo); timerVinc = timerCodigo = null; }
+  function pedirCodigo(){
+    hashHex(chaveTv).then(function(h){ return sb.rpc('vk_tv_pedir_codigo', { p_token_hash: h }); }).then(function(res){
+      if(res.error){ $('codigoTv').textContent = '······'; $('vincularInfo').textContent = 'Não foi possível gerar o código (' + res.error.message + '). Tentando de novo…'; return; }
+      var c = String(res.data || ''); $('codigoTv').textContent = c.slice(0,3) + '-' + c.slice(3);
+      $('vincularInfo').textContent = 'O código troca sozinho a cada 10 minutos.';
+    }, function(){ $('vincularInfo').textContent = 'Sem conexão com a internet. Tentando de novo…'; });
+  }
+  function conferirVinculo(){
+    sb.rpc('vk_painel_tv_aparelho', { p_token: chaveTv }).then(function(res){
+      if(res && !res.error && res.data && res.data.vinculada){ modoAparelho = true; tv = res.data.tv || tv; guarda.set('vk_tv', String(tv)); iniciaPainel(); }
+    }, function(){});
+  }
+  function mostraVincular(){
+    pararTimers(); pararVinculo();
+    if(!chaveTv){ chaveTv = novaChave(); guarda.set('vk_tv_chave', chaveTv); }
+    $('painel').hidden = true; $('menu').hidden = true; $('entrada').hidden = true; $('vincular').hidden = false;
+    pedirCodigo(); timerCodigo = setInterval(pedirCodigo, 9 * 60 * 1000);
+    timerVinc = setInterval(conferirVinculo, 4000);
+  }
+  $('btUsarSenha').addEventListener('click', function(){ mostraEntrada(''); });
+  $('btUsarCodigo').addEventListener('click', function(){ mostraVincular(); });
+
   if(!sb){ mostraEntrada('Configuração do sistema não encontrada.'); return; }
-  sb.auth.getSession().then(function(r){ if(r && r.data && r.data.session) iniciaPainel(); else mostraEntrada(''); }, function(){ mostraEntrada(''); });
+  // 1º) TV já vinculada por código → painel direto; 2º) alguém logado → painel; 3º) senão, mostra o código
+  (chaveTv ? sb.rpc('vk_painel_tv_aparelho', { p_token: chaveTv }) : Promise.resolve(null)).then(function(res){
+    if(res && !res.error && res.data && res.data.vinculada){ modoAparelho = true; tv = res.data.tv || tv; iniciaPainel(); return; }
+    return sb.auth.getSession().then(function(r){ if(r && r.data && r.data.session) iniciaPainel(); else mostraVincular(); });
+  }).catch(function(){ mostraVincular(); });
 })();
 </script>
 </body>
