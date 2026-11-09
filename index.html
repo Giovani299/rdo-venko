@@ -1021,6 +1021,13 @@
   .ob2-linha select{flex:1;min-width:0;}
   .ob2-linha .btn{white-space:nowrap;}
   .ob2-tv{grid-column:1 / -1;}
+  /* v76 — vincular TV por código */
+  .tvv-botoes{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .tvv-cod{font:800 28px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.18em;text-transform:uppercase;text-align:center;padding:12px;width:100%;}
+  .tvv-lista{display:grid;gap:8px;margin-top:6px;}
+  .tvv-item{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--surface);}
+  .tvv-item small{display:block;color:var(--steel);font-size:12px;}
+  .tvv-passos{margin:0 0 14px;padding-left:18px;color:var(--steel);font-size:13.5px;line-height:1.55;}
   .ob2-tv select{flex:0 1 220px;}
   .ob2-meta-in{display:flex;align-items:center;gap:8px;flex:1;min-width:0;color:var(--steel);font-size:12.5px;white-space:nowrap;}
   .ob2-meta-in input{flex:1;min-width:0;max-width:220px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px;font-variant-numeric:tabular-nums;}
@@ -1325,7 +1332,10 @@
           <h1>Obras</h1>
           <p>Cadastro dos canteiros acompanhados pela Venko — toda obra pertence a um cliente.</p>
         </div>
-        <a class="btn ghost sm" id="btnPainelTv" href="tv.html" target="_blank" rel="noopener" style="display:none" title="Abre o painel das TVs do escritório (previsto, atingido, % e maior dia de cada obra)">📺 Painel da TV</a>
+        <div class="tvv-botoes" id="tvBotoes" style="display:none">
+          <button class="btn primary sm" type="button" id="btnVincularTv" title="Liga uma TV do escritório ao painel pelo código que aparece nela (sem senha na TV)">📺 Vincular TV</button>
+          <a class="btn ghost sm" id="btnPainelTv" href="tv.html" target="_blank" rel="noopener" title="Abre o painel das TVs do escritório neste computador">Ver painel</a>
+        </div>
       </div>
       <div class="card" id="obraFormCard">
         <h2><span class="idx">+</span>Cadastrar obra</h2>
@@ -1684,6 +1694,87 @@
       });
     });
   }
+
+  // ---------------------------------------------------------------
+  // v76 — Vincular TV: a TV mostra um código; aqui o administrador digita o código e escolhe a TV.
+  // A TV não precisa de usuário nem senha. Dá para desvincular a qualquer momento.
+  // ---------------------------------------------------------------
+  function tvVincularAbrir(){
+    if(!ehAdmin()) return;
+    var root = document.getElementById('modal-root');
+    var wrap = document.createElement('div');
+    wrap.className = 'overlay';
+    wrap.innerHTML = '<div class="modal" role="dialog" aria-modal="true" aria-labelledby="tvvTit" style="max-width:520px;">'+
+      '<h3 id="tvvTit">Vincular TV</h3>'+
+      '<ol class="tvv-passos"><li>Na TV, abra <b>rdo.construtoravenko.com.br/tv.html</b> — aparece um código grande.</li><li>Digite o código aqui, escolha a TV e clique em Vincular. A TV entra sozinha em alguns segundos.</li></ol>'+
+      '<div class="field"><label for="tvvCod">Código que aparece na TV</label><input id="tvvCod" class="tvv-cod" maxlength="7" autocomplete="off" placeholder="ABC-123" spellcheck="false"></div>'+
+      '<div class="grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
+        '<div class="field"><label for="tvvTv">Esta TV mostra</label><select id="tvvTv"><option value="1">TV 1</option><option value="2">TV 2</option></select></div>'+
+        '<div class="field"><label for="tvvNome">Nome (opcional)</label><input id="tvvNome" maxlength="40" placeholder="ex.: TV da sala"></div>'+
+      '</div>'+
+      '<p class="hint" id="tvvMsg" role="alert" style="min-height:1.2em;margin:6px 0 0;"></p>'+
+      '<div class="row"><button class="btn ghost" data-act="fechar" type="button">Fechar</button><button class="btn primary" data-act="vincular" type="button">Vincular</button></div>'+
+      '<h3 style="margin-top:18px;font-size:15px;">TVs vinculadas</h3><div class="tvv-lista" id="tvvLista"><p class="hint">Carregando…</p></div>'+
+    '</div>';
+    root.appendChild(wrap);
+    var inp = wrap.querySelector('#tvvCod'), msg = wrap.querySelector('#tvvMsg');
+    var fechar = function(){ wrap.remove(); };
+    inp.addEventListener('input', function(){
+      var v = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+      inp.value = v.length > 3 ? v.slice(0,3) + '-' + v.slice(3) : v;
+    });
+    var listar = function(){
+      var box = wrap.querySelector('#tvvLista');
+      supabaseClient.from('tv_aparelhos').select('id, tv, nome, criado_em, criado_por_nome, ultimo_acesso').order('tv').order('criado_em').then(function(res){
+        if(res.error){ box.innerHTML = '<p class="hint">Não foi possível carregar as TVs: '+esc(res.error.message)+'</p>'; return; }
+        var rows = res.data || [];
+        if(!rows.length){ box.innerHTML = '<p class="hint">Nenhuma TV vinculada ainda.</p>'; return; }
+        box.innerHTML = rows.map(function(r){
+          var ult = r.ultimo_acesso ? new Date(r.ultimo_acesso) : null;
+          var online = ult && (Date.now() - ult.getTime()) < 5*60*1000;
+          return '<div class="tvv-item"><div><b>TV '+r.tv+(r.nome ? ' — '+esc(r.nome) : '')+'</b>'+
+            '<small>'+(online ? '🟢 ligada agora' : (ult ? 'visto por último em '+ult.toLocaleString('pt-BR') : 'ainda não abriu o painel'))+
+            ' · vinculada por '+esc(r.criado_por_nome || '—')+'</small></div>'+
+            '<button class="btn danger sm" type="button" data-desvincular="'+r.id+'">Desvincular</button></div>';
+        }).join('');
+        box.querySelectorAll('[data-desvincular]').forEach(function(b){
+          b.addEventListener('click', function(){
+            confirmModal({ title:'Desvincular TV', msg:'Esta TV para de mostrar o painel e volta a mostrar um código. Para ligar de novo, é só vincular com o código novo.', okLabel:'Desvincular', danger:true }).then(function(ok){
+              if(!ok) return;
+              supabaseClient.rpc('vk_tv_desvincular', { p_id: b.getAttribute('data-desvincular') }).then(function(r2){
+                if(r2.error){ toast('Erro ao desvincular: '+r2.error.message,'error'); return; }
+                toast('TV desvinculada.','ok'); listar();
+              });
+            });
+          });
+        });
+      });
+    };
+    var vincular = function(){
+      var cod = inp.value.replace(/[^A-Z0-9]/gi, '');
+      if(cod.length !== 6){ msg.textContent = 'O código tem 6 letras/números. Confira na TV.'; inp.focus(); return; }
+      var tv = Number(wrap.querySelector('#tvvTv').value), nome = wrap.querySelector('#tvvNome').value.trim();
+      var bt = wrap.querySelector('[data-act="vincular"]'); bt.disabled = true; msg.textContent = 'Vinculando…';
+      supabaseClient.rpc('vk_tv_vincular', { p_codigo: cod, p_tv: tv, p_nome: nome || null }).then(function(res){
+        bt.disabled = false;
+        if(res.error){ msg.textContent = res.error.message; return; }
+        msg.textContent = '';
+        toast('TV vinculada! Em alguns segundos ela mostra o painel da TV '+tv+'.','ok');
+        inp.value = ''; wrap.querySelector('#tvvNome').value = '';
+        listar();
+      });
+    };
+    wrap.addEventListener('click', function(e){
+      if(e.target === wrap){ fechar(); return; }
+      var act = e.target.getAttribute && e.target.getAttribute('data-act');
+      if(act === 'fechar') fechar();
+      if(act === 'vincular') vincular();
+    });
+    inp.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); vincular(); } });
+    listar();
+    setTimeout(function(){ try{ inp.focus(); }catch(e){} }, 50);
+  }
+  (function(){ var b = document.getElementById('btnVincularTv'); if(b) b.addEventListener('click', tvVincularAbrir); })();
 
   function openLightbox(src){
     var root = document.getElementById('modal-root');
@@ -2907,7 +2998,7 @@
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = '';
     document.getElementById('tabUsers').style.display = profile.is_admin ? '' : 'none';
-    var btnTv = document.getElementById('btnPainelTv'); if(btnTv) btnTv.style.display = profile.is_admin ? '' : 'none';
+    var btnTv = document.getElementById('tvBotoes'); if(btnTv) btnTv.style.display = profile.is_admin ? '' : 'none';
     // Abas Financeiro e Tabela de Preços retiradas do menu (não usadas pela Venko).
     document.getElementById('tabFinanceiro').style.display = 'none';
     document.getElementById('tabTabelaPrecos').style.display = 'none';
@@ -5823,7 +5914,7 @@
               ['', '1', '2'].map(function(v){ return '<option value="'+v+'"'+(String(o.painelTv||'')===v?' selected':'')+'>'+(v ? 'TV '+v : 'Não aparece na TV')+'</option>'; }).join('')+
             '</select>'+
             '<span class="ob2-meta-in"><span>Previsto do mês R$</span><input type="text" inputmode="decimal" data-metaobra="'+o.id+'" value="'+(o.metaMensal!=null ? esc(fmtMetaObra(o.metaMensal)) : '')+'" placeholder="ex.: 150.000" aria-label="Valor previsto do mês em reais"></span>'+
-          '</div><small>Na TV aparecem o previsto do mês, o atingido até agora (soma dos RDOs), a % e o maior dia.</small></div>' : '')+
+          '</div><small>Na TV aparecem o valor de hoje, o atingido no mês (soma dos RDOs), a % da meta e o dia a dia. Para ligar uma TV: 📺 Vincular TV, no topo desta página.</small></div>' : '')+
         '</div>' : '')+
         '<div class="ob2-acoes">'+
           '<div class="ob2-princ">'+
