@@ -984,6 +984,26 @@
   @media (max-width:560px){ .aj-passo-ed .grid2{grid-template-columns:1fr;} .aj-barras div{grid-template-columns:1fr 1fr 32px;} }
   .aj-chamado select[data-st]{padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px;min-height:34px;}
   .aj-chamado select[data-st]:focus-visible{outline:2px solid var(--focus);outline-offset:2px;}
+
+  /* v70 — anexar planilha de serviços */
+  .pl-modal{max-width:min(1100px,96vw);}
+  .pl-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 12px;margin:6px 0 4px;}
+  .pl-cols select,.pl-destino select,.pl-destino input[type=text]{padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px;}
+  .pl-tabela{max-height:min(46vh,420px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);margin:6px 0 12px;}
+  .pl-tabela table{width:100%;border-collapse:collapse;font-size:13px;}
+  .pl-tabela th{position:sticky;top:0;background:var(--paper);text-align:left;padding:6px 8px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--steel);z-index:1;}
+  .pl-tabela td{padding:3px 6px;border-top:1px solid var(--line);vertical-align:middle;}
+  .pl-tabela input{width:100%;padding:5px 6px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--ink);font:inherit;font-size:13px;}
+  .pl-tabela input:hover,.pl-tabela input:focus{border-color:var(--line);background:var(--surface);}
+  .pl-tabela .pl-cat{color:var(--steel);font-size:12px;max-width:220px;}
+  .pl-tabela .pl-aviso{color:var(--status-stopped);font-size:12px;white-space:nowrap;}
+  .pl-tabela tr.pl-erro td{background:var(--status-rejected-bg);}
+  .pl-tabela tr.pl-erro .pl-aviso{color:var(--status-rejected);font-weight:600;}
+  .pl-alerta{color:var(--status-rejected);font-weight:600;}
+  .pl-resumo{margin:8px 0 4px;font-size:14px;}
+  .pl-destino{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;font-size:14px;}
+  .pl-destino .checkline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  @media (max-width:640px){ .pl-tabela .pl-cat,.pl-tabela th:nth-child(2){display:none;} .pl-cols{grid-template-columns:1fr 1fr;} }
 </style>
 <script>
   (function(){
@@ -5566,6 +5586,7 @@
           (canServ?'<button class="btn ghost sm" data-servicos="'+o.id+'">'+(open?'Ocultar serviços':'Serviços contratados')+'</button>':'')+
           (canServ?'<button class="btn ghost sm" data-servpdf="'+o.id+'">⬇ Exportar PDF</button>':'')+
           (canServ?'<button class="btn ghost sm" data-mapa="'+o.id+'">🗺 Mapeamento</button>':'')+
+          (ehAdmin()?'<button class="btn ghost sm" data-anexarplanilha="'+o.id+'" title="Anexar ou atualizar a planilha de serviços desta obra (Excel do cliente)">📄 Anexar planilha</button>':'')+
           (canGestao?'<button class="btn ghost sm" data-toggle="'+o.id+'">'+(o.status==='ativa'?'Marcar concluída':'Reativar')+'</button>':'')+
           (ehAdmin()?'<button class="btn danger sm" data-del="'+o.id+'">Excluir</button>':'')+
         '</div>'+
@@ -5602,6 +5623,7 @@
         });
       });
     });
+    list.querySelectorAll('[data-anexarplanilha]').forEach(function(b){ b.addEventListener('click', function(){ plAbrir(b.getAttribute('data-anexarplanilha')); }); });
     list.querySelectorAll('[data-tabelaobra]').forEach(function(sel){
       sel.addEventListener('change', function(){
         var id = sel.getAttribute('data-tabelaobra');
@@ -14634,6 +14656,253 @@
       });
     }
     root.appendChild(wrap); desenhar();
+  }
+
+
+  // ===================== v70 — Anexar planilha de serviços (Excel do cliente) =====================
+  // Obras ▸ "📄 Anexar planilha" (só administrador). Lê o Excel, encontra sozinho as colunas
+  // Item / Descrição / Unidade / Valor, mostra tudo para conferir e corrigir, e grava de uma vez
+  // pela função do banco vk_importar_planilha (planilha nova ou atualização de uma existente).
+  var PL = { obraId:null, nomeArquivo:'', wb:null, aba:null, linhas:[], cab:-1, col:{}, itens:[], modo:'nova', destino:'', nome:'', usarNaObra:true, contratar:true };
+
+  function plNorm(s){ return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
+  function plTxt(v){ return String(v==null?'':v).replace(/\s+/g,' ').trim(); }
+  // número brasileiro ou americano: "R$ 1.234,56", "1234.56", "1,5", "596,72"
+  function plNumero(v){
+    if(v==null) return null;
+    if(typeof v==='number') return isFinite(v) ? v : null;
+    var s = String(v).replace(/R\$|\s| /gi,'').replace(/[^\d.,-]/g,'');
+    if(!s || !/\d/.test(s)) return null;
+    var temV = s.indexOf(',')>-1, temP = s.indexOf('.')>-1;
+    if(temV && temP){ if(s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g,'').replace(',', '.'); else s = s.replace(/,/g,''); }
+    else if(temV){ s = s.replace(/\./g,'').replace(',', '.'); }
+    else if(temP && /^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g,'');
+    var n = parseFloat(s); return isFinite(n) ? Math.round(n*100)/100 : null;
+  }
+  function plColNome(i){ var s=''; i++; while(i>0){ var m=(i-1)%26; s=String.fromCharCode(65+m)+s; i=Math.floor((i-1)/26); } return s; }
+  var PL_PADROES = {
+    item: /^(item|itens|it\.?|n[ºo°.]?|num(ero)?|cod(igo)?\.?|cod\.? ?item|ref)$/,
+    descricao: /(descri|servico|especifica|discrimina)/,
+    unidade: /^(un|und|unid|unidade|un\.|und\.|unid\.|u\.m\.?|um)$/,
+    valor: /(valor|preco|unit|r\$|custo)/
+  };
+  function plAcharCabecalho(linhas){
+    var melhor = { i:-1, nota:0, col:{} };
+    for(var i=0;i<Math.min(linhas.length, 60);i++){
+      var col = {}, nota = 0;
+      (linhas[i]||[]).forEach(function(c, j){
+        var t = plNorm(c); if(!t) return;
+        ['item','descricao','unidade','valor'].forEach(function(k){
+          if(col[k]==null && PL_PADROES[k].test(t)){ if(k==='valor' && /total/.test(t) && !/unit/.test(t)) return; col[k] = j; nota++; }
+        });
+      });
+      if(nota > melhor.nota){ melhor = { i:i, nota:nota, col:col }; }
+    }
+    return melhor.nota >= 2 ? melhor : { i:-1, nota:0, col:{} };
+  }
+  function plLerItens(){
+    var L = PL.linhas, c = PL.col, itens = [], cat = { numero:'', nome:'' }, seq = {};
+    if(c.descricao==null || c.unidade==null || c.valor==null) return [];
+    for(var i=PL.cab+1;i<L.length;i++){
+      var r = L[i]||[];
+      var item = c.item!=null ? plTxt(r[c.item]) : '';
+      var desc = plTxt(r[c.descricao]), un = plTxt(r[c.unidade]), val = plNumero(r[c.valor]);
+      var textoLinha = plNorm(r.join(' '));
+      if(!desc && !item) continue;
+      if(/^(sub ?total|total|bdi|valor total|soma)/.test(plNorm(desc)) || /^(sub ?total|total)\b/.test(plNorm(item))) continue;
+      var ehNumeroCat = /^\d+(\.0+)?$/.test(item);
+      if((!un || val==null) && desc){
+        // linha de grupo/categoria (ex.: "1  REDE COLETORA ... ATÉ 2 METROS")
+        if(ehNumeroCat || (!item && desc === desc.toUpperCase() && desc.length>3)){ cat = { numero: ehNumeroCat ? String(parseInt(item,10)) : '', nome: desc }; continue; }
+        if(!un && val==null) continue;
+      }
+      if(!desc || !un || val==null) { itens.push({ item_numero:item, categoria_numero:cat.numero, categoria_nome:cat.nome||'SERVIÇOS', descricao:desc, unidade:un, custo_unitario:val, linha:i+1+(PL.offset||0) }); continue; }
+      var gerado = false;
+      if(!item){ var k = cat.numero||'0'; seq[k] = (seq[k]||0)+1; item = (cat.numero ? cat.numero+'.' : '')+seq[k]; gerado = true; }
+      itens.push({ item_numero:item, categoria_numero:cat.numero, categoria_nome:cat.nome||'SERVIÇOS', descricao:desc, unidade:un, custo_unitario:val, linha:i+1+(PL.offset||0), gerado:gerado });
+    }
+    return itens;
+  }
+  function plAvisos(){
+    var vistos = {}, dup = {};
+    PL.itens.forEach(function(it){ var k = plTxt(it.item_numero); if(!k) return; if(vistos[k]) dup[k] = 1; vistos[k] = 1; });
+    PL.itens.forEach(function(it){
+      var a = [];
+      if(!plTxt(it.item_numero)) a.push('sem número');
+      else if(dup[plTxt(it.item_numero)]) a.push('número repetido');
+      if(!plTxt(it.descricao)) a.push('sem descrição');
+      if(!plTxt(it.unidade)) a.push('sem unidade');
+      if(it.custo_unitario==null || !(it.custo_unitario>=0)) a.push('sem valor');
+      it.erro = a.join(', ');
+    });
+    return PL.itens.filter(function(it){ return it.erro; }).length;
+  }
+  function plSlug(nome){
+    var b = String(nome||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,26).replace(/_+$/,'') || 'PLANILHA';
+    var existe = function(k){ return tabelasPrecoLista().some(function(t){ return t.chave===k; }); };
+    var k = b, n = 2; while(existe(k)) k = b.slice(0,24)+'_'+(n++);
+    return k;
+  }
+  function plFechar(){ var w = document.getElementById('plModal'); if(w) w.remove(); }
+  function plModal(html){
+    var w = document.getElementById('plModal');
+    if(!w){ w = document.createElement('div'); w.id = 'plModal'; w.className = 'overlay'; document.getElementById('modal-root').appendChild(w);
+      w.addEventListener('click', function(e){ if(e.target===w) plFechar(); }); }
+    w.innerHTML = '<div class="modal pl-modal" role="dialog" aria-modal="true" aria-label="Anexar planilha de serviços">'+html+'</div>';
+    return w.querySelector('.modal');
+  }
+
+  function plAbrir(obraId){
+    if(!ehAdmin()){ toast('Só um administrador anexa planilhas de serviços.','error'); return; }
+    var o = (state.obras||[]).find(function(x){ return x.id===obraId; }); if(!o) return;
+    PL = { obraId:obraId, nomeArquivo:'', wb:null, aba:null, linhas:[], cab:-1, col:{}, itens:[], modo:'nova', destino:'', nome:'', usarNaObra:true, contratar:true };
+    var atual = tabelaDaObra(obraId);
+    var m = plModal(
+      '<h3>Anexar planilha de serviços — '+esc(o.nome)+'</h3>'+
+      '<p>Escolha o arquivo Excel da planilha do cliente (.xlsx, .xls ou .csv). O sistema encontra as colunas <b>Item</b>, <b>Descrição</b>, <b>Unidade</b> e <b>Valor</b> e mostra tudo para você conferir antes de gravar.</p>'+
+      (atual ? '<p class="hint">Hoje esta obra usa a planilha <b>'+esc(tabelaPrecoNome(atual))+'</b>.</p>' : '<p class="hint">Hoje esta obra ainda não tem planilha.</p>')+
+      '<div class="field"><label for="plArquivo">Arquivo</label><input type="file" id="plArquivo" accept=".xlsx,.xls,.xlsm,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"></div>'+
+      '<div class="row"><button type="button" class="btn ghost" id="plCancelar">Cancelar</button></div>');
+    m.querySelector('#plCancelar').addEventListener('click', plFechar);
+    m.querySelector('#plArquivo').addEventListener('change', function(e){ var f = e.target.files && e.target.files[0]; if(f) plLerArquivo(f); });
+  }
+  function plLerArquivo(f){
+    if(f.size > 15*1024*1024){ toast('Arquivo grande demais (máximo 15 MB).','error'); return; }
+    PL.nomeArquivo = f.name;
+    var seguir = function(){
+      var fr = new FileReader();
+      fr.onload = function(){
+        try{
+          PL.wb = XLSX.read(new Uint8Array(fr.result), { type:'array', cellDates:false });
+        }catch(err){ toast('Não consegui abrir este arquivo como planilha: '+(err && err.message || err),'error'); return; }
+        // aba com mais linhas que parecem itens
+        var melhor = null, nota = -1;
+        PL.wb.SheetNames.forEach(function(n){
+          var l = XLSX.utils.sheet_to_json(PL.wb.Sheets[n], { header:1, raw:false, defval:'', blankrows:false });
+          var c = plAcharCabecalho(l), q = c.nota*1000 + l.length;
+          if(q > nota){ nota = q; melhor = n; }
+        });
+        plUsarAba(melhor);
+      };
+      fr.onerror = function(){ toast('Não consegui ler o arquivo.','error'); };
+      fr.readAsArrayBuffer(f);
+    };
+    if(!libsProntas(['xlsx'])) carregarLibs(['xlsx']).then(seguir, function(){ avisoLibFalhou(['xlsx']); });
+    else seguir();
+  }
+  function plUsarAba(nome){
+    PL.aba = nome;
+    var ws = PL.wb.Sheets[nome];
+    PL.offset = ws && ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']).s.r : 0;   // linha do Excel onde a aba começa
+    PL.linhas = XLSX.utils.sheet_to_json(ws, { header:1, raw:false, defval:'', blankrows:true });
+    var c = plAcharCabecalho(PL.linhas);
+    PL.cab = c.i; PL.col = c.col;
+    // nome sugerido: primeira linha de título do arquivo, ou o nome do arquivo
+    var titulo = '';
+    for(var i=0;i<Math.max(0, PL.cab);i++){ var t = plTxt((PL.linhas[i]||[]).filter(function(x){ return plTxt(x); }).join(' ')); if(t.length>5){ titulo = t; break; } }
+    var o = (state.obras||[]).find(function(x){ return x.id===PL.obraId; });
+    PL.nome = (titulo || PL.nomeArquivo.replace(/\.[^.]+$/,'') || (o && o.nome) || 'Planilha').slice(0,80);
+    var atual = tabelaDaObra(PL.obraId);
+    PL.destino = atual || '';
+    PL.itens = plLerItens();
+    plTela();
+  }
+  function plResumoMudancas(){
+    if(PL.modo!=='atualizar' || !PL.destino) return null;
+    var exist = (state.catalogoItens||[]).filter(function(i){ return i.tabela===PL.destino && i.ativo!==false; });
+    var porNum = {}; exist.forEach(function(i){ porNum[plTxt(i.itemNumero)] = i; });
+    var novos = 0, mud = 0, iguais = 0, nums = {};
+    PL.itens.forEach(function(it){
+      var k = plTxt(it.item_numero); nums[k] = 1; var e = porNum[k];
+      if(!e) novos++;
+      else if(plTxt(e.descricao)!==plTxt(it.descricao) || plTxt(e.unidade)!==plTxt(it.unidade) || Number(e.custoUnitario)!==Number(it.custo_unitario)) mud++;
+      else iguais++;
+    });
+    var saem = exist.filter(function(i){ return !nums[plTxt(i.itemNumero)]; });
+    return { novos:novos, mudam:mud, iguais:iguais, saem:saem };
+  }
+  function plTela(){
+    var nErros = plAvisos();
+    var cols = (PL.linhas[PL.cab]||PL.linhas[0]||[]).map(function(c, j){ return { j:j, t:plTxt(c) }; });
+    var maxCols = PL.linhas.reduce(function(m, r){ return Math.max(m, (r||[]).length); }, 0);
+    var opcoesCol = function(sel){ var h = '<option value="">—</option>'; for(var j=0;j<maxCols;j++){ var t = cols[j] ? cols[j].t : ''; h += '<option value="'+j+'"'+(sel===j?' selected':'')+'>Coluna '+plColNome(j)+(t ? ' — '+esc(t.slice(0,30)) : '')+'</option>'; } return h; };
+    var existentes = tabelasPrecoLista();
+    var resumo = plResumoMudancas();
+    var cats = {}; PL.itens.forEach(function(it){ cats[(it.categoria_numero||'')+' '+it.categoria_nome] = 1; });
+    var o = (state.obras||[]).find(function(x){ return x.id===PL.obraId; });
+    var linhasTab = PL.itens.map(function(it, k){
+      return '<tr'+(it.erro?' class="pl-erro"':'')+' data-k="'+k+'">'+
+        '<td><input data-c="item_numero" value="'+esc(it.item_numero)+'" style="width:64px;"></td>'+
+        '<td class="pl-cat">'+esc((it.categoria_numero?it.categoria_numero+' · ':'')+it.categoria_nome)+'</td>'+
+        '<td><input data-c="descricao" value="'+esc(it.descricao)+'" style="min-width:240px;"></td>'+
+        '<td><input data-c="unidade" value="'+esc(it.unidade)+'" style="width:56px;"></td>'+
+        '<td><input data-c="custo_unitario" value="'+(it.custo_unitario==null?'':Number(it.custo_unitario).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}))+'" style="width:96px;text-align:right;" inputmode="decimal"></td>'+
+        '<td class="pl-aviso">'+esc(it.erro || (it.gerado ? 'número criado' : ''))+'</td>'+
+        '<td><button type="button" class="btn ghost sm" data-rm="'+k+'" title="Tirar este item">✕</button></td></tr>';
+    }).join('');
+    var m = plModal(
+      '<h3>Conferir planilha — '+esc(PL.nomeArquivo)+'</h3>'+
+      (PL.wb && PL.wb.SheetNames.length>1 ? '<div class="field"><label for="plAba">Aba do Excel</label><select id="plAba">'+PL.wb.SheetNames.map(function(n){ return '<option'+(n===PL.aba?' selected':'')+'>'+esc(n)+'</option>'; }).join('')+'</select></div>' : '')+
+      (PL.cab<0 ? '<p class="pl-alerta">Não encontrei o cabeçalho (Item / Descrição / Unidade / Valor). Escolha as colunas abaixo.</p>' : '<p class="hint">Cabeçalho encontrado na linha '+(PL.cab+1+(PL.offset||0))+' do Excel. Se alguma coluna estiver errada, corrija abaixo.</p>')+
+      '<div class="pl-cols">'+
+        ['item','descricao','unidade','valor'].map(function(k){ return '<div class="field"><label>'+({item:'Item (nº)',descricao:'Descrição',unidade:'Unidade',valor:'Valor unitário'})[k]+'</label><select data-col="'+k+'">'+opcoesCol(PL.col[k])+'</select></div>'; }).join('')+
+        '<div class="field"><label>Cabeçalho na linha</label><input type="number" id="plCab" min="1" value="'+(PL.cab>=0 ? PL.cab+1+(PL.offset||0) : 1)+'" style="width:90px;"></div>'+
+      '</div>'+
+      '<p class="pl-resumo"><b>'+PL.itens.length+'</b> serviços em <b>'+Object.keys(cats).length+'</b> grupos'+(nErros ? ' · <span class="pl-alerta">'+nErros+' para corrigir</span>' : ' · tudo certo')+'</p>'+
+      '<div class="pl-tabela"><table><thead><tr><th>Item</th><th>Grupo</th><th>Descrição</th><th>Un.</th><th>Valor (R$)</th><th></th><th></th></tr></thead><tbody>'+(linhasTab || '<tr><td colspan="7" class="hint">Nenhum serviço encontrado com essas colunas.</td></tr>')+'</tbody></table></div>'+
+      '<div class="pl-destino">'+
+        '<label class="checkline"><input type="radio" name="plModo" value="nova"'+(PL.modo==='nova'?' checked':'')+'> Criar uma <b>planilha nova</b> com o nome <input type="text" id="plNome" value="'+esc(PL.nome)+'" maxlength="80" style="flex:1 1 300px;min-width:200px;"></label>'+
+        (existentes.length ? '<label class="checkline"><input type="radio" name="plModo" value="atualizar"'+(PL.modo==='atualizar'?' checked':'')+'> <b>Atualizar</b> a planilha <select id="plDestino">'+existentes.map(function(t){ return '<option value="'+esc(t.chave)+'"'+(t.chave===PL.destino?' selected':'')+'>'+esc(t.nome)+'</option>'; }).join('')+'</select> (nova versão de preços)</label>' : '')+
+        (resumo ? '<p class="hint" style="margin:4px 0 0 26px;">'+resumo.novos+' novo(s), '+resumo.mudam+' com mudança, '+resumo.iguais+' iguais'+(resumo.saem.length ? ', <b>'+resumo.saem.length+' deixam de valer</b> (ficam desativados, não são apagados): '+esc(resumo.saem.slice(0,6).map(function(i){ return i.itemNumero; }).join(', '))+(resumo.saem.length>6?'…':'') : '')+'.</p>' : '')+
+        '<label class="checkline"><input type="checkbox" id="plUsar"'+(PL.usarNaObra?' checked':'')+'> Usar esta planilha na obra <b>'+esc(o ? o.nome : '')+'</b></label>'+
+        '<label class="checkline"><input type="checkbox" id="plContratar"'+(PL.contratar?' checked':'')+'> Já marcar todos os serviços como <b>contratados</b> nesta obra (dá para desmarcar depois em Serviços contratados)</label>'+
+      '</div>'+
+      '<div class="row"><button type="button" class="btn ghost" id="plCancelar">Cancelar</button><button type="button" class="btn primary" id="plGravar"'+((nErros||!PL.itens.length)?' disabled':'')+'>Gravar planilha</button></div>');
+    m.querySelector('#plCancelar').addEventListener('click', plFechar);
+    var aba = m.querySelector('#plAba'); if(aba) aba.addEventListener('change', function(){ plUsarAba(aba.value); });
+    m.querySelectorAll('[data-col]').forEach(function(s){ s.addEventListener('change', function(){ var v = s.value===''?null:Number(s.value); PL.col[s.getAttribute('data-col')] = v; if(PL.cab<0) PL.cab = 0; PL.itens = plLerItens(); plTela(); }); });
+    m.querySelector('#plCab').addEventListener('change', function(e){ var v = Math.max(1, parseInt(e.target.value,10)||1); PL.cab = Math.max(0, v-1-(PL.offset||0)); PL.itens = plLerItens(); plTela(); });
+    m.querySelectorAll('tr[data-k] input').forEach(function(inp){ inp.addEventListener('change', function(){
+      var it = PL.itens[+inp.closest('tr').getAttribute('data-k')], c = inp.getAttribute('data-c');
+      it[c] = c==='custo_unitario' ? plNumero(inp.value) : plTxt(inp.value); it.gerado = false; plTela();
+    }); });
+    m.querySelectorAll('[data-rm]').forEach(function(b){ b.addEventListener('click', function(){ PL.itens.splice(+b.getAttribute('data-rm'), 1); plTela(); }); });
+    m.querySelectorAll('input[name="plModo"]').forEach(function(r){ r.addEventListener('change', function(){ PL.modo = r.value; plTela(); }); });
+    var dest = m.querySelector('#plDestino'); if(dest) dest.addEventListener('change', function(){ PL.destino = dest.value; if(PL.modo==='atualizar') plTela(); });
+    m.querySelector('#plNome').addEventListener('input', function(e){ PL.nome = e.target.value; });
+    m.querySelector('#plUsar').addEventListener('change', function(e){ PL.usarNaObra = e.target.checked; });
+    m.querySelector('#plContratar').addEventListener('change', function(e){ PL.contratar = e.target.checked; });
+    m.querySelector('#plGravar').addEventListener('click', plGravar);
+  }
+  function plGravar(){
+    if(plAvisos()){ plTela(); return; }
+    var nova = PL.modo==='nova';
+    if(nova && plTxt(PL.nome).length<3){ toast('Dê um nome para a planilha.','error'); return; }
+    if(!nova && !PL.destino){ toast('Escolha qual planilha atualizar.','error'); return; }
+    var chave = nova ? plSlug(PL.nome) : PL.destino;
+    var resumo = plResumoMudancas();
+    var o = (state.obras||[]).find(function(x){ return x.id===PL.obraId; });
+    var msg = nova
+      ? 'Vai criar a planilha "'+plTxt(PL.nome)+'" com '+PL.itens.length+' serviços.'
+      : 'Vai atualizar a planilha "'+tabelaPrecoNome(chave)+'": '+resumo.novos+' novo(s), '+resumo.mudam+' com mudança'+(resumo.saem.length ? ', '+resumo.saem.length+' deixam de valer (desativados, não apagados)' : '')+'. Os RDOs já lançados continuam ligados aos mesmos serviços.';
+    if(PL.usarNaObra && o) msg += ' A obra '+o.nome+' passa a usar esta planilha.';
+    if(PL.usarNaObra && PL.contratar) msg += ' Todos os serviços ficam marcados como contratados nela.';
+    confirmModal({ title: nova ? 'Criar planilha' : 'Atualizar planilha', msg: msg, okLabel:'Gravar' }).then(function(ok){
+      if(!ok) return;
+      var itens = PL.itens.map(function(it){ return { item_numero:plTxt(it.item_numero), categoria_numero:plTxt(it.categoria_numero), categoria_nome:plTxt(it.categoria_nome)||'SERVIÇOS', descricao:plTxt(it.descricao), unidade:plTxt(it.unidade), custo_unitario:it.custo_unitario }; });
+      var b = document.getElementById('plGravar'); if(b){ b.disabled = true; b.textContent = 'Gravando…'; }
+      Promise.resolve(supabaseClient.rpc('vk_importar_planilha', { p_chave:chave, p_nome: nova ? plTxt(PL.nome) : '', p_modo:PL.modo, p_arquivo:PL.nomeArquivo, p_itens:itens, p_obra: PL.usarNaObra ? PL.obraId : null, p_contratar: !!(PL.usarNaObra && PL.contratar) })).then(function(res){
+        if(res.error){
+          if(b){ b.disabled = false; b.textContent = 'Gravar planilha'; }
+          toast(/function .*vk_importar_planilha|schema cache/i.test(res.error.message) ? 'O banco ainda não tem a função de planilhas (migration 070).' : 'Não foi possível gravar: '+res.error.message, 'error');
+          return;
+        }
+        var r = res.data || {};
+        plFechar();
+        toast('Planilha gravada: '+(r.novos||0)+' novo(s), '+(r.atualizados||0)+' atualizado(s)'+(r.desativados ? ', '+r.desativados+' desativado(s)' : '')+'.', 'ok');
+        Promise.all([loadTabelasPreco(), loadCatalogoProdutos(), loadObraServicosContratados()]).then(function(){ return loadObras(); });
+      }, function(){ if(b){ b.disabled = false; b.textContent = 'Gravar planilha'; } toast('Sem conexão. Tente de novo.','error'); });
+    });
   }
 
 })();
