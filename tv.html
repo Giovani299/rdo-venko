@@ -41,7 +41,7 @@
 
   #grade{display:grid;gap:calc(var(--u)*1.2);min-height:0;}
   .obra{--k:1;overflow:hidden;background:linear-gradient(180deg,var(--placa-2),var(--placa));border:1px solid var(--linha);border-radius:calc(var(--u)*1.1);
-    padding:calc(var(--u)*1.4*var(--k)) calc(var(--u)*1.6*var(--k));display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:calc(var(--u)*1.1*var(--k));min-height:0;min-width:0;
+    padding:calc(var(--u)*1.4*var(--k)) calc(var(--u)*1.6*var(--k));display:grid;grid-template-rows:auto minmax(0,1fr);gap:calc(var(--u)*1.1*var(--k));min-height:0;min-width:0;
     box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 30px 60px -40px rgba(0,0,0,.9);animation:entra .5s ease both;}
   @keyframes entra{from{opacity:.001;transform:translateY(8px);}to{opacity:1;transform:none;}}
   #grade.m .obra{--k:.8;} #grade.p .obra{--k:.64;}
@@ -50,32 +50,24 @@
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
   .obra-cli{color:var(--aco);font-size:calc(var(--u)*.95*max(var(--k),.8));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:calc(var(--u)*.2);}
 
-  .numeros{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:calc(var(--u)*1.6*var(--k));align-items:end;}
-  .hoje .valor{white-space:nowrap;font-size:calc(var(--u)*4.4*var(--k));font-weight:800;line-height:.95;margin-top:calc(var(--u)*.35);color:var(--ouro-2);}
-  .hoje .valor.zero{color:var(--aco);}
-  .hoje .obs{color:var(--tinta-2);font-size:calc(var(--u)*.9*max(var(--k),.8));margin-top:calc(var(--u)*.45);}
-  .meta .linha1{display:flex;justify-content:space-between;align-items:baseline;gap:calc(var(--u)*.8);}
-  .meta .pct{white-space:nowrap;font-size:calc(var(--u)*4.4*var(--k));font-weight:800;line-height:.95;}
-  .meta .pct small{font-size:.5em;margin-left:.06em;color:var(--tinta-2);}
-  .meta .pct.batida{color:var(--ok);}
-  .barra{position:relative;height:calc(var(--u)*1.05*var(--k));background:#2A2924;border-radius:999px;overflow:hidden;margin:calc(var(--u)*.55) 0 calc(var(--u)*.45);}
+  /* 4 números por obra: previsto, atingido, % e maior dia */
+  .quatro{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:calc(var(--u)*.9*var(--k));min-height:0;}
+  .bloco{overflow:hidden;background:rgba(255,255,255,.025);border:1px solid var(--linha);border-radius:calc(var(--u)*.8);padding:calc(var(--u)*1.1*var(--k)) calc(var(--u)*1.2*var(--k));
+    display:flex;flex-direction:column;justify-content:center;gap:calc(var(--u)*.45*var(--k));min-width:0;min-height:0;}
+  .bloco .grande{font-size:calc(var(--u)*4.4*var(--k));font-weight:800;line-height:.95;white-space:nowrap;}
+  #grade.u .bloco .grande{font-size:calc(var(--u)*8.5);}
+  #grade.u .bloco .sub{font-size:calc(var(--u)*1.2);}
+  #grade.u .bloco .rot{font-size:calc(var(--u)*1);}
+  .bloco .grande small{font-size:.5em;margin-left:.06em;color:var(--tinta-2);}
+  .bloco .sub{color:var(--tinta-2);font-size:calc(var(--u)*.95*max(var(--k),.8));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .bloco.previsto .grande{color:var(--tinta);}
+  .bloco.atingido .grande{color:var(--ouro-2);}
+  .bloco.pct .grande.batida{color:var(--ok);}
+  .bloco .apagado{color:var(--aco) !important;}
+  #grade.m .bloco .sub, #grade.p .bloco .sub{display:none;}   /* telas com muitas obras: só os números */
+  .barra{position:relative;height:calc(var(--u)*.8*var(--k));background:#2A2924;border-radius:999px;overflow:hidden;margin-top:calc(var(--u)*.2);}
   .barra i{position:absolute;inset:0 auto 0 0;border-radius:999px;background:linear-gradient(90deg,#C99F05,var(--ouro) 60%,var(--ouro-2));transition:width 1s ease;}
   .barra i.batida{background:linear-gradient(90deg,#2F8F52,var(--ok));}
-  .meta .detalhe{display:flex;flex-wrap:wrap;justify-content:space-between;gap:0 calc(var(--u)*.8);color:var(--tinta-2);font-size:calc(var(--u)*.95*max(var(--k),.8));}
-  .meta .detalhe span{white-space:nowrap;}
-  .meta .detalhe b{color:var(--tinta);font-weight:700;}
-  .sem-meta{color:var(--aco);font-size:calc(var(--u)*max(var(--k),.8));border:1px dashed var(--linha);border-radius:calc(var(--u)*.7);padding:calc(var(--u)*.8) calc(var(--u)*1);}
-  .sem-meta b{white-space:nowrap;color:var(--tinta);display:block;font-size:calc(var(--u)*1.6*var(--k));font-family:"Big Shoulders Display",sans-serif;font-weight:800;}
-
-  .grafico{display:flex;flex-direction:column;min-height:0;}
-  .grafico .rot{display:flex;justify-content:space-between;margin-bottom:calc(var(--u)*.5);}
-  .barras{flex:1;min-height:0;display:flex;align-items:flex-end;gap:2px;border-bottom:1px solid var(--linha);}
-  .barras span{flex:1;min-width:1px;border-radius:3px 3px 0 0;background:#4A4840;position:relative;}
-  .barras span.vazio{background:transparent;}
-  .barras span.futuro{background:transparent;border-bottom:2px dotted #34322C;}
-  .barras span.hoje{background:var(--ouro);box-shadow:0 0 calc(var(--u)*.8) rgba(238,197,18,.45);}
-  .sem-lanc{align-self:center;margin:auto;color:var(--aco);font-style:normal;font-size:calc(var(--u)*.95*max(var(--k),.8));}
-  .eixo{display:flex;justify-content:space-between;color:var(--aco);font-size:calc(var(--u)*.72);margin-top:calc(var(--u)*.3);font-variant-numeric:tabular-nums;}
 
   footer{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--u)*2);border-top:1px solid var(--linha);padding-top:calc(var(--u)*1);}
   .totais{display:flex;gap:calc(var(--u)*3);}
@@ -144,10 +136,9 @@
   <main id="grade"></main>
   <footer>
     <div class="totais">
-      <div><span class="rot">Total hoje</span><b id="totHoje">—</b></div>
-      <div><span class="rot">Total do mês</span><b id="totMes">—</b></div>
-      <div><span class="rot">Meta do mês</span><b id="totMeta">—</b></div>
-      <div><span class="rot">Atingido</span><b id="totPct">—</b></div>
+      <div><span class="rot">Previsto do mês</span><b id="totMeta">—</b></div>
+      <div><span class="rot">Atingido até agora</span><b id="totMes">—</b></div>
+      <div><span class="rot">Porcentagem</span><b id="totPct">—</b></div>
     </div>
     <div class="estado"><div class="paginas" id="paginas"></div><span id="status"><span class="ponto"></span>Carregando…</span></div>
   </footer>
@@ -183,6 +174,7 @@
 
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function reais(v){ return 'R$ ' + Math.round(Number(v)||0).toLocaleString('pt-BR'); }
+  function diaSemana(iso){ var p = String(iso).split('-'); var d = new Date(+p[0], +p[1]-1, +p[2]); var t = d.toLocaleDateString('pt-BR', {weekday:'long', day:'numeric', month:'long'}); return t.charAt(0).toUpperCase() + t.slice(1); }
   function dm(iso){ if(!iso) return ''; var p = String(iso).split('-'); return p[2]+'/'+p[1]; }
   function hhmm(d){ return d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}); }
 
@@ -258,16 +250,15 @@
     var obras = (dados && dados.obras) || [];
     var grade = $('grade');
     // totais da TV
-    var tHoje = 0, tMes = 0, tMeta = 0, tMesComMeta = 0;
-    obras.forEach(function(o){ tHoje += +o.hoje||0; tMes += +o.mes||0; if(o.meta>0){ tMeta += +o.meta; tMesComMeta += +o.mes||0; } });
-    $('totHoje').textContent = reais(tHoje);
+    var tMes = 0, tMeta = 0, tMesComMeta = 0;
+    obras.forEach(function(o){ tMes += +o.mes||0; if(o.meta>0){ tMeta += +o.meta; tMesComMeta += +o.mes||0; } });
     $('totMes').textContent = reais(tMes);
     $('totMeta').textContent = tMeta>0 ? reais(tMeta) : '—';
     $('totPct').textContent = tMeta>0 ? Math.floor(tMesComMeta / tMeta * 100) + '%' : '—';
 
     if(!obras.length){
       grade.style.gridTemplateColumns = '1fr'; grade.style.gridTemplateRows = '1fr';
-      grade.innerHTML = '<div class="vazio-geral"><div><b>Nenhuma obra nesta TV</b>No sistema, em Obras, escolha “TV '+tv+'” no campo “Painel da TV” de cada obra.</div></div>';
+      grade.innerHTML = '<div class="vazio-geral"><div><b>Nenhuma obra nesta TV</b>No sistema, em Obras, escolha “TV '+tv+'” no campo “Painel da TV” de cada obra e digite o valor previsto do mês.</div></div>';
       $('paginas').innerHTML = ''; return;
     }
     var paginas = Math.ceil(obras.length / POR_PAGINA);
@@ -276,56 +267,50 @@
     var c = colunas(paginas > 1 ? POR_PAGINA : vis.length);
     grade.style.gridTemplateColumns = 'repeat('+c[0]+', minmax(0,1fr))';
     grade.style.gridTemplateRows = 'repeat('+c[1]+', minmax(0,1fr))';
-    grade.className = (c[0]*c[1] >= 6) ? 'p' : (c[0]*c[1] >= 4 ? 'm' : '');
+    grade.className = (c[0]*c[1] >= 6) ? 'p' : (c[0]*c[1] >= 4 ? 'm' : (c[0]*c[1] === 1 ? 'u' : ''));
     grade.innerHTML = vis.map(cartao).join('');
+    ajusta();
     $('paginas').innerHTML = paginas > 1 ? Array.apply(null, Array(paginas)).map(function(_, i){ return '<i class="'+(i===pagina?'on':'')+'"></i>'; }).join('') : '';
   }
 
+  // diminui o número até caber no quadro (largura e altura), qualquer que seja a TV ou a fonte
+  function ajusta(){
+    document.querySelectorAll('#grade .bloco').forEach(function(b){
+      var g = b.querySelector('.grande'); if(!g) return;
+      g.style.fontSize = '';
+      var t = parseFloat(getComputedStyle(g).fontSize), n = 0;
+      while(n++ < 40 && t > 12 && (g.scrollWidth > g.clientWidth + 1 || b.scrollHeight > b.clientHeight + 1)){ t *= 0.93; g.style.fontSize = t + 'px'; }
+    });
+  }
+  var tAjuste = null;
+  window.addEventListener('resize', function(){ clearTimeout(tAjuste); tAjuste = setTimeout(ajusta, 150); });
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ ajusta(); });
+
   function cartao(o){
-    var hoje = +o.hoje || 0, mes = +o.mes || 0, meta = +o.meta || 0;
-    var dias = o.dias || [];
-    // observação embaixo do valor do dia
-    var obs = '';
-    if(hoje > 0) obs = (o.rdos_hoje||0) + ' RDO' + ((o.rdos_hoje||0)===1?'':'s') + ' hoje';
-    else {
-      var ult = null; for(var i=dias.length-1;i>=0;i--){ if(+dias[i][1] > 0){ ult = dias[i]; break; } }
-      obs = (o.rdos_hoje ? 'RDO de hoje sem serviços lançados' : 'Nenhum RDO hoje ainda') + (ult ? ' · último: ' + dm(ult[0]) + ' ' + reais(ult[1]) : '');
-    }
-    // meta
-    var blocoMeta;
+    var mes = +o.mes || 0, meta = +o.meta || 0, dias = o.dias || [];
+    var nomeMes = MESES[(+String(dados.inicio_mes).split('-')[1]) - 1];
+    // maior dia do mês (pelo valor dos serviços lançados nos RDOs)
+    var maior = null; dias.forEach(function(d){ if(+d[1] > 0 && (!maior || +d[1] > +maior[1])) maior = d; });
+    var bPrev = '<div class="bloco previsto"><span class="rot">Previsto do mês</span>'+
+      (meta > 0 ? '<div class="grande num">'+reais(meta)+'</div><div class="sub">'+nomeMes+'</div>'
+                : '<div class="grande num apagado">—</div><div class="sub">defina em Obras ▸ Painel da TV</div>')+'</div>';
+    var bAting = '<div class="bloco atingido"><span class="rot">Atingido até agora</span><div class="grande num'+(mes>0?'':' apagado')+'">'+reais(mes)+'</div>'+
+      '<div class="sub">'+(mes>0 ? 'soma dos RDOs de '+nomeMes : 'nenhum serviço lançado nos RDOs')+'</div></div>';
+    var bPct;
     if(meta > 0){
       var pct = Math.floor(mes / meta * 100), batida = mes >= meta;
-      var falta = Math.max(0, meta - mes);
-      blocoMeta = '<div class="meta">'+
-        '<div class="linha1"><span class="rot">Meta do mês</span><span class="pct num'+(batida?' batida':'')+'">'+pct+'<small>%</small></span></div>'+
-        '<div class="barra" role="img" aria-label="'+pct+'% da meta"><i class="'+(batida?'batida':'')+'" style="width:'+Math.min(100, mes/meta*100).toFixed(1)+'%"></i></div>'+
-        '<div class="detalhe"><span><b>'+reais(mes)+'</b> de '+reais(meta)+'</span><span>'+(batida ? 'Meta batida' : 'Faltam <b>'+reais(falta)+'</b>')+'</span></div>'+
-      '</div>';
+      bPct = '<div class="bloco pct"><span class="rot">Porcentagem</span><div class="grande num'+(batida?' batida':'')+'">'+pct+'<small>%</small></div>'+
+        '<div class="barra" role="img" aria-label="'+pct+'% do previsto"><i class="'+(batida?'batida':'')+'" style="width:'+Math.min(100, mes/meta*100).toFixed(1)+'%"></i></div>'+
+        '<div class="sub">'+(batida ? 'previsto atingido' : 'faltam '+reais(meta - mes))+'</div></div>';
     } else {
-      blocoMeta = '<div class="sem-meta"><span class="rot">Medido no mês</span><b>'+reais(mes)+'</b>Meta do mês não definida</div>';
+      bPct = '<div class="bloco pct"><span class="rot">Porcentagem</span><div class="grande num apagado">—</div><div class="sub">sem valor previsto</div></div>';
     }
-    // gráfico dia a dia (o mês inteiro; dias que ainda não chegaram ficam pontilhados)
-    var ini = dados.inicio_mes, hojeIso = dados.hoje;
-    var p = String(ini).split('-'), ano = +p[0], mesN = +p[1];
-    var nDias = new Date(ano, mesN, 0).getDate();
-    var porDia = {}; dias.forEach(function(d){ porDia[d[0]] = +d[1] || 0; });
-    var max = 0; dias.forEach(function(d){ if(+d[1] > max) max = +d[1]; });
-    var barras = '';
-    for(var dd=1; dd<=nDias; dd++){
-      var iso = ano + '-' + String(mesN).padStart(2,'0') + '-' + String(dd).padStart(2,'0');
-      if(iso > hojeIso){ barras += '<span class="futuro" style="height:0"></span>'; continue; }
-      var v = porDia[iso] || 0;
-      var h = max > 0 ? Math.max(v > 0 ? 4 : 0, v / max * 100) : 0;
-      barras += '<span class="'+(iso===hojeIso?'hoje':'')+(v===0&&iso!==hojeIso?' vazio':'')+'" style="height:'+h.toFixed(1)+'%" title="'+dm(iso)+': '+reais(v)+'"></span>';
-    }
+    var bMaior = '<div class="bloco maior"><span class="rot">Maior dia'+(maior ? ' · '+dm(maior[0]) : '')+'</span>'+
+      (maior ? '<div class="grande num">'+reais(maior[1])+'</div><div class="sub">'+diaSemana(maior[0])+'</div>'
+             : '<div class="grande num apagado">—</div><div class="sub">ainda sem lançamentos no mês</div>')+'</div>';
     return '<section class="obra">'+
       '<div class="obra-topo"><div class="obra-nome" title="'+esc(o.nome)+'">'+esc(o.nome)+'</div>'+(o.cliente ? '<div class="obra-cli">'+esc(o.cliente)+'</div>' : '')+'</div>'+
-      '<div class="numeros">'+
-        '<div class="hoje"><span class="rot">Valor de hoje</span><div class="valor num'+(hoje>0?'':' zero')+'">'+reais(hoje)+'</div><div class="obs">'+esc(obs)+'</div></div>'+
-        blocoMeta+
-      '</div>'+
-      '<div class="grafico"><div class="rot"><span>Dia a dia — '+MESES[mesN-1]+'</span><span>maior dia '+reais(max)+'</span></div>'+
-        '<div class="barras">'+(max>0 ? barras : '<em class="sem-lanc">Nenhum serviço lançado nos RDOs deste mês ainda</em>')+'</div><div class="eixo"><span>1</span><span>'+Math.ceil(nDias/2)+'</span><span>'+nDias+'</span></div></div>'+
+      '<div class="quatro">'+bPrev+bAting+bPct+bMaior+'</div>'+
     '</section>';
   }
 
