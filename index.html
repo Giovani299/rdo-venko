@@ -1020,6 +1020,12 @@
   .ob2-linha{display:flex;gap:8px;align-items:center;}
   .ob2-linha select{flex:1;min-width:0;}
   .ob2-linha .btn{white-space:nowrap;}
+  .ob2-tv{grid-column:1 / -1;}
+  .ob2-tv select{flex:0 1 220px;}
+  .ob2-meta-in{display:flex;align-items:center;gap:8px;flex:1;min-width:0;color:var(--steel);font-size:12.5px;white-space:nowrap;}
+  .ob2-meta-in input{flex:1;min-width:0;max-width:220px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px;font-variant-numeric:tabular-nums;}
+  .premium #app .ob2-meta-in input{border-radius:10px;box-shadow:inset 0 1px 2px rgba(28,27,24,.04);}
+  .ob2-meta-in input:focus{outline:none;border-color:var(--venko-yellow-deep);box-shadow:0 0 0 3px rgba(238,197,18,.28);}
   .ob2-acoes{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;}
   .ob2-acoes > div{display:flex;gap:8px;flex-wrap:wrap;}
   .ob2-acoes .ob2-sec .btn.ghost{color:var(--steel);}
@@ -1319,6 +1325,7 @@
           <h1>Obras</h1>
           <p>Cadastro dos canteiros acompanhados pela Venko — toda obra pertence a um cliente.</p>
         </div>
+        <a class="btn ghost sm" id="btnPainelTv" href="tv.html" target="_blank" rel="noopener" style="display:none" title="Abre o painel das TVs do escritório (valor do dia e % da meta de cada obra)">📺 Painel da TV</a>
       </div>
       <div class="card" id="obraFormCard">
         <h2><span class="idx">+</span>Cadastrar obra</h2>
@@ -1521,6 +1528,7 @@
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoObras" checked><label for="userAcessoObras">Acesso à aba Obras</label></div>
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoObrasGestao" checked><label for="userAcessoObrasGestao">Pode cadastrar/editar/excluir clientes e obras (desmarque para deixar só visualizar e lançar serviços contratados)</label></div>
           <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userAcessoPlanejamento"><label for="userAcessoPlanejamento">Acesso ao módulo Planejamento (Matriz de Serviços, Cronograma, Acompanhamento da Obra)</label></div>
+          <div class="checkline" style="margin-top:6px;"><input type="checkbox" id="userPainelTv"><label for="userPainelTv">Conta do painel da TV — usada só nas TVs do escritório: não vê nada do sistema, só o painel com o valor do dia e a % da meta das obras</label></div>
           <div class="field" id="userObrasBox" style="margin-top:12px;display:none;">
             <label>Obras que este usuário vê</label>
             <div class="checkline"><input type="checkbox" id="userObrasTodas"><label for="userObrasTodas">Todas as obras (inclusive as cadastradas depois)</label></div>
@@ -2254,7 +2262,7 @@
 
   /* ---------------- data loading (Postgres + Realtime) ---------------- */
   function mapObraRow(row){
-    return { id:row.id, clienteId:row.cliente_id||null, nome:row.nome, endereco:row.endereco, responsavelTecnico:row.responsavel_tecnico, dataInicio:row.data_inicio, localidade:row.localidade||'', contrato:row.contrato||'', tabelaPreco:String(row.tabela_preco||'').toUpperCase(), responsavelRdo:row.responsavel_rdo||null, cobrarRdo:row.cobrar_rdo!==false, status:row.status, exemplo:row.exemplo, createdAt:row.created_at };
+    return { id:row.id, clienteId:row.cliente_id||null, nome:row.nome, endereco:row.endereco, responsavelTecnico:row.responsavel_tecnico, dataInicio:row.data_inicio, localidade:row.localidade||'', contrato:row.contrato||'', tabelaPreco:String(row.tabela_preco||'').toUpperCase(), responsavelRdo:row.responsavel_rdo||null, cobrarRdo:row.cobrar_rdo!==false, metaMensal:(row.meta_mensal==null?null:Number(row.meta_mensal)), painelTv:(row.painel_tv==null?null:Number(row.painel_tv)), temPainelTv:('painel_tv' in row), status:row.status, exemplo:row.exemplo, createdAt:row.created_at };
   }
   function mapClienteRow(row){
     return { id:row.id, nomeEmpresa:row.nome_empresa, cnpj:row.cnpj, email:row.email, telefone:row.telefone, tabelaPreco:String(row.tabela_preco||'').toUpperCase(), createdAt:row.created_at, updatedAt:row.updated_at };
@@ -2524,6 +2532,8 @@
       if(res.error){ toast('Não foi possível carregar usuários.','error'); return; }
       state.profiles = (res.data||[]).sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
       state.temObrasIds = (res.data||[]).some(function(p){ return Object.prototype.hasOwnProperty.call(p, 'obras_ids'); });
+      state.temPainelTvPerfil = (res.data||[]).some(function(p){ return Object.prototype.hasOwnProperty.call(p, 'painel_tv'); });
+      var linhaTv = document.getElementById('userPainelTv'); if(linhaTv && linhaTv.parentNode) linhaTv.parentNode.style.display = state.temPainelTvPerfil ? '' : 'none';
       if(!editingUserId) renderUserObrasBox([]);
       if(state.currentUser){
         var fresh = state.profiles.find(function(p){ return p.id===state.currentUser.id; });
@@ -2891,10 +2901,13 @@
   }
 
   function setCurrentUser(profile){
+    // v74: a conta das TVs do escritório só usa o painel
+    if(profile && profile.painel_tv && !profile.is_admin){ location.replace('tv.html'); return; }
     state.currentUser = profile;
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = '';
     document.getElementById('tabUsers').style.display = profile.is_admin ? '' : 'none';
+    var btnTv = document.getElementById('btnPainelTv'); if(btnTv) btnTv.style.display = profile.is_admin ? '' : 'none';
     // Abas Financeiro e Tabela de Preços retiradas do menu (não usadas pela Venko).
     document.getElementById('tabFinanceiro').style.display = 'none';
     document.getElementById('tabTabelaPrecos').style.display = 'none';
@@ -3383,8 +3396,11 @@
     var isObras = document.getElementById('userAcessoObras').checked;
     var isObrasGestao = document.getElementById('userAcessoObrasGestao').checked;
     var isPlanejamento = document.getElementById('userAcessoPlanejamento').checked;
+    var chkTv = document.getElementById('userPainelTv'), isTv = !!(chkTv && chkTv.checked);
     if(!login || !nome){ toast('Preencha usuário e nome.','error'); return; }
-    var obrasSel = lerUserObrasIds();
+    if(isTv && isAdmin){ toast('A conta do painel da TV não pode ser administrador. Desmarque uma das duas opções.','error'); return; }
+    if(isTv){ isFinanceiro = false; isObras = false; isObrasGestao = false; isPlanejamento = false; }
+    var obrasSel = isTv ? { ok:true, valor:(state.temObrasIds ? [] : undefined) } : lerUserObrasIds();
     if(!obrasSel.ok && (isAdmin || isFinanceiro)) obrasSel = { ok:true, valor:null };   // admin e financeiro veem todas as obras de qualquer jeito
     if(!obrasSel.ok){ toast('Marque as obras que esta pessoa pode ver e lançar RDO (ou “Todas as obras”).','error'); return; }
     var chkPrincipal = document.getElementById('userAdminPrincipal');
@@ -3392,6 +3408,7 @@
 
     if(editingUserId){
       var upd = { nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao, acesso_planejamento:isPlanejamento };
+      if(chkTv && state.temPainelTvPerfil) upd.painel_tv = isTv;
       if(obrasSel.valor!==undefined) upd.obras_ids = obrasSel.valor;
       if(ehAdminPrincipal() && !document.getElementById('userAdminPrincipal').disabled) upd.admin_principal = document.getElementById('userAdminPrincipal').checked;
       supabaseClient.from('profiles').update(upd).eq('id', editingUserId)
@@ -3416,6 +3433,7 @@
       // Perfil criado pelo ADMIN (com as permissões de uma vez). Com a migration 048 o
       // banco só aceita assim; sem ela, cai no jeito antigo (o novo login cria o próprio perfil).
       var perfilAdmin = { id:newId, login:login, nome:nome, cargo:cargo, is_admin:isAdmin, acesso_financeiro:isFinanceiro, acesso_obras:isObras, acesso_obras_gestao:isObrasGestao, acesso_planejamento:isPlanejamento };
+      if(isTv && state.temPainelTvPerfil) perfilAdmin.painel_tv = true;
       if(obrasSel.valor!==undefined) perfilAdmin.obras_ids = obrasSel.valor;
       if(ehAdminPrincipal() && document.getElementById('userAdminPrincipal').checked) perfilAdmin.admin_principal = true;
       // v69: o perfil é sempre gravado pelo administrador (o banco não aceita perfil criado pela própria conta)
@@ -3440,7 +3458,7 @@
     list.innerHTML = state.profiles.map(function(u){
       var isSelf = state.currentUser && state.currentUser.id===u.id;
       return '<div class="obra-card" data-id="'+u.id+'">'+
-        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+(u.admin_principal?'<span class="tag-admin">Principal</span>':'')+(u.acesso_financeiro?'<span class="tag-financeiro">Financeiro</span>':'')+(u.acesso_planejamento?'<span class="tag-financeiro">Planejamento</span>':'')+(!u.is_admin && u.obras_ids && u.obras_ids.length ? '<span class="tag-example" title="'+esc((u.obras_ids||[]).map(function(id){ var o=(state.obras||[]).find(function(x){ return x.id===id; }); return o?o.nome:'obra removida'; }).join(', '))+'">'+u.obras_ids.length+' obra'+(u.obras_ids.length===1?'':'s')+'</span>':'')+(u.acesso_obras===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Sem Obras</span>':'')+(!u.is_admin && u.acesso_obras!==false && u.acesso_obras_gestao===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Obras só visualizar</span>':'')+'</b>'+
+        '<div class="info"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+(u.admin_principal?'<span class="tag-admin">Principal</span>':'')+(u.acesso_financeiro?'<span class="tag-financeiro">Financeiro</span>':'')+(u.acesso_planejamento?'<span class="tag-financeiro">Planejamento</span>':'')+(u.painel_tv?'<span class="tag-financeiro">📺 Conta da TV</span>':'')+(!u.is_admin && u.obras_ids && u.obras_ids.length ? '<span class="tag-example" title="'+esc((u.obras_ids||[]).map(function(id){ var o=(state.obras||[]).find(function(x){ return x.id===id; }); return o?o.nome:'obra removida'; }).join(', '))+'">'+u.obras_ids.length+' obra'+(u.obras_ids.length===1?'':'s')+'</span>':'')+(u.acesso_obras===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Sem Obras</span>':'')+(!u.is_admin && u.acesso_obras!==false && u.acesso_obras_gestao===false?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">Obras só visualizar</span>':'')+'</b>'+
           '<div class="meta">'+esc(u.login)+' · '+esc(u.cargo||'—')+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
@@ -3475,6 +3493,7 @@
         document.getElementById('userAcessoObras').checked = (u.acesso_obras !== false);
         document.getElementById('userAcessoObrasGestao').checked = (u.acesso_obras_gestao !== false);
         document.getElementById('userAcessoPlanejamento').checked = !!u.acesso_planejamento;
+        var chkTvEd = document.getElementById('userPainelTv'); if(chkTvEd) chkTvEd.checked = !!u.painel_tv;
         renderUserObrasBox(u.obras_ids || null);
         document.getElementById('userFormTitle').textContent = 'Editar usuário — '+u.nome;
         document.getElementById('userSubmitBtn').textContent = 'Salvar alterações';
@@ -5737,6 +5756,16 @@
 
   // v63 — responsável pelo RDO da obra (060_rdo_responsavel.sql): recebe "Faça o RDO" às 18h
   function obraRespRdoNome(id){ var p = id && (state.profiles||[]).find(function(x){ return x.id===id; }); return p ? p.nome : ''; }
+  // v74 — meta do mês (R$) da obra: aceita "150.000", "150000", "150.000,50", "R$ 150 mil" não
+  function fmtMetaObra(v){ var n = Number(v); var d = (Math.round(n*100) % 100) ? 2 : 0; return n.toLocaleString('pt-BR', {minimumFractionDigits:d, maximumFractionDigits:d}); }
+  function lerMetaObra(txt){
+    var t = String(txt||'').replace(/R\$|\s/g,'');
+    if(!t) return null;
+    if(/,/.test(t)) t = t.replace(/\./g,'').replace(',', '.');
+    else if(/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g,'');
+    var n = Number(t);
+    return (isFinite(n) && n >= 0) ? Math.round(n*100)/100 : false;
+  }
   function obraRespRdoMeta(o){
     if(!state.temRespRdo) return '';
     var u = state.currentUser;
@@ -5769,6 +5798,7 @@
       // v71: cartão organizado — título e números, dados da obra, configuração (responsável e planilha) e ações
       var planilhaNome = tabelaPrecoNome(tabelaDaObra(o.id)) || 'nenhuma';
       var podeResp = ehAdmin() && state.temRespRdo, podePlan = canGestao && tabelasPrecoCfg.db, podeAnexar = ehAdmin();
+      var podeTv = ehAdmin() && o.temPainelTv && o.status==='ativa';   // v74: painel das TVs do escritório
       var dados = ['Cliente: '+esc(clienteNomeById(o.clienteId)||'—')];
       if(o.localidade) dados.push(esc(o.localidade));
       if(o.endereco) dados.push(esc(o.endereco));
@@ -5782,12 +5812,18 @@
           '<div class="ob2-numeros"><span><b>'+rdoCount+'</b>RDO'+(rdoCount===1?'':'s')+'</span>'+(canServ?'<span><b>'+servCount+'</b>serviço'+(servCount===1?'':'s')+' contratado'+(servCount===1?'':'s')+'</span>':'')+'</div>'+
         '</div>'+
         '<div class="ob2-meta">'+dados.join(' · ')+'</div>'+
-        ((podeResp || podePlan || podeAnexar) ? '<div class="ob2-config">'+
+        ((podeResp || podePlan || podeAnexar || podeTv) ? '<div class="ob2-config">'+
           (podeResp ? '<div class="ob2-campo"><label for="resp-'+o.id+'">Responsável pelo RDO</label><select id="resp-'+o.id+'" data-resprdo="'+o.id+'">'+obraRespRdoOptions(o.responsavelRdo)+'</select><small>Recebe o aviso das 18h e pode editar os RDOs desta obra.</small></div>' : '')+
           ((podePlan || podeAnexar) ? '<div class="ob2-campo"><label for="plan-'+o.id+'">Planilha de serviços</label><div class="ob2-linha">'+
             (podePlan ? '<select id="plan-'+o.id+'" data-tabelaobra="'+o.id+'">'+obraTabelaOptionsHtml(o.tabelaPreco)+'</select>' : '<span style="flex:1;">'+esc(planilhaNome)+'</span>')+
             (podeAnexar ? '<button class="btn ghost sm" data-anexarplanilha="'+o.id+'" title="Anexar ou atualizar a planilha de serviços desta obra (Excel do cliente)">📄 Anexar planilha</button>' : '')+
           '</div><small>Os serviços desta planilha aparecem no item 4 do RDO.</small></div>' : '')+
+          (podeTv ? '<div class="ob2-campo ob2-tv"><label for="tv-'+o.id+'">Painel da TV</label><div class="ob2-linha">'+
+            '<select id="tv-'+o.id+'" data-paineltv="'+o.id+'" title="Em qual TV do escritório esta obra aparece">'+
+              ['', '1', '2'].map(function(v){ return '<option value="'+v+'"'+(String(o.painelTv||'')===v?' selected':'')+'>'+(v ? 'TV '+v : 'Não aparece na TV')+'</option>'; }).join('')+
+            '</select>'+
+            '<span class="ob2-meta-in"><span>Meta do mês R$</span><input type="text" inputmode="decimal" data-metaobra="'+o.id+'" value="'+(o.metaMensal!=null ? esc(fmtMetaObra(o.metaMensal)) : '')+'" placeholder="ex.: 150.000" aria-label="Meta do mês em reais"></span>'+
+          '</div><small>Na TV aparecem o valor medido no dia e a % da meta do mês atingida.</small></div>' : '')+
         '</div>' : '')+
         '<div class="ob2-acoes">'+
           '<div class="ob2-princ">'+
@@ -5834,6 +5870,30 @@
       });
     });
     list.querySelectorAll('[data-anexarplanilha]').forEach(function(b){ b.addEventListener('click', function(){ plAbrir(b.getAttribute('data-anexarplanilha')); }); });
+    // v74: em qual TV a obra aparece e a meta do mês
+    list.querySelectorAll('[data-paineltv]').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        var id = sel.getAttribute('data-paineltv');
+        supabaseClient.from('obras').update({ painel_tv: sel.value ? Number(sel.value) : null }).eq('id', id).then(function(res){
+          if(res.error){ toast('Erro ao escolher a TV: '+res.error.message,'error'); loadObras(); return; }
+          toast(sel.value ? 'A obra vai aparecer na TV '+sel.value+'.' : 'A obra não aparece mais na TV.','ok');
+          loadObras();
+        });
+      });
+    });
+    list.querySelectorAll('[data-metaobra]').forEach(function(inp){
+      inp.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } });
+      inp.addEventListener('change', function(){
+        var id = inp.getAttribute('data-metaobra');
+        var v = lerMetaObra(inp.value);
+        if(v===false){ toast('Meta inválida. Escreva só o valor em reais, ex.: 150.000 ou 150000,50.','error'); return; }
+        supabaseClient.from('obras').update({ meta_mensal: v }).eq('id', id).then(function(res){
+          if(res.error){ toast('Erro ao salvar a meta: '+res.error.message,'error'); loadObras(); return; }
+          toast(v==null ? 'Meta do mês removida.' : 'Meta do mês salva: R$ '+fmtMetaObra(v)+'.','ok');
+          loadObras();
+        });
+      });
+    });
     list.querySelectorAll('[data-tabelaobra]').forEach(function(sel){
       sel.addEventListener('change', function(){
         var id = sel.getAttribute('data-tabelaobra');
