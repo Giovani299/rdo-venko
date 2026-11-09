@@ -91,12 +91,21 @@
 
   .grafico{margin-top:calc(var(--u)*1.1*var(--k));flex:1;min-height:calc(var(--u)*5);display:flex;flex-direction:column;}
   .grafico .tit{display:flex;justify-content:space-between;font-size:calc(var(--u)*.7*var(--k));margin-bottom:calc(var(--u)*.55*var(--k));}
-  .barras{flex:1;min-height:0;display:flex;align-items:flex-end;gap:calc(var(--u)*.3*var(--k));padding:calc(var(--u)*.55) calc(var(--u)*.25) 0;border-bottom:1px solid #282828;}
-  .barras span{flex:1;min-width:1px;border-radius:2px 2px 0 0;background:#2c2c2c;}
-  .barras span.zero{background:#1a1a1a;}
-  .barras span.futuro{background:rgba(28,28,28,.5);}
-  .barras span.hj{background:var(--amarelo);box-shadow:0 0 15px rgba(255,202,0,.5);}
-  .eixo{display:flex;justify-content:space-between;font-size:calc(var(--u)*.7*var(--k));color:var(--cinza);font-weight:700;margin-top:calc(var(--u)*.25);padding:0 calc(var(--u)*.1);}
+  /* cada dia é uma coluna: valor do dia em cima, barra, e o número do dia embaixo */
+  .barras{flex:1;min-height:0;display:flex;gap:calc(var(--u)*.3*var(--k));padding:0 calc(var(--u)*.25);border-bottom:1px solid #282828;}
+  .barras .col{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;}
+  .barras .v{font-size:calc(var(--u)*.6*var(--k));font-weight:700;color:var(--cinza-2);text-align:center;white-space:nowrap;margin-bottom:calc(var(--u)*.2);letter-spacing:-.03em;overflow:visible;}
+  #grade.u .barras .v{font-size:calc(var(--u)*.72);}
+  .barras .col.hj .v{color:var(--amarelo);}
+  .barras .b{border-radius:2px 2px 0 0;background:#2c2c2c;}
+  .barras .col.zero .b{background:#1a1a1a;}
+  .barras .col.futuro .b{background:rgba(28,28,28,.5);}
+  .barras .col.hj .b{background:var(--amarelo);box-shadow:0 0 15px rgba(255,202,0,.5);}
+  .eixo{display:flex;gap:calc(var(--u)*.3*var(--k));padding:0 calc(var(--u)*.25);margin-top:calc(var(--u)*.25);}
+  .eixo span{flex:1;min-width:0;text-align:center;font-size:calc(var(--u)*.6*var(--k));color:#737373;font-weight:700;font-variant-numeric:tabular-nums;}
+  #grade.u .eixo span{font-size:calc(var(--u)*.72);}
+  .eixo span.hj{color:var(--amarelo);}
+  .eixo span.fds{color:#4a4a4a;}
 
   .vazio-geral{grid-column:1/-1;display:grid;place-items:center;text-align:center;color:var(--cinza);font-size:calc(var(--u)*1.2);}
   .vazio-geral b{display:block;font-size:calc(var(--u)*2.2);font-weight:900;color:var(--branco);text-transform:uppercase;margin-bottom:calc(var(--u)*.5);}
@@ -187,6 +196,13 @@
 
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function reais(v){ return 'R$ ' + Math.round(Number(v)||0).toLocaleString('pt-BR'); }
+  // valor do dia em cima da barra: inteiro quando cabe (3.509), resumido quando a coluna é estreita (3,5k)
+  function valorCurto(v, largo){
+    v = Math.round(v);
+    if(largo || v < 1000) return v.toLocaleString('pt-BR');
+    var k = v / 1000;
+    return (k < 10 ? k.toFixed(1).replace('.', ',').replace(',0', '') : Math.round(k)) + 'k';
+  }
   function hhmm(d){ return d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}); }
 
   // ---------- relógio ----------
@@ -287,15 +303,22 @@
     var obs = rdosHoje ? rdosHoje + ' RDO' + (rdosHoje===1 ? '' : 's') + ' hoje' + (hoje > 0 ? '' : ' (sem serviços lançados)') : 'Nenhum RDO hoje ainda';
     var pct = meta > 0 ? Math.floor(mes / meta * 100) : null, batida = meta > 0 && mes >= meta;
 
-    // gráfico dia a dia: dias passados em cinza, hoje em amarelo, dias que ainda vão chegar bem apagados
-    var barras = '';
+    // gráfico do dia 1 ao último dia do mês (vira sozinho no mês seguinte):
+    // valor de cada dia em cima da barra, hoje em amarelo, dias que ainda vão chegar apagados
+    var largo = (dados.obras || []).length === 1;   // obra sozinha na TV: cabe o valor inteiro
+    var barras = '', eixo = '';
     for(var dd=1; dd<=nDias; dd++){
       var iso = ano + '-' + String(mesN).padStart(2,'0') + '-' + String(dd).padStart(2,'0');
-      if(iso > hojeIso){ barras += '<span class="futuro" style="height:4%"></span>'; continue; }
-      var v = porDia[iso] || 0, h;
-      if(iso === hojeIso){ h = maior > 0 && v > 0 ? Math.max(6, v / maior * 100) : 4; barras += '<span class="hj" style="height:'+h.toFixed(1)+'%" title="hoje: '+reais(v)+'"></span>'; continue; }
-      if(v > 0){ h = Math.max(6, v / maior * 100); barras += '<span style="height:'+h.toFixed(1)+'%" title="'+dd+': '+reais(v)+'"></span>'; }
-      else barras += '<span class="zero" style="height:10%" title="'+dd+': sem lançamento"></span>';
+      var dow = new Date(ano, mesN-1, dd).getDay(), fds = (dow === 0 || dow === 6);
+      var v = porDia[iso] || 0, h, cls, rotulo = '';
+      if(iso > hojeIso){ cls = 'futuro'; h = 4; }
+      else {
+        cls = (iso === hojeIso) ? 'hj' : (v > 0 ? '' : 'zero');
+        h = v > 0 ? Math.max(5, v / maior * 82) : (iso === hojeIso ? 4 : 8);
+        if(v > 0) rotulo = valorCurto(v, largo);
+      }
+      barras += '<div class="col '+cls+'" title="'+dd+'/'+String(mesN).padStart(2,'0')+': '+reais(v)+'"><span class="v n">'+rotulo+'</span><span class="b" style="height:'+h.toFixed(1)+'%"></span></div>';
+      eixo += '<span class="'+(iso === hojeIso ? 'hj' : (fds ? 'fds' : ''))+'">'+dd+'</span>';
     }
 
     return '<section class="obra">'+
@@ -327,7 +350,7 @@
       '<div class="grafico">'+
         '<div class="tit rot"><span>Dia a dia — '+MESES[mesN-1]+'</span><span>Maior dia '+reais(maior)+'</span></div>'+
         '<div class="barras">'+barras+'</div>'+
-        '<div class="eixo"><span>1</span><span>15</span><span>'+nDias+'</span></div>'+
+        '<div class="eixo">'+eixo+'</div>'+
       '</div>'+
     '</section>';
   }
