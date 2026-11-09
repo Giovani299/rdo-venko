@@ -38,6 +38,12 @@
   .mes-nome.passado{color:#111;background:var(--amarelo);border-radius:999px;padding:calc(var(--u)*.15) calc(var(--u)*.7);font-weight:800;}
   .bt[disabled]{opacity:.35;cursor:default;}
   .menu-sep{width:1px;background:#333;margin:0 4px;}
+  .bt.on{background:var(--amarelo);color:#111;border-color:var(--amarelo);}
+  .barras.meses .col{cursor:pointer;}
+  .eixo.meses span{text-transform:lowercase;}
+  .barras.meses .v{font-size:calc(var(--u)*.95*var(--k));}
+  .barras.meses .vp{font-size:calc(var(--u)*.8*var(--k));}
+  .eixo.meses span{font-size:calc(var(--u)*.75*var(--k));}
   .relogio{text-align:right;}
   .relogio .hora{font-size:calc(var(--u)*2.5);font-weight:800;letter-spacing:-.02em;line-height:1;}
   .relogio .data{font-size:calc(var(--u)*.83);font-weight:600;color:var(--cinza);letter-spacing:.02em;margin-top:calc(var(--u)*.25);}
@@ -100,11 +106,23 @@
   .barras .col{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;}
   .barras .v{font-size:calc(var(--u)*.6*var(--k));font-weight:700;color:var(--cinza-2);text-align:center;white-space:nowrap;margin-bottom:calc(var(--u)*.2);letter-spacing:-.03em;overflow:visible;}
   #grade.u .barras .v{font-size:calc(var(--u)*.72);}
-  .barras .col.hj .v{color:var(--amarelo);}
-  .barras .b{border-radius:2px 2px 0 0;background:#2c2c2c;}
-  .barras .col.zero .b{background:#1a1a1a;}
-  .barras .col.futuro .b{background:rgba(28,28,28,.5);}
-  .barras .col.hj .b{background:var(--amarelo);box-shadow:0 0 15px rgba(255,202,0,.5);}
+  .barras .col.feito .v{color:var(--amarelo);}
+  .barras .vp{font-size:calc(var(--u)*.55*var(--k));font-weight:600;color:#8a8a8a;text-align:center;white-space:nowrap;margin-bottom:calc(var(--u)*.2);letter-spacing:-.03em;}
+  #grade.u .barras .vp{font-size:calc(var(--u)*.66);}
+  .barras .v:empty{display:none;}
+  /* pilha do dia: previsto (cinza, atrás) e o que foi feito (amarelo, na frente) */
+  .barras .pilha{position:relative;flex:none;}
+  .barras .pilha > i{position:absolute;left:0;right:0;bottom:0;display:block;border-radius:2px 2px 0 0;}
+  .barras .pilha .p{background:rgba(255,255,255,.07);border-top:2px solid #6b6b6b;}
+  .barras .pilha .b{background:#1a1a1a;}
+  .barras .col.feito .pilha .b{background:var(--amarelo);}
+  .barras .col.futuro .pilha .p{background:rgba(255,255,255,.04);border-top-color:#454545;}
+  .barras .col.hj .pilha .b{box-shadow:0 0 15px rgba(255,202,0,.5);}
+  .grafico .tit .leg{display:inline-flex;align-items:center;gap:calc(var(--u)*.9);}
+  .grafico .tit .leg i{display:inline-block;width:calc(var(--u)*.6);height:calc(var(--u)*.6);border-radius:2px;margin-right:calc(var(--u)*.3);vertical-align:middle;}
+  .grafico .tit .leg .lf{background:var(--amarelo);}
+  .grafico .tit .leg .lp{background:rgba(255,255,255,.07);border-top:2px solid #6b6b6b;}
+  .grafico .tit .leg .prev{color:var(--cinza);}
   .eixo{display:flex;gap:calc(var(--u)*.3*var(--k));padding:0 calc(var(--u)*.25);margin-top:calc(var(--u)*.25);}
   .eixo span{flex:1;min-width:0;text-align:center;font-size:calc(var(--u)*.6*var(--k));color:#737373;font-weight:700;font-variant-numeric:tabular-nums;}
   #grade.u .eixo span{font-size:calc(var(--u)*.72);}
@@ -198,6 +216,7 @@
   <button class="bt" type="button" id="btMesAnt" title="Ver o mês anterior">◀ Mês anterior</button>
   <button class="bt" type="button" id="btMesAtual" title="Voltar para o mês atual">Mês atual</button>
   <button class="bt" type="button" id="btMesProx" title="Ver o mês seguinte">Próximo mês ▶</button>
+  <button class="bt" type="button" id="btModo" title="Trocar o gráfico entre dia a dia e mês a mês">Mês a mês</button>
   <span class="menu-sep"></span>
   <button class="bt" type="button" id="btTela">Tela cheia</button>
   <button class="bt" type="button" id="btTroca">Trocar para TV 2</button>
@@ -227,6 +246,7 @@
   var dados = null, ultimaOk = null, pagina = 0, timerDados = null, timerPagina = null;
   // mês escolhido no menu (null = mês atual). Volta sozinho para o mês atual depois de 10 min sem mexer.
   var mesSel = null, timerVoltaMes = null;
+  var modoMeses = false;   // gráfico de baixo: dia a dia (false) ou mês a mês (true)
   // TV vinculada por código: a chave fica só neste aparelho; o banco guarda apenas o hash dela
   var chaveTv = guarda.get('vk_tv_chave'), modoAparelho = false, timerVinc = null, timerCodigo = null;
   function novaChave(){ var b = new Uint8Array(32); crypto.getRandomValues(b); return Array.prototype.map.call(b, function(x){ return ('0'+x.toString(16)).slice(-2); }).join(''); }
@@ -240,6 +260,17 @@
     if(largo || v < 1000) return v.toLocaleString('pt-BR');
     var k = v / 1000;
     return (k < 10 ? k.toFixed(1).replace('.', ',').replace(',0', '') : Math.round(k)) + 'k';
+  }
+  // feriados que não contam como dia de trabalho: nacionais + 9 de julho (estado de SP) + Sexta-feira Santa
+  function feriados(ano){
+    var a = ano % 19, b = Math.floor(ano / 100), c = ano % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25),
+        g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4,
+        l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+        mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+    var sexta = new Date(ano, mes - 1, dia - 2);
+    var lista = ['01-01','04-21','05-01','07-09','09-07','10-12','11-02','11-15','11-20','12-25'];
+    lista.push(String(sexta.getMonth()+1).padStart(2,'0') + '-' + String(sexta.getDate()).padStart(2,'0'));
+    return lista;
   }
   function hhmm(d){ return d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}); }
 
@@ -352,26 +383,36 @@
     dias.forEach(function(d){ porDia[d[0]] = +d[1] || 0; if(+d[1] > maior) maior = +d[1]; });
 
     var atual = dados.mes_atual !== false;   // mês passado: sem "hoje"; mostra o maior dia e quantos dias tiveram serviço
+    var futuro = !!dados.futuro;             // mês que ainda vai chegar: só o previsto
+    // previsto do dia = meta do mês ÷ dias de segunda a sexta do mês, sem feriados (ex.: 400.000 ÷ 21)
+    var fer = feriados(ano), diasUteis = 0;
+    function folga(dia){ var w = new Date(ano, mesN-1, dia).getDay(); return w === 0 || w === 6 || fer.indexOf(String(mesN).padStart(2,'0') + '-' + String(dia).padStart(2,'0')) >= 0; }
+    for(var du=1; du<=nDias; du++){ if(!folga(du)) diasUteis++; }
+    var prevDia = (meta > 0 && diasUteis) ? meta / diasUteis : 0;
     var obs = rdosHoje ? rdosHoje + ' RDO' + (rdosHoje===1 ? '' : 's') + ' hoje' + (hoje > 0 ? '' : ' (sem serviços lançados)') : 'Nenhum RDO hoje ainda';
     var diaMaior = null; dias.forEach(function(d){ if(+d[1] > 0 && +d[1] === maior && !diaMaior) diaMaior = d[0]; });
-    if(!atual){ obs = diaMaior ? 'em ' + diaMaior.split('-').reverse().slice(0,2).join('/') + ' · ' + (+o.rdos_mes||0) + ' RDOs no mês' : 'Nenhum serviço lançado neste mês'; }
+    if(futuro){ obs = diasUteis + ' dias úteis' + (prevDia ? ' · ' + reais(prevDia) + ' por dia' : ''); }
+    else if(!atual){ obs = diaMaior ? 'em ' + diaMaior.split('-').reverse().slice(0,2).join('/') + ' · ' + (+o.rdos_mes||0) + ' RDOs no mês' : 'Nenhum serviço lançado neste mês'; }
     var pct = meta > 0 ? Math.floor(mes / meta * 100) : null, batida = meta > 0 && mes >= meta;
 
     // gráfico do dia 1 ao último dia do mês (vira sozinho no mês seguinte):
-    // valor de cada dia em cima da barra, hoje em amarelo, dias que ainda vão chegar apagados
+    // valor de cada dia em cima da barra (amarelo), previsto do dia em cinza atrás; dias que ainda vão chegar só com o previsto
     var largo = (dados.obras || []).length === 1;   // obra sozinha na TV: cabe o valor inteiro
+    var escala = Math.max(maior, prevDia) || 1;
     var barras = '', eixo = '';
     for(var dd=1; dd<=nDias; dd++){
       var iso = ano + '-' + String(mesN).padStart(2,'0') + '-' + String(dd).padStart(2,'0');
-      var dow = new Date(ano, mesN-1, dd).getDay(), fds = (dow === 0 || dow === 6);
-      var v = porDia[iso] || 0, h, cls, rotulo = '';
-      if(iso > hojeIso){ cls = 'futuro'; h = 4; }
+      var fds = folga(dd);   // sábado, domingo ou feriado: sem previsto
+      var v = porDia[iso] || 0, h, hp = (!fds && prevDia) ? prevDia / escala * 82 : 0, cls, rotulo = '';
+      if(iso > hojeIso){ cls = 'futuro'; h = 0; }
       else {
-        cls = (atual && iso === hojeIso) ? 'hj' : (v > 0 ? '' : 'zero');
-        h = v > 0 ? Math.max(5, v / maior * 82) : (iso === hojeIso ? 4 : 8);
+        cls = (v > 0 ? 'feito' : 'zero') + ((atual && iso === hojeIso) ? ' hj' : '');
+        h = v > 0 ? Math.max(5, v / escala * 82) : (hp ? 0 : 2);
         if(v > 0) rotulo = valorCurto(v, largo);
       }
-      barras += '<div class="col '+cls+'" title="'+dd+'/'+String(mesN).padStart(2,'0')+': '+reais(v)+'"><span class="v n">'+rotulo+'</span><span class="b" style="height:'+h.toFixed(1)+'%"></span></div>';
+      var hm = Math.max(h, hp, 1);
+      barras += '<div class="col '+cls+'" title="'+dd+'/'+String(mesN).padStart(2,'0')+': '+reais(v)+(fds && fer.indexOf(String(mesN).padStart(2,'0') + '-' + String(dd).padStart(2,'0')) >= 0 ? ' · feriado' : '')+(hp ? ' · previsto '+reais(prevDia) : '')+'"><span class="v n">'+rotulo+'</span>'+(hp ? '<span class="vp n">'+valorCurto(prevDia, largo)+'</span>' : '')+
+        '<span class="pilha" style="height:'+hm.toFixed(1)+'%">'+(hp ? '<i class="p" style="height:'+(hp/hm*100).toFixed(1)+'%"></i>' : '')+(h ? '<i class="b" style="height:'+(h/hm*100).toFixed(1)+'%"></i>' : '')+'</span></div>';
       eixo += '<span class="'+(atual && iso === hojeIso ? 'hj' : (fds ? 'fds' : ''))+'">'+dd+'</span>';
     }
 
@@ -379,8 +420,8 @@
       '<div class="topo">'+
         '<div class="esq">'+
           '<div class="nome" title="'+esc(o.nome)+'">'+esc(o.nome)+'</div>'+
-          '<span class="rot">'+(atual ? 'Valor de hoje' : 'Maior dia do mês')+'</span>'+
-          (atual ? '<div class="hoje n'+(hoje>0?'':' zero')+'">'+reais(hoje)+'</div>' : '<div class="hoje n'+(maior>0?'':' zero')+'">'+reais(maior)+'</div>')+
+          '<span class="rot">'+(futuro ? 'Previsto do mês' : atual ? 'Valor de hoje' : 'Maior dia do mês')+'</span>'+
+          (futuro ? '<div class="hoje n">'+(meta>0 ? reais(meta) : '—')+'</div>' : atual ? '<div class="hoje n'+(hoje>0?'':' zero')+'">'+reais(hoje)+'</div>' : '<div class="hoje n'+(maior>0?'':' zero')+'">'+reais(maior)+'</div>')+
           '<div class="obs">'+esc(obs)+'</div>'+
         '</div>'+
         '<div class="dir">'+
@@ -390,7 +431,7 @@
         '</div>'+
       '</div>'+
       '<div class="faixa">'+
-        (atual ? '<div><div class="rot">Total hoje</div><b class="n">'+reais(hoje)+'</b></div>'
+        (futuro ? '<div><div class="rot">Dias úteis</div><b class="n">'+diasUteis+' dias</b></div>' : atual ? '<div><div class="rot">Total hoje</div><b class="n">'+reais(hoje)+'</b></div>'
                : '<div><div class="rot">Dias com serviço</div><b class="n">'+(+o.dias_com_valor||0)+' dia'+((+o.dias_com_valor||0)===1?'':'s')+'</b></div>')+
         '<div><div class="rot">Total do mês</div><b class="n">'+reais(mes)+'</b></div>'+
         '<div><div class="rot">Meta do mês</div><b class="n am">'+(meta>0 ? reais(meta) : '—')+'</b></div>'+
@@ -402,12 +443,40 @@
             '<div class="l2"><span>Atingido: <b>'+reais(mes)+'</b></span><span class="meta">Meta: <b>'+reais(meta)+'</b></span></div>'
           : '<div class="sem-meta">Meta do mês não definida — no sistema, em Obras, preencha “Previsto do mês R$”.</div>')+
       '</div>'+
-      '<div class="grafico">'+
-        '<div class="tit rot"><span>Dia a dia — '+MESES[mesN-1]+(atual ? '' : ' de '+ano)+'</span><span>Maior dia '+reais(maior)+'</span></div>'+
+      (modoMeses ? graficoMeses(o, largo) : '<div class="grafico">'+
+        '<div class="tit rot"><span>Dia a dia — '+MESES[mesN-1]+(atual ? '' : ' de '+ano)+'</span><span class="leg"><span><i class="lf"></i>Feito</span>'+(prevDia ? '<span class="prev"><i class="lp"></i>Previsto por dia ('+diasUteis+' dias úteis): <b class="n">'+reais(prevDia)+'</b></span>' : '')+'<span>Maior dia '+reais(maior)+'</span></span></div>'+
         '<div class="barras">'+barras+'</div>'+
         '<div class="eixo">'+eixo+'</div>'+
-      '</div>'+
+      '</div>')+
     '</section>';
+  }
+
+  // mês a mês: coluna cinza = previsto do mês, amarelo = o que foi produzido. Do início da obra em diante,
+  // sempre com pelo menos 12 meses e 3 meses à frente do mês atual. Clicar numa coluna abre aquele mês.
+  function graficoMeses(o, largo){
+    var meta = +o.meta || 0, feito = {}, maior = 0, total = 0;
+    (o.meses || []).forEach(function(m){ feito[m[0]] = +m[1] || 0; total += +m[1] || 0; if(+m[1] > maior) maior = +m[1]; });
+    var atualIso = mesAtualIso(), ini = String(o.inicio_obra || atualIso).slice(0,7) + '-01';
+    if(ini > atualIso) ini = atualIso;
+    var lista = [], m = ini;
+    while(lista.length < 24 && (lista.length < 12 || m <= somaMes(atualIso, 3))){ lista.push(m); m = somaMes(m, 1); }
+    var escala = Math.max(meta, maior) || 1, visto = String(dados.inicio_mes).slice(0,10), largoM = largo || lista.length <= 14;
+    var barras = '', eixo = '';
+    lista.forEach(function(iso){
+      var k = iso.slice(0,7), v = feito[k] || 0, fut = iso > atualIso;
+      var h = v > 0 ? Math.max(3, v / escala * 82) : 0, hp = meta > 0 ? meta / escala * 82 : 0, hm = Math.max(h, hp, 1);
+      var cls = (fut ? 'futuro' : (v > 0 ? 'feito' : 'zero')) + (iso === visto ? ' hj' : '');
+      var nome = MESES[+iso.slice(5,7)-1];
+      barras += '<div class="col '+cls+'" data-mes="'+iso+'" title="'+nome+' de '+iso.slice(0,4)+': feito '+reais(v)+(meta ? ' · previsto '+reais(meta) : '')+'">'+
+        '<span class="v n">'+(v > 0 ? valorCurto(v, largoM) : '')+'</span>'+(meta ? '<span class="vp n">'+valorCurto(meta, largoM)+'</span>' : '')+
+        '<span class="pilha" style="height:'+hm.toFixed(1)+'%">'+(hp ? '<i class="p" style="height:'+(hp/hm*100).toFixed(1)+'%"></i>' : '')+(h ? '<i class="b" style="height:'+(h/hm*100).toFixed(1)+'%"></i>' : '')+'</span></div>';
+      eixo += '<span class="'+(iso === visto ? 'hj' : '')+'">'+nome.slice(0,3)+'/'+iso.slice(2,4)+'</span>';
+    });
+    return '<div class="grafico">'+
+      '<div class="tit rot"><span>Mês a mês — desde o início da obra</span><span class="leg"><span><i class="lf"></i>Feito</span>'+(meta ? '<span class="prev"><i class="lp"></i>Previsto por mês: <b class="n">'+reais(meta)+'</b></span>' : '')+'<span>Total feito '+reais(total)+'</span></span></div>'+
+      '<div class="barras meses">'+barras+'</div>'+
+      '<div class="eixo meses">'+eixo+'</div>'+
+    '</div>';
   }
 
   // ---------- tela sempre acesa, tela cheia, cursor ----------
@@ -439,12 +508,12 @@
     var el = $('mesNome'), passado = !!mesSel;
     el.textContent = (passado ? 'Vendo ' : '') + MESES[+p[1]-1].charAt(0).toUpperCase() + MESES[+p[1]-1].slice(1) + ' ' + p[0];
     el.className = 'mes-nome' + (passado ? ' passado' : '');
-    $('btMesProx').disabled = !mesSel; $('btMesAtual').disabled = !mesSel;
+    $('btMesProx').disabled = (mesSel || mesAtualIso()) >= somaMes(mesAtualIso(), 24); $('btMesAtual').disabled = !mesSel;
     $('btMesAnt').disabled = (mesSel || mesAtualIso()) <= somaMes(mesAtualIso(), -36);
   }
   function irParaMes(iso){
     var atualIso = mesAtualIso();
-    mesSel = (!iso || iso >= atualIso) ? null : iso;
+    mesSel = (!iso || iso === atualIso) ? null : iso;
     clearTimeout(timerVoltaMes);
     if(mesSel) timerVoltaMes = setTimeout(function(){ irParaMes(null); }, 10 * 60 * 1000);
     pagina = 0; dados = null; mostraMes();
@@ -452,8 +521,17 @@
     buscar();
   }
   $('btMesAnt').addEventListener('click', function(){ irParaMes(somaMes(mesSel || mesAtualIso(), -1)); });
-  $('btMesProx').addEventListener('click', function(){ if(mesSel) irParaMes(somaMes(mesSel, 1)); });
+  $('btMesProx').addEventListener('click', function(){ irParaMes(somaMes(mesSel || mesAtualIso(), 1)); });
   $('btMesAtual').addEventListener('click', function(){ irParaMes(null); });
+  $('btModo').addEventListener('click', function(){
+    modoMeses = !modoMeses;
+    this.textContent = modoMeses ? 'Dia a dia' : 'Mês a mês'; this.classList.toggle('on', modoMeses);
+    if(dados) desenha();
+  });
+  $('grade').addEventListener('click', function(e){
+    var col = e.target.closest && e.target.closest('.barras.meses .col');
+    if(col) irParaMes(col.getAttribute('data-mes'));
+  });
   document.addEventListener('keydown', function(e){
     if($('painel').hidden) return;
     if(e.key === 'ArrowLeft') $('btMesAnt').click();
