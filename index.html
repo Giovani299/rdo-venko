@@ -2158,7 +2158,7 @@
     document.querySelectorAll('.tab-btn').forEach(function(b){
       b.classList.toggle('active', b.getAttribute('data-view')===view);
     });
-    if(view==='novo' && state.editId===null){ renderRdoForm(null); rdoPerguntarEquipesAnteriores(rdoFormAtual); }
+    if(view==='novo' && state.editId===null){ renderRdoForm(null); }   // v73: sem a pergunta de carregar equipes do RDO anterior
     if(view==='detail' && state.detailId){ registrarAcessoRdo(state.detailId); }
     if(view==='ponto'){ pontoAbrir(); }
     if(view==='mapa'){ state.mapaMode=null; state.mapaRamalPoints=[]; if(mapaTempLayerGroup) mapaTempLayerGroup.clearLayers(); updateMapaModeUI(); }
