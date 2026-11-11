@@ -1028,6 +1028,20 @@
   .tvv-lista{display:grid;gap:8px;margin-top:6px;}
   .tvv-item{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--surface);}
   .tvv-item small{display:block;color:var(--steel);font-size:12px;}
+  /* v78: previsto por mês e feriados */
+  .pm-lista{display:grid;gap:6px;margin:8px 0 4px;max-height:52vh;overflow-y:auto;padding-right:4px;}
+  .pm-linha{display:grid;grid-template-columns:1fr 170px;align-items:center;gap:10px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);}
+  .pm-linha.atual{border-color:var(--venko-yellow-deep);}
+  .pm-linha span{font-size:14px;}
+  .pm-linha span small{display:block;color:var(--steel);font-size:11.5px;}
+  .pm-linha input{padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px;text-align:right;font-variant-numeric:tabular-nums;width:100%;}
+  .pm-linha input:focus{outline:none;border-color:var(--venko-yellow-deep);box-shadow:0 0 0 3px rgba(238,197,18,.28);}
+  .fe-form{display:grid;grid-template-columns:150px minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end;}
+  .fe-form .field{min-width:0;margin:0;}
+  .fe-form input,.fe-form select{width:100%;max-width:100%;min-width:0;}
+  .fe-modal{overflow-x:hidden;}
+  @media (max-width:640px){ .fe-form{grid-template-columns:minmax(0,1fr) minmax(0,1fr);} .pm-linha{grid-template-columns:1fr 130px;} }
+  .ob2-aviso{color:var(--status-rejected);font-weight:600;}
   .tvv-passos{margin:0 0 14px;padding-left:18px;color:var(--steel);font-size:13.5px;line-height:1.55;}
   .ob2-tv select{flex:0 1 220px;}
   .ob2-meta-in{display:flex;align-items:center;gap:8px;flex:1;min-width:0;color:var(--steel);font-size:12.5px;white-space:nowrap;}
@@ -1335,6 +1349,7 @@
         </div>
         <div class="tvv-botoes" id="tvBotoes" style="display:none">
           <button class="btn primary sm" type="button" id="btnVincularTv" title="Liga uma TV do escritório ao painel pelo código que aparece nela (sem senha na TV)">📺 Vincular TV</button>
+          <button class="btn ghost sm" type="button" id="btnFeriados" title="Feriados da cidade que não contam como dia útil no painel">📅 Feriados</button>
           <a class="btn ghost sm" id="btnPainelTv" href="tv.html" target="_blank" rel="noopener" title="Abre o painel das TVs do escritório neste computador">Ver painel</a>
         </div>
       </div>
@@ -1668,7 +1683,7 @@
     region.appendChild(el);
     setTimeout(function(){ el.style.transition='opacity .3s'; el.style.opacity='0';
       setTimeout(function(){ el.remove(); }, 300);
-    }, 3800);
+    }, Math.min(12000, Math.max(3800, String(msg||'').length * 55)));   // v78: aviso longo fica mais tempo na tela
   }
 
   function confirmModal(opts){
@@ -1776,6 +1791,165 @@
     setTimeout(function(){ try{ inp.focus(); }catch(e){} }, 50);
   }
   (function(){ var b = document.getElementById('btnVincularTv'); if(b) b.addEventListener('click', tvVincularAbrir); })();
+
+  // ---------------------------------------------------------------
+  // v78 — Previsto por mês (cronograma da obra), feriados da cidade e serviços sem preço
+  // ---------------------------------------------------------------
+  var MESES_PT = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  function mesIsoSoma(iso, n){ var p = iso.split('-'), d = new Date(+p[0], +p[1]-1+n, 1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'; }
+  function metasMesAbrir(obraId){
+    if(!ehAdmin()) return;
+    var o = (state.obras||[]).find(function(x){ return x.id===obraId; }); if(!o) return;
+    var hoje = new Date(), atual = hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-01';
+    var ini = o.dataInicio ? String(o.dataInicio).slice(0,7)+'-01' : atual;
+    var meses = [], m = ini, fim = mesIsoSoma(ini > atual ? ini : atual, 12);
+    while(m <= fim && meses.length < 48){ meses.push(m); m = mesIsoSoma(m, 1); }
+    var padrao = o.metaMensal;
+    var root = document.getElementById('modal-root'), wrap = document.createElement('div');
+    wrap.className = 'overlay';
+    wrap.innerHTML = '<div class="modal" role="dialog" aria-modal="true" aria-labelledby="pmTit" style="max-width:520px;">'+
+      '<h3 id="pmTit">Previsto por mês — '+esc(o.nome)+'</h3>'+
+      '<p class="hint" style="margin:0 0 6px;">Coloque a meta de cada mês. Mês em branco usa o previsto padrão da obra'+(padrao!=null ? ' (<b>R$ '+esc(fmtMetaObra(padrao))+'</b>)' : ' (ainda não definido)')+'. O previsto por dia, o ritmo necessário e a projeção do painel são calculados sozinhos.</p>'+
+      '<div class="pm-lista" id="pmLista"><p class="hint">Carregando…</p></div>'+
+      '<p class="hint" id="pmMsg" role="alert" style="min-height:1.2em;margin:6px 0 0;"></p>'+
+      '<div class="row"><button class="btn ghost" data-act="fechar" type="button">Fechar</button><button class="btn primary" data-act="salvar" type="button">Salvar</button></div>'+
+    '</div>';
+    root.appendChild(wrap);
+    var antes = {}, msg = wrap.querySelector('#pmMsg');
+    supabaseClient.from('obras_metas').select('mes, valor').eq('obra_id', obraId).then(function(res){
+      var box = wrap.querySelector('#pmLista');
+      if(res.error){ box.innerHTML = '<p class="hint">Não foi possível carregar: '+esc(res.error.message)+'. Confira se a atualização 075 do banco foi instalada.</p>'; return; }
+      (res.data||[]).forEach(function(r){ antes[String(r.mes).slice(0,10)] = Number(r.valor); });
+      Object.keys(antes).forEach(function(k){ if(meses.indexOf(k) < 0) meses.push(k); });
+      meses.sort();
+      box.innerHTML = meses.map(function(k){
+        var p = k.split('-'), nome = MESES_PT[+p[1]-1], v = antes[k];
+        return '<label class="pm-linha'+(k===atual?' atual':'')+'"><span>'+nome.charAt(0).toUpperCase()+nome.slice(1)+' de '+p[0]+(k===atual?'<small>mês atual</small>':'')+'</span>'+
+          '<input type="text" inputmode="decimal" data-pmmes="'+k+'" value="'+(v!=null ? esc(fmtMetaObra(v)) : '')+'" placeholder="'+(padrao!=null ? 'padrão '+esc(fmtMetaObra(padrao)) : 'ex.: 400.000')+'" aria-label="Previsto de '+nome+' de '+p[0]+' em reais"></label>';
+      }).join('');
+      var cur = box.querySelector('.pm-linha.atual'); if(cur) cur.scrollIntoView({block:'center'});
+    });
+    var salvar = function(){
+      var ups = [], dels = [], erro = null;
+      wrap.querySelectorAll('[data-pmmes]').forEach(function(inp){
+        var k = inp.getAttribute('data-pmmes'), txt = inp.value.trim();
+        if(!txt){ if(antes[k]!=null) dels.push(k); return; }
+        var v = lerMetaObra(txt);
+        if(v===false || v==null){ if(!erro){ erro = inp; } return; }
+        if(antes[k]!==v) ups.push({ obra_id: obraId, mes: k, valor: v, atualizado_em: new Date().toISOString() });
+      });
+      if(erro){ msg.textContent = 'Valor inválido. Escreva só o valor em reais, ex.: 350.000 ou 350000,50.'; erro.focus(); return; }
+      if(!ups.length && !dels.length){ wrap.remove(); return; }
+      var bt = wrap.querySelector('[data-act="salvar"]'); bt.disabled = true; msg.textContent = 'Salvando…';
+      var p1 = ups.length ? supabaseClient.from('obras_metas').upsert(ups, { onConflict: 'obra_id,mes' }) : Promise.resolve({});
+      Promise.resolve(p1).then(function(r1){
+        if(r1 && r1.error) throw r1.error;
+        return dels.length ? supabaseClient.from('obras_metas').delete().eq('obra_id', obraId).in('mes', dels) : {};
+      }).then(function(r2){
+        if(r2 && r2.error) throw r2.error;
+        toast('Previsto por mês salvo ('+(ups.length+dels.length)+((ups.length+dels.length)===1?' mês':' meses')+' alterado'+((ups.length+dels.length)===1?'':'s')+').','ok');
+        wrap.remove();
+      }).catch(function(e){ bt.disabled = false; msg.textContent = 'Erro ao salvar: '+(e && e.message ? e.message : e); });
+    };
+    wrap.addEventListener('click', function(e){
+      if(e.target === wrap){ wrap.remove(); return; }
+      var act = e.target.getAttribute && e.target.getAttribute('data-act');
+      if(act === 'fechar') wrap.remove();
+      if(act === 'salvar') salvar();
+    });
+    wrap.addEventListener('keydown', function(e){ if(e.key === 'Enter' && e.target.hasAttribute && e.target.hasAttribute('data-pmmes')){ e.preventDefault(); salvar(); } });
+  }
+
+  function feriadosAbrir(){
+    if(!ehAdmin()) return;
+    var ano = new Date().getFullYear();
+    var obrasAtivas = (state.obras||[]).filter(function(o){ return o.status==='ativa' && !o.exemplo; });
+    var root = document.getElementById('modal-root'), wrap = document.createElement('div');
+    wrap.className = 'overlay';
+    wrap.innerHTML = '<div class="modal fe-modal" role="dialog" aria-modal="true" aria-labelledby="feTit" style="max-width:640px;">'+
+      '<h3 id="feTit">Feriados da cidade</h3>'+
+      '<p class="hint" style="margin:0 0 10px;">Dias cadastrados aqui não contam como dia útil no painel (o previsto do dia é dividido pelos dias que sobram). Os feriados nacionais, a Sexta-feira Santa e o 9 de julho já são contados sozinhos — cadastre só os da cidade (aniversário, padroeiro, Corpus Christi, Carnaval, pontes).</p>'+
+      '<div class="fe-form">'+
+        '<div class="field"><label for="feData">Data</label><input type="date" id="feData"></div>'+
+        '<div class="field"><label for="feNome">Nome</label><input id="feNome" maxlength="80" placeholder="ex.: Aniversário de Suzano"></div>'+
+        '<div class="field"><label for="feObra">Vale para</label><select id="feObra"><option value="">Todas as obras</option>'+obrasAtivas.map(function(o){ return '<option value="'+o.id+'">'+esc(o.nome)+'</option>'; }).join('')+'</select></div>'+
+        '<button class="btn primary" data-act="add" type="button" style="margin-bottom:2px;">Adicionar</button>'+
+      '</div>'+
+      '<p class="hint" id="feMsg" role="alert" style="min-height:1.2em;margin:6px 0 0;"></p>'+
+      '<div class="tvv-lista" id="feLista"><p class="hint">Carregando…</p></div>'+
+      '<div class="row"><button class="btn ghost" data-act="fechar" type="button">Fechar</button></div>'+
+    '</div>';
+    root.appendChild(wrap);
+    var msg = wrap.querySelector('#feMsg');
+    var listar = function(){
+      var box = wrap.querySelector('#feLista');
+      supabaseClient.from('feriados').select('id, data, nome, obra_id').gte('data', (ano-1)+'-01-01').order('data').then(function(res){
+        if(res.error){ box.innerHTML = '<p class="hint">Não foi possível carregar: '+esc(res.error.message)+'. Confira se a atualização 075 do banco foi instalada.</p>'; return; }
+        var rows = res.data || [];
+        if(!rows.length){ box.innerHTML = '<p class="hint">Nenhum feriado da cidade cadastrado ainda.</p>'; return; }
+        box.innerHTML = rows.map(function(r){
+          var ob = r.obra_id ? (state.obras||[]).find(function(o){ return o.id===r.obra_id; }) : null;
+          var d = String(r.data).slice(0,10).split('-'), dt = new Date(+d[0], +d[1]-1, +d[2]);
+          return '<div class="tvv-item"><div><b>'+d[2]+'/'+d[1]+'/'+d[0]+' — '+esc(r.nome)+'</b><small>'+dt.toLocaleDateString('pt-BR',{weekday:'long'})+' · '+(ob ? esc(ob.nome) : 'todas as obras')+'</small></div>'+
+            '<button class="btn danger sm" type="button" data-feexcluir="'+r.id+'">Excluir</button></div>';
+        }).join('');
+        box.querySelectorAll('[data-feexcluir]').forEach(function(b){
+          b.addEventListener('click', function(){
+            confirmModal({ title:'Excluir feriado', msg:'Este dia volta a contar como dia útil no painel.', okLabel:'Excluir', danger:true }).then(function(ok){
+              if(!ok) return;
+              supabaseClient.from('feriados').delete().eq('id', b.getAttribute('data-feexcluir')).then(function(r2){
+                if(r2.error){ toast('Erro ao excluir: '+r2.error.message,'error'); return; }
+                toast('Feriado excluído.','ok'); listar();
+              });
+            });
+          });
+        });
+      });
+    };
+    var adicionar = function(){
+      var data = wrap.querySelector('#feData').value, nome = wrap.querySelector('#feNome').value.trim(), obra = wrap.querySelector('#feObra').value || null;
+      if(!data){ msg.textContent = 'Escolha a data do feriado.'; wrap.querySelector('#feData').focus(); return; }
+      if(!nome){ msg.textContent = 'Dê um nome ao feriado (ex.: Aniversário da cidade).'; wrap.querySelector('#feNome').focus(); return; }
+      msg.textContent = 'Salvando…';
+      supabaseClient.from('feriados').insert({ data: data, nome: nome, obra_id: obra }).then(function(res){
+        if(res.error){ msg.textContent = /duplicate|unique/i.test(res.error.message) ? 'Esse feriado já está cadastrado.' : 'Erro: '+res.error.message; return; }
+        msg.textContent = ''; wrap.querySelector('#feNome').value = '';
+        toast('Feriado cadastrado.','ok'); listar();
+      });
+    };
+    wrap.addEventListener('click', function(e){
+      if(e.target === wrap){ wrap.remove(); return; }
+      var act = e.target.getAttribute && e.target.getAttribute('data-act');
+      if(act === 'fechar') wrap.remove();
+      if(act === 'add') adicionar();
+    });
+    listar();
+  }
+  (function(){ var b = document.getElementById('btnFeriados'); if(b) b.addEventListener('click', feriadosAbrir); })();
+
+  // serviços lançados no mês atual cujo item está sem preço na planilha (ou saiu dela): entram como R$ 0
+  function servicoSemPreco(id){ var it = catalogoItemById(id); return !it || !(Number(it.custoUnitario) > 0); }
+  function obraServicosSemPreco(obraId){
+    var hoje = new Date(), ini = hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-01', n = 0, nomes = {};
+    (state.rdos||[]).forEach(function(r){
+      if(r.obraId!==obraId || r.deletedAt || r.exemplo || String(r.data||'') < ini) return;
+      (r.equipesDetalhe||[]).forEach(function(d){ (d && d.concluidos || []).forEach(function(c){
+        if(!c || !c.catalogoItemId || !servicoSemPreco(c.catalogoItemId)) return;
+        n++; var it = catalogoItemById(c.catalogoItemId); nomes[it ? it.descricao : 'item que saiu da planilha'] = 1;
+      }); });
+    });
+    return { n: n, nomes: Object.keys(nomes) };
+  }
+  // aviso depois de salvar o RDO: rascunho sem serviço e serviços sem preço
+  function rdoAvisoPosSalvar(payload, semProducao){
+    var cs = [];
+    (payload.equipes_detalhe||[]).forEach(function(d){ (d.concluidos||[]).forEach(function(c){ if(c && c.catalogoItemId) cs.push(c); }); });
+    var semPreco = {}; cs.forEach(function(c){ if(servicoSemPreco(c.catalogoItemId)){ var it = catalogoItemById(c.catalogoItemId); semPreco[it ? it.descricao : 'item que saiu da planilha'] = 1; } });
+    var nomes = Object.keys(semPreco), avisos = [];
+    if(!cs.length && !semProducao && payload.status==='rascunho') avisos.push('Este rascunho ainda não tem serviços no item 4 — lance as quantidades antes de enviar, senão o dia fica com R$ 0 no painel.');
+    if(nomes.length) avisos.push('Atenção: '+nomes.length+' serviço'+(nomes.length===1?'':'s')+' sem preço na planilha ('+nomes.slice(0,3).join(', ')+(nomes.length>3?'…':'')+') — entra'+(nomes.length===1?'':'m')+' como R$ 0 na medição. Avise o administrador para atualizar a planilha.');
+    return avisos.join(' ');
+  }
 
   function openLightbox(src){
     var root = document.getElementById('modal-root');
@@ -5891,12 +6065,14 @@
       var planilhaNome = tabelaPrecoNome(tabelaDaObra(o.id)) || 'nenhuma';
       var podeResp = ehAdmin() && state.temRespRdo, podePlan = canGestao && tabelasPrecoCfg.db, podeAnexar = ehAdmin();
       var podeTv = ehAdmin() && o.temPainelTv && o.status==='ativa';   // v74: painel das TVs do escritório
+      var semPreco = (ehAdmin() || canQtd) ? obraServicosSemPreco(o.id) : null;   // v78: serviço lançado sem preço na planilha entra como R$ 0
       var dados = ['Cliente: '+esc(clienteNomeById(o.clienteId)||'—')];
       if(o.localidade) dados.push(esc(o.localidade));
       if(o.endereco) dados.push(esc(o.endereco));
       if(o.responsavelTecnico) dados.push('Resp. técnico: '+esc(o.responsavelTecnico));
       if(!podeResp){ var rr = obraRespRdoMeta(o).replace(/^ · /,''); if(rr) dados.push(esc(rr)); }
       if(!podePlan) dados.push('Planilha: '+esc(planilhaNome));
+      if(semPreco && semPreco.n) dados.push('<span class="ob2-aviso" title="'+esc(semPreco.nomes.join(', '))+'">⚠ '+semPreco.n+' serviço'+(semPreco.n===1?'':'s')+' lançado'+(semPreco.n===1?'':'s')+' este mês sem preço na planilha (entra'+(semPreco.n===1?'':'m')+' como R$ 0): '+esc(semPreco.nomes.slice(0,3).join(', '))+(semPreco.nomes.length>3?'…':'')+'</span>');
       var card = '<div class="obra-card ob2" data-id="'+o.id+'">'+
         '<div class="ob2-topo">'+
           '<div class="ob2-titulo"><b>'+esc(o.nome)+(o.exemplo?'<span class="tag-example">exemplo</span>':'')+'</b>'+
@@ -5914,8 +6090,9 @@
             '<select id="tv-'+o.id+'" data-paineltv="'+o.id+'" title="Em qual TV do escritório esta obra aparece">'+
               ['', '1', '2'].map(function(v){ return '<option value="'+v+'"'+(String(o.painelTv||'')===v?' selected':'')+'>'+(v ? 'TV '+v : 'Não aparece na TV')+'</option>'; }).join('')+
             '</select>'+
-            '<span class="ob2-meta-in"><span>Previsto do mês R$</span><input type="text" inputmode="decimal" data-metaobra="'+o.id+'" value="'+(o.metaMensal!=null ? esc(fmtMetaObra(o.metaMensal)) : '')+'" placeholder="ex.: 150.000" aria-label="Valor previsto do mês em reais"></span>'+
-          '</div><small>Na TV aparecem o valor de hoje, o atingido no mês (soma dos RDOs), a % da meta e o dia a dia. Para ligar uma TV: 📺 Vincular TV, no topo desta página.</small></div>' : '')+
+            '<span class="ob2-meta-in"><span>Previsto do mês R$</span><input type="text" inputmode="decimal" data-metaobra="'+o.id+'" value="'+(o.metaMensal!=null ? esc(fmtMetaObra(o.metaMensal)) : '')+'" placeholder="ex.: 150.000" aria-label="Valor previsto padrão do mês em reais"></span>'+
+            '<button class="btn ghost sm" type="button" data-metasmes="'+o.id+'" title="Meta de cada mês (cronograma). Mês sem valor usa o previsto padrão ao lado.">📅 Previsto por mês</button>'+
+          '</div><small>O valor ao lado é o padrão; em “Previsto por mês” dá para colocar uma meta diferente para cada mês. Na TV aparecem o valor de hoje, o atingido no mês (soma dos RDOs), a % da meta e o dia a dia. Para ligar uma TV: 📺 Vincular TV, no topo desta página.</small></div>' : '')+
         '</div>' : '')+
         '<div class="ob2-acoes">'+
           '<div class="ob2-princ">'+
@@ -5986,6 +6163,7 @@
         });
       });
     });
+    list.querySelectorAll('[data-metasmes]').forEach(function(b){ b.addEventListener('click', function(){ metasMesAbrir(b.getAttribute('data-metasmes')); }); });
     list.querySelectorAll('[data-tabelaobra]').forEach(function(sel){
       sel.addEventListener('change', function(){
         var id = sel.getAttribute('data-tabelaobra');
@@ -11380,6 +11558,8 @@
           toast('Erro ao salvar: '+res.error.message,'error'); return;
         }
         toast(isLockedEdit ? 'Alterações salvas.' : (wantsSend ? 'RDO enviada e aprovada.' : 'Rascunho salvo.'), 'ok');
+        var avisoPos = rdoAvisoPosSalvar(payload, !!rdo.semProducao);   // v78
+        if(avisoPos) setTimeout(function(){ toast(avisoPos, 'error'); }, 700);
         var newId = res.data ? res.data.id : effId;
         if(effIsEdit && effId) marcarRdoEditado(effId);
         state.editId = null; state.photos = []; state.videos = [];
