@@ -428,7 +428,7 @@
     function folga(dia){ var w = new Date(ano, mesN-1, dia).getDay(); return w === 0 || w === 6 || fer.indexOf(String(mesN).padStart(2,'0') + '-' + String(dia).padStart(2,'0')) >= 0; }
     for(var du=1; du<=nDias; du++){ if(!folga(du)) diasUteis++; }
     var prevDia = (meta > 0 && diasUteis) ? meta / diasUteis : 0;
-    var obs = rdosHoje ? 'Hoje: ' + reais(hoje) + ' · ' + rdosHoje + ' RDO' + (rdosHoje===1 ? '' : 's') + (hoje > 0 ? '' : ' (sem serviços lançados)') : 'Nenhum RDO hoje ainda';
+    var obs = rdosHoje ? 'Hoje: ' + reais(hoje) + ' · ' + rdosHoje + ' RDO' + (rdosHoje===1 ? '' : 's') + (hoje > 0 ? '' : ' (sem serviços lançados)') : '';   // sem RDO hoje: não escreve nada
     var diaMaior = null; dias.forEach(function(d){ if(+d[1] > 0 && +d[1] === maior && !diaMaior) diaMaior = d[0]; });
     if(futuro){ obs = diasUteis + ' dias úteis' + (prevDia ? ' · ' + reais(prevDia) + ' por dia' : ''); }
     else if(!atual){ obs = diaMaior ? 'Maior dia ' + reais(maior) + ' em ' + diaMaior.split('-').reverse().slice(0,2).join('/') + ' · ' + (+o.rdos_mes||0) + ' RDOs no mês' : 'Nenhum serviço lançado neste mês'; }
@@ -456,9 +456,8 @@
       '</div>';
     }
     // sem RDO hoje: dia útil, mês atual, depois das 17h
-    if(atual && !antesInicio && !folga(hojeD) && !rdosHoje && new Date().getHours() >= 17){ semRdoHoje = true; obs = 'Sem RDO hoje — já passou das 17h'; }
+    // (aviso de "sem RDO hoje" retirado a pedido)
     var avisos = [];
-    if(semRdoHoje) avisos.push('<span class="av r">⚠ Sem RDO hoje</span>');
     if(+o.rdos_sem_servico) avisos.push('<span class="av">'+o.rdos_sem_servico+' RDO'+(o.rdos_sem_servico==1?'':'s')+' do mês sem serviço lançado</span>');
     if(+o.rdos_rascunho) avisos.push('<span class="av">'+o.rdos_rascunho+' RDO'+(o.rdos_rascunho==1?'':'s')+' em rascunho (não enviado'+(o.rdos_rascunho==1?'':'s')+')</span>');
     if(+o.sem_preco){ var itensSp = (o.sem_preco_itens || []).slice(0,3).join(', ') + ((o.sem_preco_itens || []).length > 3 ? '…' : '');
