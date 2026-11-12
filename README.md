@@ -56,3 +56,6 @@ para uso futuro até alguém adicioná-lo na aba Equipamentos).
   sistema, mas o login no Supabase Auth continua existindo — para apagar
   de vez, use o painel do Supabase em Authentication → Users).
 
+## Versão no ar
+
+- v78 (12/11/2026): previsto por mês, feriados da cidade, ritmo necessário e projeção no painel da TV.
