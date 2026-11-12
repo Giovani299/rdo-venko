@@ -97,7 +97,10 @@
   .trilho i.batida{background:var(--verde);box-shadow:0 0 12px rgba(63,191,106,.4);}
   .progresso .l2{display:flex;justify-content:space-between;font-size:calc(var(--u)*.7*var(--k));color:var(--cinza);font-weight:500;margin-top:calc(var(--u)*.3*var(--k));}
   .progresso .l2 b{color:var(--branco);font-weight:700;}
-  .progresso .l2 .meta b{color:var(--cinza-2);}
+  .progresso .l2{align-items:baseline;}
+  .progresso .l2 .meta{display:flex;align-items:baseline;gap:calc(var(--u)*.5);}
+  .progresso .l2 .meta .rot{font-size:calc(var(--u)*.63*var(--k));}
+  .progresso .l2 .meta b{font-size:calc(var(--u)*1.05*var(--k));font-weight:900;color:var(--branco);white-space:nowrap;}   /* mesmo tamanho do Ritmo necessário */
   .sem-meta{font-size:calc(var(--u)*.83*var(--k));color:var(--cinza);}
   /* ritmo necessário e projeção (mês atual) */
   .ritmo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(var(--u)*.85*var(--k));margin-top:calc(var(--u)*.55*var(--k));}
@@ -506,7 +509,7 @@
         (meta > 0
           ? '<div class="l1"><span>PROGRESSO DA META: <strong>'+pct+'%</strong></span><span class="falta">'+(batida ? '<strong>META BATIDA</strong>' : 'FALTAM: <strong>'+reais(meta - mes)+'</strong>')+'</span></div>'+
             '<div class="trilho" role="img" aria-label="'+pct+'% da meta"><i class="'+(batida?'batida':'')+'" style="width:'+Math.min(100, mes/meta*100).toFixed(1)+'%"></i></div>'+
-            '<div class="l2"><span>Atingido: <b>'+reais(mes)+'</b></span><span class="meta">Meta: <b>'+reais(meta)+'</b></span></div>'+ritmoHtml
+            '<div class="l2"><span>Atingido: <b>'+reais(mes)+'</b></span><span class="meta"><span class="rot">Meta</span><b class="n">'+reais(meta)+'</b></span></div>'+ritmoHtml
           : '<div class="sem-meta">'+(antesInicio ? 'A obra ainda não tinha começado neste mês.' : 'Meta do mês não definida — no sistema, em Obras, preencha “Previsto do mês R$”.')+'</div>')+
       '</div>'+
       (modoMeses ? graficoMeses(o, largo) : '<div class="grafico">'+
