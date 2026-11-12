@@ -73,19 +73,20 @@
   .dir{text-align:right;display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;}
   .cli{max-width:calc(var(--u)*20*var(--k));overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .pct{display:flex;align-items:baseline;gap:calc(var(--u)*.25);margin-top:calc(var(--u)*.25*var(--k));line-height:1;}
-  .pct b{font-size:calc(var(--u)*3.33*var(--k));font-weight:900;letter-spacing:-.02em;}
-  .pct span{font-size:calc(var(--u)*1.67*var(--k));font-weight:700;color:var(--cinza-2);}
+  .pct b{font-size:calc(var(--u)*5*var(--k));font-weight:900;letter-spacing:-.03em;}
+  .pct span{font-size:calc(var(--u)*2.3*var(--k));font-weight:700;color:var(--cinza-2);}
   .pct.batida b{color:var(--verde);}
   .ating{margin-top:calc(var(--u)*.25*var(--k));}
   .ating .rot{font-size:calc(var(--u)*.7*var(--k));}
   .ating b{font-size:calc(var(--u)*1.25*var(--k));font-weight:800;color:var(--amarelo);letter-spacing:-.01em;}
 
-  .faixa{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:calc(var(--u)*.85*var(--k));background:rgba(26,26,26,.9);border:1px solid var(--faixa-borda);
+  .faixa{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(var(--u)*.85*var(--k));background:rgba(26,26,26,.9);border:1px solid var(--faixa-borda);
     border-radius:calc(var(--u)*.85);padding:calc(var(--u)*.85*var(--k));margin-top:calc(var(--u)*1.1*var(--k));}
   .faixa > div + div{border-left:1px solid #262626;padding-left:calc(var(--u)*.85*var(--k));}
   .faixa .rot{font-size:calc(var(--u)*.63*var(--k));}
   .faixa b{display:block;font-size:calc(var(--u)*1.25*var(--k));font-weight:900;letter-spacing:-.01em;margin-top:calc(var(--u)*.1);white-space:nowrap;}
   .faixa b.am{color:var(--amarelo);}
+  .faixa b small{font-size:.55em;font-weight:600;color:var(--cinza);margin-left:calc(var(--u)*.3);letter-spacing:0;}
 
   .progresso{margin-top:calc(var(--u)*1.1*var(--k));padding-top:calc(var(--u)*.85*var(--k));border-top:1px solid rgba(36,36,36,.6);}
   .progresso .l1{display:flex;justify-content:space-between;gap:calc(var(--u)*1);font-size:calc(var(--u)*.76*var(--k));font-weight:600;color:var(--cinza);margin-bottom:calc(var(--u)*.4*var(--k));}
@@ -427,12 +428,17 @@
     function folga(dia){ var w = new Date(ano, mesN-1, dia).getDay(); return w === 0 || w === 6 || fer.indexOf(String(mesN).padStart(2,'0') + '-' + String(dia).padStart(2,'0')) >= 0; }
     for(var du=1; du<=nDias; du++){ if(!folga(du)) diasUteis++; }
     var prevDia = (meta > 0 && diasUteis) ? meta / diasUteis : 0;
-    var obs = rdosHoje ? rdosHoje + ' RDO' + (rdosHoje===1 ? '' : 's') + ' hoje' + (hoje > 0 ? '' : ' (sem serviços lançados)') : 'Nenhum RDO hoje ainda';
+    var obs = rdosHoje ? 'Hoje: ' + reais(hoje) + ' · ' + rdosHoje + ' RDO' + (rdosHoje===1 ? '' : 's') + (hoje > 0 ? '' : ' (sem serviços lançados)') : 'Nenhum RDO hoje ainda';
     var diaMaior = null; dias.forEach(function(d){ if(+d[1] > 0 && +d[1] === maior && !diaMaior) diaMaior = d[0]; });
     if(futuro){ obs = diasUteis + ' dias úteis' + (prevDia ? ' · ' + reais(prevDia) + ' por dia' : ''); }
-    else if(!atual){ obs = diaMaior ? 'em ' + diaMaior.split('-').reverse().slice(0,2).join('/') + ' · ' + (+o.rdos_mes||0) + ' RDOs no mês' : 'Nenhum serviço lançado neste mês'; }
+    else if(!atual){ obs = diaMaior ? 'Maior dia ' + reais(maior) + ' em ' + diaMaior.split('-').reverse().slice(0,2).join('/') + ' · ' + (+o.rdos_mes||0) + ' RDOs no mês' : 'Nenhum serviço lançado neste mês'; }
     var pct = meta > 0 ? Math.floor(mes / meta * 100) : null, batida = meta > 0 && mes >= meta;
     var antesInicio = o.inicio_obra && String(dados.inicio_mes).slice(0,7) < String(o.inicio_obra).slice(0,7);
+    // dias úteis (segunda a sexta, sem feriados) que faltam para fechar o mês, contando hoje
+    var faltamDias = 0;
+    if(futuro) faltamDias = diasUteis;
+    else if(atual){ var hd = +String(hojeIso).slice(8,10); for(var fd=hd; fd<=nDias; fd++){ if(!folga(fd)) faltamDias++; } }
+    var diasProd = +o.dias_com_valor || 0;
 
     // ritmo necessário (quanto falta ÷ dias úteis que ainda restam, contando hoje) e projeção
     // (média por dia útil já trabalhado × dias úteis do mês). Só no mês atual; recalcula sozinho a cada atualização.
@@ -483,21 +489,18 @@
       '<div class="topo">'+
         '<div class="esq">'+
           '<div class="nome" title="'+esc(o.nome)+'">'+esc(o.nome)+'</div>'+
-          '<span class="rot">'+(futuro ? 'Previsto do mês' : atual ? 'Valor de hoje' : 'Maior dia do mês')+'</span>'+
-          (futuro ? '<div class="hoje n">'+(meta>0 ? reais(meta) : '—')+'</div>' : atual ? '<div class="hoje n'+(hoje>0?'':' zero')+'">'+reais(hoje)+'</div>' : '<div class="hoje n'+(maior>0?'':' zero')+'">'+reais(maior)+'</div>')+
+          '<span class="rot">Total do mês</span>'+
+          '<div class="hoje n'+(mes>0?'':' zero')+'">'+reais(mes)+'</div>'+
           '<div class="obs'+(semRdoHoje?' alerta':'')+'">'+esc(obs)+'</div>'+
         '</div>'+
         '<div class="dir">'+
           '<span class="rot cli">'+esc(o.cliente || '')+'</span>'+
           '<div class="pct'+(batida?' batida':'')+'"><b class="n">'+(pct==null ? '—' : pct)+'</b>'+(pct==null ? '' : '<span>%</span>')+'</div>'+
-          '<div class="ating"><span class="rot">Valor atingido</span><b class="n">'+reais(mes)+'</b></div>'+
         '</div>'+
       '</div>'+
       '<div class="faixa">'+
-        (futuro ? '<div><div class="rot">Dias úteis</div><b class="n">'+diasUteis+' dias</b></div>' : atual ? '<div><div class="rot">Total hoje</div><b class="n">'+reais(hoje)+'</b></div>'
-               : '<div><div class="rot">Dias com serviço</div><b class="n">'+(+o.dias_com_valor||0)+' dia'+((+o.dias_com_valor||0)===1?'':'s')+'</b></div>')+
-        '<div><div class="rot">Total do mês</div><b class="n">'+reais(mes)+'</b></div>'+
-        '<div><div class="rot">Meta do mês</div><b class="n am">'+(meta>0 ? reais(meta) : '—')+'</b></div>'+
+        '<div><div class="rot">Dias produzidos</div><b class="n">'+diasProd+' dia'+(diasProd===1?'':'s')+'</b></div>'+
+        '<div><div class="rot">Faltam</div><b class="n am">'+(!atual && !futuro ? 'Mês encerrado' : faltamDias+' dia'+(faltamDias===1?'':'s')+'<small>úte'+(faltamDias===1?'l':'is')+' (5x2)</small>')+'</b></div>'+
       '</div>'+
       (avisos.length ? '<div class="avisos">'+avisos.join('')+'</div>' : '')+
       '<div class="progresso">'+
