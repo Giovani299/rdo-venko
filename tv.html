@@ -86,7 +86,7 @@
   .faixa .rot{font-size:calc(var(--u)*.63*var(--k));}
   .faixa b{display:block;font-size:calc(var(--u)*1.25*var(--k));font-weight:900;letter-spacing:-.01em;margin-top:calc(var(--u)*.1);white-space:nowrap;}
   .faixa b.am{color:var(--amarelo);}
-  .faixa b small{font-size:.55em;font-weight:600;color:var(--cinza);margin-left:calc(var(--u)*.3);letter-spacing:0;}
+  .faixa b{text-transform:uppercase;}   /* DIAS PRODUZIDOS / FALTAM: tudo em maiúsculo */
 
   .progresso{margin-top:calc(var(--u)*1.1*var(--k));padding-top:calc(var(--u)*.85*var(--k));border-top:1px solid rgba(36,36,36,.6);}
   .progresso .l1{display:flex;justify-content:space-between;gap:calc(var(--u)*1);font-size:calc(var(--u)*.76*var(--k));font-weight:600;color:var(--cinza);margin-bottom:calc(var(--u)*.4*var(--k));}
@@ -499,7 +499,7 @@
       '</div>'+
       '<div class="faixa">'+
         '<div><div class="rot">Dias produzidos</div><b class="n">'+diasProd+' dia'+(diasProd===1?'':'s')+'</b></div>'+
-        '<div><div class="rot">Faltam</div><b class="n am">'+(!atual && !futuro ? 'Mês encerrado' : faltamDias+' dia'+(faltamDias===1?'':'s')+'<small>úte'+(faltamDias===1?'l':'is')+' (5x2)</small>')+'</b></div>'+
+        '<div><div class="rot">Faltam</div><b class="n am">'+(!atual && !futuro ? 'Mês encerrado' : faltamDias+' dia'+(faltamDias===1?'':'s'))+'</b></div>'+
       '</div>'+
       (avisos.length ? '<div class="avisos">'+avisos.join('')+'</div>' : '')+
       '<div class="progresso">'+
