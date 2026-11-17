@@ -424,7 +424,7 @@
     var porDia = {}, maior = 0;
     dias.forEach(function(d){ porDia[d[0]] = +d[1] || 0; if(+d[1] > maior) maior = +d[1]; });
 
-    var atual = dados.mes_atual !== false;   // mês passado: sem "hoje"; mostra o maior dia e quantos dias tiveram serviço
+    var atual = dados.mes_atual !== false;   // mês passado: sem "hoje"; mostra quantos dias tiveram serviço
     var futuro = !!dados.futuro;             // mês que ainda vai chegar: só o previsto
     // previsto do dia = meta do mês ÷ dias de segunda a sexta do mês, sem feriados (ex.: 400.000 ÷ 21)
     var fer = feriados(ano).concat((o.feriados || []).map(function(d){ return String(d).slice(5); })), diasUteis = 0;   // + feriados da cidade cadastrados no sistema
@@ -434,7 +434,7 @@
     var obs = rdosHoje ? 'Hoje: ' + reais(hoje) + ' · ' + rdosHoje + ' RDO' + (rdosHoje===1 ? '' : 's') + (hoje > 0 ? '' : ' (sem serviços lançados)') : '';   // sem RDO hoje: não escreve nada
     var diaMaior = null; dias.forEach(function(d){ if(+d[1] > 0 && +d[1] === maior && !diaMaior) diaMaior = d[0]; });
     if(futuro){ obs = diasUteis + ' dias úteis' + (prevDia ? ' · ' + reais(prevDia) + ' por dia' : ''); }
-    else if(!atual){ obs = diaMaior ? 'Maior dia ' + reais(maior) + ' em ' + diaMaior.split('-').reverse().slice(0,2).join('/') + ' · ' + (+o.rdos_mes||0) + ' RDOs no mês' : 'Nenhum serviço lançado neste mês'; }
+    else if(!atual){ obs = diaMaior ? (+o.rdos_mes||0) + ' RDOs no mês' : 'Nenhum serviço lançado neste mês'; }
     var pct = meta > 0 ? Math.floor(mes / meta * 100) : null, batida = meta > 0 && mes >= meta;
     var antesInicio = o.inicio_obra && String(dados.inicio_mes).slice(0,7) < String(o.inicio_obra).slice(0,7);
     // dias úteis (segunda a sexta, sem feriados) que faltam para fechar o mês, contando hoje
@@ -513,7 +513,7 @@
           : '<div class="sem-meta">'+(antesInicio ? 'A obra ainda não tinha começado neste mês.' : 'Meta do mês não definida — no sistema, em Obras, preencha “Previsto do mês R$”.')+'</div>')+
       '</div>'+
       (modoMeses ? graficoMeses(o, largo) : '<div class="grafico">'+
-        '<div class="tit rot"><span>Dia a dia — '+MESES[mesN-1]+(atual ? '' : ' de '+ano)+'</span><span class="leg"><span><i class="lf"></i>Feito</span>'+(prevDia ? '<span class="prev"><i class="lp"></i>Previsto por dia ('+diasUteis+' dias úteis): <b class="n">'+reais(prevDia)+'</b></span>' : '')+'<span>Maior dia '+reais(maior)+'</span></span></div>'+
+        '<div class="tit rot"><span>Dia a dia — '+MESES[mesN-1]+(atual ? '' : ' de '+ano)+'</span><span class="leg"><span><i class="lf"></i>Feito</span>'+(prevDia ? '<span class="prev"><i class="lp"></i>Previsto por dia ('+diasUteis+' dias úteis): <b class="n">'+reais(prevDia)+'</b></span>' : '')+'</span></div>'+
         '<div class="barras">'+barras+'</div>'+
         '<div class="eixo">'+eixo+'</div>'+
       '</div>')+
