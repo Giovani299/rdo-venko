@@ -319,7 +319,7 @@
   // ---------- atualização sozinha ----------
   // A cada 5 minutos a tela confere se o painel foi atualizado no site; se mudou, recarrega sozinha.
   // Assim a TV 1, a TV 2 e as TVs vinculadas por código pegam as mudanças sem ninguém apertar F5.
-  var VERSAO_TELA = '202611171516';
+  var VERSAO_TELA = '202611171548';
   function confereVersao(){
     if(!window.fetch) return;
     fetch(location.pathname + '?versao=' + Date.now(), { cache:'no-store' }).then(function(r){ return r.ok ? r.text() : null; }).then(function(t){
@@ -446,7 +446,7 @@
     function folga(dia){ var w = new Date(ano, mesN-1, dia).getDay(); return w === 0 || w === 6 || fer.indexOf(String(mesN).padStart(2,'0') + '-' + String(dia).padStart(2,'0')) >= 0; }
     for(var du=1; du<=nDias; du++){ if(!folga(du)) diasUteis++; }
     var prevDia = (meta > 0 && diasUteis) ? meta / diasUteis : 0;
-    var obs = rdosHoje ? 'Hoje: ' + reais(hoje) + ' · ' + rdosHoje + ' RDO' + (rdosHoje===1 ? '' : 's') + (hoje > 0 ? '' : ' (sem serviços lançados)') : '';   // sem RDO hoje: não escreve nada
+    var obs = '';   // mês atual: não mostra a linha "Hoje" (retirada a pedido)
     var diaMaior = null; dias.forEach(function(d){ if(+d[1] > 0 && +d[1] === maior && !diaMaior) diaMaior = d[0]; });
     if(futuro){ obs = diasUteis + ' dias úteis' + (prevDia ? ' · ' + reais(prevDia) + ' por dia' : ''); }
     else if(!atual){ obs = diaMaior ? (+o.rdos_mes||0) + ' RDOs no mês' : 'Nenhum serviço lançado neste mês'; }
