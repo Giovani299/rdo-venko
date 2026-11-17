@@ -13274,8 +13274,9 @@
   function pontoCarregarFeriados(forcar){
     if(pontoFeriadosProm && !forcar) return pontoFeriadosProm;
     if(!supabaseClient) return Promise.resolve();
-    var p = Promise.resolve(supabaseClient.from('ponto_feriados').select('id,data,descricao,obra_id').order('data', { ascending:true })).then(function(res){
-      if(res && !res.error) state.feriados = res.data || [];
+    var p = Promise.resolve(supabaseClient.from('ponto_feriados').select('*').order('data', { ascending:true })).then(function(res){
+      // v79: dias marcados só para não cobrar RDO (so_rdo) não são feriado na folha de ponto
+      if(res && !res.error) state.feriados = (res.data || []).filter(function(f){ return f.so_rdo !== true; });
       else if(pontoFeriadosProm===p) pontoFeriadosProm = null;
     }, function(){ if(pontoFeriadosProm===p) pontoFeriadosProm = null; });
     pontoFeriadosProm = p;
