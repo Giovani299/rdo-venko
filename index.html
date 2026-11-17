@@ -1964,18 +1964,36 @@
   }
   (function(){ var b = document.getElementById('btnFeriados'); if(b) b.addEventListener('click', feriadosAbrir); })();
 
-  // v80: se os botões do menu não cabem ao lado do logo, passam para uma linha própria (nada fica escondido)
+  // v80/v81: se os botões do menu não cabem ao lado do logo, passam para uma linha própria (nada fica escondido).
+  // v81: a conta é feita com a largura natural de cada parte, sem tirar/pôr a classe para medir —
+  // antes isso fazia o topo ficar alternando (a tela "tremia").
   (function(){
     var top = document.querySelector('.topbar'), tabs = top && top.querySelector('.tabs');
     if(!top || !tabs) return;
-    var ajusta = function(){
-      top.classList.remove('tabs-linha');
-      if(window.innerWidth > 680 && tabs.scrollWidth > tabs.clientWidth + 2) top.classList.add('tabs-linha');
+    var px = function(v){ return parseFloat(v) || 0; };
+    var visivel = function(el){ return el.offsetParent !== null || getComputedStyle(el).position === 'fixed'; };
+    var natural = function(el){
+      var cs = getComputedStyle(el), kids = Array.prototype.filter.call(el.children, visivel);
+      var w = kids.reduce(function(t, k){ return t + k.getBoundingClientRect().width; }, 0) + px(cs.columnGap) * Math.max(0, kids.length - 1);
+      return w + px(cs.paddingLeft) + px(cs.paddingRight) + px(cs.borderLeftWidth) + px(cs.borderRightWidth);
     };
-    window.addEventListener('resize', ajusta);
-    if(window.MutationObserver) new MutationObserver(function(){ requestAnimationFrame(ajusta); }).observe(tabs, { attributes:true, subtree:true, attributeFilter:['style','class','hidden'] });
-    if(window.ResizeObserver) new ResizeObserver(function(){ requestAnimationFrame(ajusta); }).observe(top);
-    ajusta(); setTimeout(ajusta, 800);
+    var pendente = false;
+    var ajusta = function(){
+      pendente = false;
+      var deve = false;
+      if(window.innerWidth > 680){
+        var cs = getComputedStyle(top), gap = px(cs.columnGap);
+        var outros = Array.prototype.filter.call(top.children, function(el){ return el !== tabs && visivel(el); });
+        var ocupado = outros.reduce(function(t, el){ return t + (el.children.length ? natural(el) : el.getBoundingClientRect().width) + (el.classList.contains('user-box') ? 14 : 0); }, 0);
+        var livre = top.clientWidth - px(cs.paddingLeft) - px(cs.paddingRight) - ocupado - gap * outros.length - 8;   // 8 = sobra de segurança
+        deve = natural(tabs) > livre;
+      }
+      if(top.classList.contains('tabs-linha') !== deve) top.classList.toggle('tabs-linha', deve);   // só mexe quando a decisão muda
+    };
+    var agenda = function(){ if(!pendente){ pendente = true; requestAnimationFrame(ajusta); } };
+    window.addEventListener('resize', agenda);
+    if(window.MutationObserver) new MutationObserver(agenda).observe(tabs, { attributes:true, subtree:true, childList:true, attributeFilter:['style','hidden'] });
+    ajusta(); setTimeout(ajusta, 800); setTimeout(ajusta, 3000);
   })();
 
   // serviços lançados no mês atual cujo item está sem preço na planilha (ou saiu dela): entram como R$ 0
