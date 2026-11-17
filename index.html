@@ -1223,6 +1223,43 @@
     .premium #app .btn:hover:not(:disabled),.premium .aj-item:hover{transform:none;}
   }
   @supports not (backdrop-filter: blur(1px)){ .premium #app .topbar{background:var(--surface);} }
+
+  /* ---------- v80: alinhamento — tudo que fica na mesma linha tem a mesma altura ----------
+     Antes: campo de texto 35px, data/lista 37px, botão pequeno 29px lado a lado (filtros "espaçando").
+     Agora: campos 38px; nas linhas de ação (botões pequenos) lista/campo/botão com 32px. */
+  :root{--ctl-h:38px;--ctl-h-sm:32px;}
+  #app .field input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]),
+  #app .field select{height:var(--ctl-h);min-height:var(--ctl-h);box-sizing:border-box;padding-top:0;padding-bottom:0;line-height:normal;}
+  #app .filters > .btn, #app .ponto-datanav > .btn, #app .ponto-datanav .btn{height:var(--ctl-h);box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding-top:0;padding-bottom:0;}
+  #app :is(.obra-actions,.ob2-linha,.ob2-princ,.ob2-sec,.ob2-campo,.tvv-botoes,.aj-abas,.ponto-acoes) :is(.btn.sm, select, input:not([type=checkbox]):not([type=radio]):not([type=file])),
+  #app :is(div,td,li):has(> .btn.sm):has(> select) > :is(.btn.sm, select){height:var(--ctl-h-sm);min-height:var(--ctl-h-sm);box-sizing:border-box;padding-top:0;padding-bottom:0;}
+  #app :is(.obra-actions,.ob2-linha,.ob2-princ,.ob2-sec,.tvv-botoes,.aj-abas,.ponto-acoes) .btn.sm,
+  #app :is(div,td,li):has(> .btn.sm):has(> select) > .btn.sm{display:inline-flex;align-items:center;justify-content:center;gap:4px;}
+  #app .tvv-botoes a.btn.sm{line-height:1;}
+  /* filtros: cada campo divide o espaço da linha (antes o nome comprido de uma obra esticava a lista e sobrava buraco no fim da linha) */
+  @media (min-width:681px){
+    #app .filters > .field{flex:1 1 150px;min-width:0;}
+    #app .filters > .field.grow{flex:3 1 260px;}
+    #app .filters > .field select, #app .filters > .field input{width:100%;min-width:0;}
+    #app .filters > .field + .btn{margin-left:auto;}   /* botões (Limpar filtros, Lixeira) ficam à direita */
+  }
+  /* celular: campos de formulário passavam da borda da tela (lista com nome de obra comprido esticava a coluna) */
+  #app :is(.grid2,.grid3,.grid4,.kpi-row,.colab-filtros,.ob2-config,.ob2-campo) > *{min-width:0;}
+  @media (max-width:680px){ #app .colab-filtros{grid-template-columns:minmax(0,1fr);} }
+  @media (max-width:760px){ #app .ob2-config{grid-template-columns:minmax(0,1fr);} }
+  @media (max-width:720px){ #app .ob2-meta-in{flex:1 1 100%;flex-wrap:wrap;white-space:normal;min-width:0;} #app .ob2-meta-in input{max-width:none;flex:1 1 140px;min-width:0;} }
+  #app .field :is(input,select,textarea){max-width:100%;}
+  /* número da seção (1, 2, 3…) não estica quando o título quebra em duas linhas */
+  #app .card h2 .idx{flex:0 0 auto;align-self:flex-start;margin-top:1px;}
+  /* menu em linha própria: usuário volta para a direita */
+  .topbar.tabs-linha .user-box{margin-left:auto;}
+  /* etiquetas (Sem registro, Ativa...) nunca quebram em duas linhas */
+  .chip{white-space:nowrap;flex-shrink:0;}
+  .ponto-quem{min-width:0;}
+  /* menu do topo: quando os botões não cabem ao lado do logo, vão para uma linha própria (antes ficavam escondidos) */
+  @media (min-width:681px){
+    .topbar.tabs-linha .tabs{order:10;flex:1 1 100%;margin-left:0;flex-wrap:wrap;overflow:visible;justify-content:center;}
+  }
 </style>
 <script>
   (function(){
@@ -1926,6 +1963,20 @@
     listar();
   }
   (function(){ var b = document.getElementById('btnFeriados'); if(b) b.addEventListener('click', feriadosAbrir); })();
+
+  // v80: se os botões do menu não cabem ao lado do logo, passam para uma linha própria (nada fica escondido)
+  (function(){
+    var top = document.querySelector('.topbar'), tabs = top && top.querySelector('.tabs');
+    if(!top || !tabs) return;
+    var ajusta = function(){
+      top.classList.remove('tabs-linha');
+      if(window.innerWidth > 680 && tabs.scrollWidth > tabs.clientWidth + 2) top.classList.add('tabs-linha');
+    };
+    window.addEventListener('resize', ajusta);
+    if(window.MutationObserver) new MutationObserver(function(){ requestAnimationFrame(ajusta); }).observe(tabs, { attributes:true, subtree:true, attributeFilter:['style','class','hidden'] });
+    if(window.ResizeObserver) new ResizeObserver(function(){ requestAnimationFrame(ajusta); }).observe(top);
+    ajusta(); setTimeout(ajusta, 800);
+  })();
 
   // serviços lançados no mês atual cujo item está sem preço na planilha (ou saiu dela): entram como R$ 0
   function servicoSemPreco(id){ var it = catalogoItemById(id); return !it || !(Number(it.custoUnitario) > 0); }
