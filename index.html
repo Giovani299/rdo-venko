@@ -472,6 +472,16 @@
   .gestao-add input{flex:1;min-width:0;border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:7px 9px;font:inherit;font-size:14px;}
   .colab-obra-sel{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:6px 8px;font:inherit;font-size:13px;max-width:220px;}
   .colab-cont{margin:10px 0 0;font-size:13px;color:var(--muted);}
+  .pcmp{margin:12px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;line-height:1.45;}
+  .pcmp:empty{display:none;}
+  .pcmp-tit{font-weight:700;margin:0 0 6px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline;}
+  .pcmp-tit small{font-weight:400;color:var(--muted);}
+  .pcmp.ok{border-color:color-mix(in srgb, var(--status-approved, #2e7d32) 45%, var(--line));}
+  .pcmp.dif{border-color:color-mix(in srgb, #d98e04 55%, var(--line));}
+  .pcmp-grupo{margin:6px 0 0;}
+  .pcmp-grupo b{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);margin-bottom:3px;}
+  .pcmp-nomes{display:flex;flex-wrap:wrap;gap:4px;}
+  .pcmp-nomes span{padding:2px 8px;border-radius:999px;background:var(--surface-2, rgba(127,127,127,.12));white-space:nowrap;}
   .eq-serv-resumo{margin:12px 0 0;padding:8px 10px;border-radius:6px;background:var(--surface);border:1px solid var(--line);font-size:12.5px;}
   .admin-aviso{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 10px;padding:10px 12px;border:1px solid var(--line);border-left:4px solid var(--venko-yellow-deep);border-radius:var(--radius);background:var(--surface);font-size:13px;line-height:1.45;}
   .admin-aviso > div{flex:1 1 280px;}
@@ -9766,7 +9776,16 @@
   }
 
   /* ---------------- photo handling ---------------- */
-  function resizeImageFile(file, maxDim, quality){
+  // Fotos do RDO: WebP (bem menor) quando o aparelho consegue gerar; senão JPEG reduzido.
+  var FOTO_WEBP_OK = null;
+  function fotoWebpOk(){
+    if(FOTO_WEBP_OK===null){ try{ var c = document.createElement('canvas'); c.width = c.height = 2; FOTO_WEBP_OK = c.toDataURL('image/webp', 0.5).indexOf('data:image/webp')===0; }catch(e){ FOTO_WEBP_OK = false; } }
+    return FOTO_WEBP_OK;
+  }
+  function resizeFotoRdo(file){
+    return fotoWebpOk() ? resizeImageFile(file, 1280, 0.6, 'image/webp') : resizeImageFile(file, 1024, 0.6);
+  }
+  function resizeImageFile(file, maxDim, quality, tipo){
     return new Promise(function(resolve, reject){
       var reader = new FileReader();
       reader.onerror = function(){ reject(new Error('read_failed')); };
@@ -9781,7 +9800,9 @@
           canvas.width = cw; canvas.height = ch;
           var ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, cw, ch);
-          resolve(canvas.toDataURL('image/jpeg', quality));
+          var out = tipo ? canvas.toDataURL(tipo, quality) : '';
+          if(!tipo || out.indexOf('data:'+tipo)!==0) out = canvas.toDataURL('image/jpeg', quality);
+          resolve(out);
         };
         img.src = reader.result;
       };
@@ -10411,6 +10432,88 @@
       .map(function(c){ return { nome:c.nome, funcao:c.funcao||'', departamento: departamentoNome(c.departamentoId) }; })
       .sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), 'pt-BR'); });
   }
+  // ---------------------------------------------------------------
+  // Ponto x RDO: compara quem bateu ponto na obra no dia com quem está
+  // na mão de obra do RDO. Só aparece quando há ponto registrado.
+  // ---------------------------------------------------------------
+  var pontoCmpCache = {};
+  function pontoCmpNorm(n){ return rdoNorm(String(n||'').replace(/\s+/g, ' ').trim()); }
+  function pontoCmpCarregar(obraId, data){
+    if(!obraId || !data || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return Promise.resolve(null);
+    var k = obraId+'|'+data, c = pontoCmpCache[k];
+    if(c && c.p) return c.p;
+    if(c && Date.now()-c.em < 60000) return Promise.resolve(c.regs);
+    var p = Promise.resolve(supabaseClient.from('ponto_registros').select('colaborador_id, colaborador_nome, entrada, ocorrencia').eq('obra_id', obraId).eq('data', data))
+      .then(function(res){ var regs = (res && !res.error) ? (res.data||[]) : null; pontoCmpCache[k] = { em:Date.now(), regs:regs }; return regs; },
+            function(){ pontoCmpCache[k] = { em:Date.now(), regs:null }; return null; });
+    pontoCmpCache[k] = { p:p };
+    return p;
+  }
+  function pontoCmpDados(regs, mo){
+    var colabs = state.colaboradores||[];
+    var nomeDe = function(r){ var c = r.colaborador_id && colabs.find(function(x){ return x.id===r.colaborador_id; }); return (c && c.nome) || r.colaborador_nome || ''; };
+    var chavesDe = function(r){ var c = r.colaborador_id && colabs.find(function(x){ return x.id===r.colaborador_id; }); return [nomeDe(r), r.colaborador_nome, c && c.nomeCompleto].filter(Boolean).map(pontoCmpNorm); };
+    var noRdo = {}; (mo||[]).forEach(function(m){ if(m && m.nome) noRdo[pontoCmpNorm(m.nome)] = m.nome; });
+    var presentes = (regs||[]).filter(function(r){ return r.entrada && !r.ocorrencia; });
+    var faltas = (regs||[]).filter(function(r){ return r.ocorrencia==='falta' || r.ocorrencia==='falta_justificada'; });
+    var casou = {};
+    var semRdo = [];
+    presentes.forEach(function(r){ var ks = chavesDe(r), achou = ks.filter(function(x){ return noRdo[x]; })[0]; if(achou) casou[achou] = 1; else semRdo.push(nomeDe(r)); });
+    var faltaNoRdo = [];
+    faltas.forEach(function(r){ var ks = chavesDe(r), achou = ks.filter(function(x){ return noRdo[x]; })[0]; if(achou){ casou[achou] = 1; faltaNoRdo.push(noRdo[achou]); } });
+    var semPonto = Object.keys(noRdo).filter(function(x){ return !casou[x]; }).map(function(x){ return noRdo[x]; });
+    var ord = function(a, b){ return String(a).localeCompare(String(b), 'pt-BR'); };
+    return { total:(regs||[]).length, presentes:presentes.length, conferem:presentes.length-semRdo.length, semRdo:semRdo.sort(ord), semPonto:semPonto.sort(ord), faltaNoRdo:faltaNoRdo.sort(ord) };
+  }
+  function pontoCmpHtml(regs, mo, opts){
+    opts = opts || {};
+    if(!regs || !regs.length) return '';
+    var d = pontoCmpDados(regs, mo);
+    var grupo = function(tit, nomes){ return nomes.length ? '<div class="pcmp-grupo"><b>'+esc(tit)+' ('+nomes.length+')</b><div class="pcmp-nomes">'+nomes.map(function(n){ return '<span>'+esc(n)+'</span>'; }).join('')+'</div></div>' : ''; };
+    var dif = d.semRdo.length + d.semPonto.length + d.faltaNoRdo.length;
+    var tit = opts.titulo===false ? '' : '<p class="pcmp-tit">'+(dif ? '⚠ Ponto x RDO: '+dif+' diferença(s)' : '✓ Ponto x RDO conferem')+'<small>'+d.presentes+' bateram ponto · '+(mo||[]).filter(function(m){ return m && m.nome; }).length+' no RDO</small></p>';
+    if(!dif) return '<div class="pcmp ok">'+tit+'</div>';
+    return '<div class="pcmp dif">'+tit+
+      grupo('Bateram ponto e não estão no RDO', d.semRdo)+
+      grupo('Estão no RDO sem ponto batido', d.semPonto)+
+      grupo('Falta no ponto, mas estão no RDO', d.faltaNoRdo)+
+    '</div>';
+  }
+  // No formulário (item 3): redesenha a caixa quando a obra, a data ou a equipe mudam.
+  function pontoCmpAtualizarForm(rdo){
+    var el = document.getElementById('rdoPontoCmp');
+    if(!el || !rdo) return;
+    var obraEl = document.getElementById('rdoObra'), dataEl = document.getElementById('rdoData');
+    var obraId = (obraEl && obraEl.value) || rdo.obraId || '', data = (dataEl && dataEl.value) || rdo.data || '';
+    var k = obraId+'|'+data;
+    el.setAttribute('data-k', k);
+    var c = pontoCmpCache[k];
+    if(c && !c.p && Date.now()-c.em < 60000){ el.innerHTML = pontoCmpHtml(c.regs, rdo.maoDeObra); return; }
+    pontoCmpCarregar(obraId, data).then(function(regs){
+      var el2 = document.getElementById('rdoPontoCmp');
+      if(!el2 || el2.getAttribute('data-k')!==k) return;
+      el2.innerHTML = pontoCmpHtml(regs, rdo.maoDeObra);
+    });
+  }
+  document.addEventListener('change', function(e){
+    if(e.target && (e.target.id==='rdoData' || e.target.id==='rdoObra') && rdoFormAtual) setTimeout(function(){ pontoCmpAtualizarForm(rdoFormAtual); }, 0);
+  });
+  // No RDO aberto (detalhe): cartão abaixo do relatório, fora do PDF.
+  function pontoCmpDetalhe(r){
+    var card = document.getElementById('rdoPontoCard');
+    if(!card || !r || !r.obraId || !r.data) return;
+    pontoCmpCarregar(r.obraId, r.data).then(function(regs){
+      var c2 = document.getElementById('rdoPontoCard');
+      if(!c2 || state.detailId!==r.id) return;
+      var h = pontoCmpHtml(regs, r.maoDeObra, {titulo:false});
+      if(!h){ c2.style.display = 'none'; c2.innerHTML = ''; return; }
+      var d = pontoCmpDados(regs, r.maoDeObra), dif = d.semRdo.length + d.semPonto.length + d.faltaNoRdo.length;
+      c2.innerHTML = '<h2><span class="idx">·</span>Ponto x RDO'+(dif ? ' — '+dif+' diferença(s)' : ' — confere')+'</h2>'+
+        '<p class="hint" style="margin:0;">'+d.presentes+' bateram ponto nesta obra no dia · '+(r.maoDeObra||[]).filter(function(m){ return m && m.nome; }).length+' colaboradores no RDO.</p>'+
+        (dif ? h : '');
+      c2.style.display = '';
+    });
+  }
   function renderRdoColaboradores(rdo){
     var box = document.getElementById('rdoColabBox');
     if(!box) return;
@@ -10460,7 +10563,9 @@
     if((rdo.moAvulsos||[]).length) html += '<p class="hint" style="margin:6px 0 0;">Também registrados neste RDO (sem equipe): '+rdo.moAvulsos.map(function(m){ return esc(m.nome); }).join(', ')+'.</p>';
     var nCol = (rdo.maoDeObra||[]).length, nEq = (rdo.equipesDia||[]).length;
     html += '<p class="colab-cont" id="rdoColabCont">'+(nEq ? '<b>'+nEq+'</b> equipe(s) · <b>'+nCol+'</b> colaborador(es) no dia' : 'Nenhuma equipe marcada ainda.')+'</p>';
+    html += '<div id="rdoPontoCmp" class="pcmp-box"></div>';
     box.innerHTML = html;
+    pontoCmpAtualizarForm(rdo);
     box.querySelectorAll('[data-eqtoggle]').forEach(function(b){
       b.addEventListener('click', function(){
         var nome = cand[+b.getAttribute('data-eqtoggle')]; if(nome==null) return;
@@ -11360,7 +11465,7 @@
     renderPhotoUI();
     var aoEscolherFotos = function(e){
       var files = Array.prototype.slice.call(e.target.files||[]);
-      Promise.all(files.map(function(f){ return resizeImageFile(f, 1280, 0.7).then(function(du){ return {dataUrl:du}; }); }))
+      Promise.all(files.map(function(f){ return resizeFotoRdo(f).then(function(du){ return {dataUrl:du}; }); }))
         .then(function(newPhotos){
           state.photos = state.photos.concat(newPhotos);
           renderPhotoUI();
@@ -11760,6 +11865,7 @@
       '</div>'+
 
       rdoBodyHtml(r, {print:false})+
+      '<div class="card" id="rdoPontoCard" style="display:none;"></div>'+
       (function(){ var h = rdoAcessosHtml(id); return '<div class="card" id="rdoAcessosCard"'+(h?'':' style="display:none;"')+'>'+h+'</div>'; })();
 
     document.querySelectorAll('#detailGallery img').forEach(function(img){
@@ -11772,6 +11878,7 @@
     videoAssinar((r.videos||[]).map(function(v){ return (typeof v==='string') ? {url:v} : v; })).then(function(n){ if(n) videoAtualizarTela(el); });
     var editBtn = document.getElementById('btnEditRdo');
     if(editBtn) editBtn.addEventListener('click', function(){ state.editId=r.id; state.editingPendingItem=null; goto('novo'); renderRdoForm(r); });
+    pontoCmpDetalhe(r);
     document.getElementById('btnExportPdf').addEventListener('click', function(){ exportRdoPdf(r); });
   }
   function kvItem(l,v,warn){ return '<div class="item"><div class="l">'+esc(l)+'</div><div class="v"'+(warn?' style="color:var(--status-rejected)"':'')+'>'+esc(v)+'</div></div>'; }
