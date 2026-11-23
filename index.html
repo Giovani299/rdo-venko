@@ -472,6 +472,29 @@
   .gestao-add input{flex:1;min-width:0;border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:7px 9px;font:inherit;font-size:14px;}
   .colab-obra-sel{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:6px 8px;font:inherit;font-size:13px;max-width:220px;}
   .colab-cont{margin:10px 0 0;font-size:13px;color:var(--muted);}
+  .sst-modal{max-width:860px;width:calc(100vw - 32px);}
+  .sst-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+  .sst-bloco{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);}
+  .sst-bloco h4{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--steel);margin:0 0 8px;}
+  .sst-acoes{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+  .sst-acoes select{height:var(--ctl-h, 38px);max-width:100%;}
+  .sst-epis{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;}
+  .sst-epi{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;cursor:pointer;min-width:0;}
+  .sst-epi.on{border-color:var(--venko-yellow);background:color-mix(in srgb, var(--venko-yellow) 12%, transparent);}
+  .sst-epi input[type=checkbox]{width:18px;height:18px;flex:0 0 auto;accent-color:#232320;}
+  .sst-epi-nome{flex:1;min-width:0;font-size:13px;font-weight:600;line-height:1.25;}
+  .sst-epi-nome small{display:block;font-weight:400;color:var(--steel);}
+  .sst-epi input[type=number]{width:58px;flex:0 0 auto;height:32px;padding:4px 6px;}
+  .sst-velho td{color:var(--steel);}
+  .sst-tdacoes{white-space:nowrap;text-align:right;}
+  .sst-tdacoes .btn{margin-left:4px;}
+  .sst-risco{border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px;display:grid;gap:6px;}
+  .sst-risco-top{display:flex;gap:6px;}
+  .sst-risco-top input{flex:1;min-width:0;font-weight:600;}
+  .sst-cat input[type=text],.sst-cat input[type=date],.sst-cat input[type=number]{width:100%;min-width:90px;height:32px;padding:4px 8px;}
+  .sst-cat td:first-child input{min-width:180px;}
+  #sstAlerta.so-aviso{border-left-color:#d98e04;background:rgba(217,142,4,.09);}
+  #sstAlerta{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin:0 0 12px;padding:10px 14px;border-radius:8px;border-left:4px solid #C6433F;background:rgba(198,67,63,.07);font-size:13.5px;}
   .pcmp{margin:12px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;line-height:1.45;}
   .pcmp:empty{display:none;}
   .pcmp-tit{font-weight:700;margin:0 0 6px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline;}
@@ -1464,6 +1487,7 @@
           <h1>Colaboradores</h1>
           <p>Cadastro das pessoas que aparecem no RDO (item 3 — Colaboradores presentes). Colaborador de uma obra só aparece no RDO dessa obra.</p>
         </div>
+        <button class="btn ghost" type="button" id="btnSstCentral" style="display:none" data-sstver="trocar">🦺 EPIs e OS</button>
       </div>
       <div class="card" style="display:none">
         <h2><span class="idx">+</span>Departamentos</h2>
@@ -1493,6 +1517,7 @@
           <div class="form-actions"><button type="submit" class="btn primary">Salvar colaborador</button></div>
         </form>
       </div>
+      <div id="sstAlerta" style="display:none" role="status"></div>
       <div class="card colab-filtros" id="colabFiltros">
         <div class="field"><label for="colabBusca">Buscar colaborador</label><input type="search" id="colabBusca" placeholder="Nome, nome completo ou função…" autocomplete="off"></div>
         <div class="field"><label for="colabFiltroObra">Obra</label><select id="colabFiltroObra"><option value="">Todas as obras</option></select></div>
@@ -2788,6 +2813,7 @@
       state.colaboradores.sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
       cacheSet('colaboradores', state.colaboradores);
       colabPrivCarregar();
+      sstCarregar();
       renderAll();
       try{ if(state.view==='novo' && rdoFormAtual) renderRdoColaboradores(rdoFormAtual); }catch(e){}
     });
@@ -9348,6 +9374,459 @@
     });
   }
 
+  // ---------------------------------------------------------------
+  // v83 — Segurança do trabalho: OS por função, Ficha de EPI, entregas de EPI
+  // e aviso de troca. Só administrador e gestão (mesmo grupo que vê o CPF).
+  // Tabelas: sst_epis, sst_os_modelos, sst_epi_entregas, sst_documentos (migration 077).
+  // ---------------------------------------------------------------
+  var SST_EMPRESA = 'VENKO CONSTRUTORA E SERVIÇOS LTDA', SST_CNPJ = '50.920.781/0001-00', SST_CIDADE = 'São Paulo';
+  var SST_AVISO_DIAS = 15;
+  var SST_LOGO = 'data:image/jpeg;base64,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';
+  state.sst = { ok:false, carregando:null, epis:[], modelos:[], entregas:[], docs:[] };
+  function sstPode(){ return pontoVeCpf(); }
+  function sstHoje(){ var d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function sstSomaDias(iso, n){ var p = String(iso).split('-'); var d = new Date(+p[0], +p[1]-1, +p[2]+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function sstDiff(isoA, isoB){ var a = String(isoA).split('-'), b = String(isoB).split('-'); return Math.round((Date.UTC(+a[0],+a[1]-1,+a[2]) - Date.UTC(+b[0],+b[1]-1,+b[2]))/86400000); }
+  function sstErroMsg(err){
+    var m = (err && (err.message || err.error_description)) || String(err||'');
+    if(/sst_|does not exist|schema cache/i.test(m) && /not exist|not find|schema cache/i.test(m)) return 'O módulo de segurança do trabalho ainda não foi instalado no banco (migration 077).';
+    return pontoErroMsg ? pontoErroMsg(err) : m;
+  }
+  function sstCarregar(forcar){
+    if(!supabaseClient || !sstPode()) return Promise.resolve();
+    if(state.sst.carregando && !forcar) return state.sst.carregando;
+    var q = function(t, ord){ var x = supabaseClient.from(t).select('*'); if(ord) x = x.order(ord[0], {ascending:ord[1]}); return Promise.resolve(x); };
+    state.sst.carregando = Promise.all([q('sst_epis', ['nome', true]), q('sst_os_modelos', ['funcao', true]), q('sst_epi_entregas', ['data_entrega', true]), q('sst_documentos', ['gerado_em', false])]).then(function(rs){
+      var err = rs.filter(function(r){ return r && r.error; })[0];
+      if(err){ state.sst.ok = false; state.sst.erro = sstErroMsg(err.error); }
+      else {
+        state.sst.ok = true; state.sst.erro = '';
+        state.sst.epis = rs[0].data||[]; state.sst.modelos = rs[1].data||[]; state.sst.entregas = rs[2].data||[]; state.sst.docs = rs[3].data||[];
+      }
+      sstAtualizarTelas();
+    }, function(e){ state.sst.ok = false; state.sst.erro = sstErroMsg(e); }).then(function(){ state.sst.carregando = null; });
+    return state.sst.carregando;
+  }
+  function sstAtualizarTelas(){
+    if(state.view==='colaboradores'){ try{ renderColaboradorList(); }catch(e){} }
+    sstBannerRender();
+    var m = document.getElementById('sstColabModal'); if(m && m._render) m._render();
+    var c = document.getElementById('sstCentral'); if(c && c._render) c._render();
+  }
+  function sstEpi(id){ return (state.sst.epis||[]).find(function(e){ return e.id===id; }) || null; }
+  function sstModeloDe(funcao){
+    var k = rdoNorm(String(funcao||'').trim());
+    return k ? ((state.sst.modelos||[]).find(function(m){ return rdoNorm(String(m.funcao||'').trim())===k; }) || null) : null;
+  }
+  // Situação de cada entrega ainda em uso: só a mais recente de cada EPI conta
+  function sstSituacao(colabId){
+    var hoje = sstHoje(), ult = {};
+    (state.sst.entregas||[]).filter(function(x){ return x.colaborador_id===colabId && !x.devolvido_em; }).forEach(function(x){
+      var k = x.epi_id || ('n:'+rdoNorm(x.epi_nome||''));
+      if(!ult[k] || x.data_entrega > ult[k].data_entrega || (x.data_entrega===ult[k].data_entrega && x.criado_em > ult[k].criado_em)) ult[k] = x;
+    });
+    return Object.keys(ult).map(function(k){
+      var x = ult[k], epi = x.epi_id ? sstEpi(x.epi_id) : null, r = { entrega:x, epi:epi, status:'sem_prazo', dias:null, vence:null, caVencido:false };
+      if(epi && epi.troca_dias){ r.vence = sstSomaDias(x.data_entrega, +epi.troca_dias); r.dias = sstDiff(r.vence, hoje); r.status = r.dias<0 ? 'vencido' : (r.dias<=SST_AVISO_DIAS ? 'proximo' : 'ok'); }
+      if(epi && epi.ca_validade && epi.ca_validade < hoje) r.caVencido = true;
+      return r;
+    });
+  }
+  function sstPendencias(){
+    var out = [];
+    (state.colaboradores||[]).filter(function(c){ return c.ativo!==false; }).forEach(function(c){
+      sstSituacao(c.id).forEach(function(s){ if(s.status==='vencido' || s.status==='proximo' || s.caVencido) out.push({ colab:c, s:s }); });
+    });
+    out.sort(function(a, b){ return (a.s.dias==null ? 9999 : a.s.dias) - (b.s.dias==null ? 9999 : b.s.dias); });
+    return out;
+  }
+  function sstStatusChip(s){
+    if(s.status==='vencido') return '<span class="chip rejected">Troca vencida há '+(-s.dias)+' dia(s)</span>';
+    if(s.status==='proximo') return '<span class="chip pending-offline">'+(s.dias===0 ? 'Trocar hoje' : 'Trocar em '+s.dias+' dia(s)')+'</span>';
+    if(s.status==='ok') return '<span class="chip approved">Até '+fmtDate(s.vence)+'</span>';
+    return '<span class="chip draft">Sem prazo de troca</span>';
+  }
+  function sstColabChip(colabId){
+    if(!sstPode() || !state.sst.ok) return '';
+    var ss = sstSituacao(colabId), venc = ss.filter(function(s){ return s.status==='vencido'; }).length, prox = ss.filter(function(s){ return s.status==='proximo'; }).length, ca = ss.filter(function(s){ return s.caVencido; }).length;
+    if(venc) return ' <span class="chip rejected">EPI: '+venc+' troca(s) vencida(s)</span>';
+    if(prox) return ' <span class="chip pending-offline">EPI: '+prox+' troca(s) em breve</span>';
+    if(ca) return ' <span class="chip rejected">EPI com C.A. vencido</span>';
+    return '';
+  }
+  function sstBannerRender(){
+    var el = document.getElementById('sstAlerta'), bt = document.getElementById('btnSstCentral');
+    if(bt) bt.style.display = sstPode() ? '' : 'none';
+    if(!el) return;
+    if(!sstPode() || !state.sst.ok){ el.innerHTML = ''; el.style.display = 'none'; return; }
+    var p = sstPendencias(), venc = p.filter(function(x){ return x.s.status==='vencido'; }).length, prox = p.filter(function(x){ return x.s.status==='proximo'; }).length, ca = p.filter(function(x){ return x.s.caVencido; }).length;
+    if(!p.length){ el.innerHTML = ''; el.style.display = 'none'; return; }
+    var partes = [];
+    if(venc) partes.push('<b>'+venc+'</b> troca(s) de EPI vencida(s)');
+    if(prox) partes.push('<b>'+prox+'</b> EPI(s) para trocar em até '+SST_AVISO_DIAS+' dias');
+    if(ca) partes.push('<b>'+ca+'</b> EPI(s) com C.A. vencido');
+    el.innerHTML = '<span>🦺 '+partes.join(' · ')+'</span><button type="button" class="btn ghost sm" data-sstver="trocar">Ver lista</button>';
+    el.classList.toggle('so-aviso', !venc && !ca);
+    el.style.display = '';
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target && e.target.closest && e.target.closest('[data-sstver]');
+    if(b){ if(b.tagName==='A') e.preventDefault(); sstCentralModal(b.getAttribute('data-sstver')); }
+  });
+
+  // ---------- impressão (OS e ficha) ----------
+  function sstImprimir(titulo, corpo){
+    var css = '@page{size:A4;margin:14mm 14mm 12mm}*{box-sizing:border-box}body{font-family:Arial,"Liberation Sans",Helvetica,sans-serif;font-size:9.6pt;color:#111;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+      'table{border-collapse:collapse;width:100%}td,th{border:1px solid #222;padding:4px 7px;vertical-align:middle}h2,h3,h4{margin:0}'+
+      '.c{text-align:center}.logo img{width:46mm;height:auto}.os-top{text-align:center;margin-bottom:10px}.os-top h1{font-size:13pt;margin:6px 0 2px}.os-top h2{font-size:12pt}'+
+      '.sec{font-weight:700;text-align:center;margin:12px 0 5px;font-size:10.5pt}.sec.u{text-decoration:underline}p{margin:0 0 6px;line-height:1.38}.rt{font-weight:700;margin:7px 0 2px}'+
+      '.cols{columns:2;column-gap:30px;margin:0 0 4px;padding-left:16px}.cols li{margin:1px 0}'+
+      '.ass{display:flex;justify-content:space-between;gap:40px;margin-top:46px}.ass .l{flex:1.6;border-top:1px solid #222;padding-top:3px}.ass .r{flex:1;border-top:1px solid #222;padding-top:3px}'+
+      '.fcab td{height:27mm}.fcab .logo{width:26%;text-align:center}.fcab .logo img{height:auto;width:50mm}.ftit{text-align:center;font-weight:700;font-size:11.2pt;line-height:1.4}'+
+      '.dados td{white-space:nowrap}.termo{border:1px solid #222;margin-top:9px;padding:8px 12px 10px}.termo h3{text-align:center;font-size:10.5pt;text-decoration:underline;margin:2px 0 7px}'+
+      '.itens{margin-top:14px}.itens th{background:#ddd;padding:5px;white-space:nowrap}.itens td{height:7mm;text-align:center}.itens td.d{text-align:left;font-weight:700}.fass{width:52%;border-top:1px solid #222;padding-top:3px;margin-top:26px}'+
+      'tr{page-break-inside:avoid}';
+    var html = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>'+esc(titulo)+'</title><style>'+css+'</style></head><body>'+corpo+'</body></html>';
+    var ifr = document.createElement('iframe');
+    ifr.setAttribute('aria-hidden', 'true');
+    ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+    document.body.appendChild(ifr);
+    var doc = ifr.contentWindow.document; doc.open(); doc.write(html); doc.close();
+    var imprimir = function(){ try{ ifr.contentWindow.focus(); ifr.contentWindow.print(); }catch(e){ toast('Não foi possível abrir a impressão.','error'); } setTimeout(function(){ ifr.remove(); }, 60000); };
+    var imgs = Array.prototype.slice.call(doc.images||[]);
+    Promise.all(imgs.map(function(im){ return im.complete ? 0 : new Promise(function(r){ im.onload = im.onerror = r; }); })).then(function(){ setTimeout(imprimir, 120); });
+  }
+  function sstDadosColab(c){
+    var cpf = (state.colabPriv||{})[c.id] || '';
+    return { nome:String(c.nomeCompleto || c.nome || '').toUpperCase(), cpf: cpf ? vkCpfFmt(cpf) : '', funcao: c.funcao || '' };
+  }
+  function sstOsHtml(c, modelo){
+    var d = sstDadosColab(c), ct = modelo.conteudo || {};
+    var paras = function(a){ return (a||[]).filter(Boolean).map(function(t){ return '<p>'+esc(t)+'</p>'; }).join(''); };
+    var lista = function(a){ return (a||[]).length ? '<ul class="cols">'+a.map(function(t){ return '<li>'+esc(t)+'</li>'; }).join('')+'</ul>' : ''; };
+    return '<div class="os-top"><div class="logo"><img src="'+SST_LOGO+'" alt="Venko"></div><h1>DEPARTAMENTO DE SEGURANÇA DO TRABALHO</h1><h2>OS – ORDEM DE SERVIÇO</h2></div>'+
+      '<table><tr><td><b>FUNÇÃO:</b> '+esc(String(modelo.titulo||d.funcao).toUpperCase())+'</td><td style="width:34%"><b>DATA:</b> '+fmtDate(sstHoje())+'</td></tr>'+
+      '<tr><td><b>NOME:</b> '+esc(d.nome)+'</td><td><b>CPF:</b> '+esc(d.cpf || '_______________')+'</td></tr>'+
+      '<tr><td><b>EMPRESA:</b> '+esc(SST_EMPRESA)+'</td><td><b>CNPJ:</b> '+esc(SST_CNPJ)+'</td></tr></table>'+
+      '<div class="sec u">CONTEÚDO PROGRAMÁTICO</div><div class="sec">ATIVIDADES DO COLABORADOR</div>'+paras(ct.atividades)+
+      ((ct.riscos||[]).length || ct.riscos_intro ? '<div class="sec">RISCO E AVALIAÇÃO</div>'+(ct.riscos_intro ? '<p>'+esc(ct.riscos_intro)+'</p>' : '')+
+        (ct.riscos||[]).map(function(r){ return '<div class="rt">'+esc(r.tipo||'')+'</div>'+(r.descricao ? '<p>'+esc(r.descricao)+'</p>' : '')+(r.medidas ? '<p>'+esc(r.medidas)+'</p>' : ''); }).join('') : '')+
+      ((ct.obrigacoes||[]).length ? '<div class="sec">OBRIGAÇÕES DE SEGURANÇA DO COLABORADOR</div>'+paras(ct.obrigacoes) : '')+
+      ((ct.epis||[]).length ? '<div class="sec">EQUIPAMENTOS DE PROTEÇÃO INDIVIDUAL – EPI\'s</div>'+lista(ct.epis) : '')+
+      ((ct.epcs||[]).length ? '<div class="sec">EQUIPAMENTOS DE PROTEÇÃO COLETIVA – EPC\'s</div>'+lista(ct.epcs) : '')+
+      (ct.penalidades ? '<div class="sec">PENALIDADES AO COLABORADOR</div><p>'+esc(ct.penalidades)+'</p>' : '')+
+      (ct.acidentes ? '<div class="sec">PROCEDIMENTO EM CASO DE ACIDENTES</div><p>'+esc(ct.acidentes)+'</p>' : '')+
+      '<div class="ass"><div class="l"><b>'+esc(d.nome)+'</b><br><i>Assinatura do funcionário</i></div><div class="r"><b>DATA:</b> ______/______/__________</div></div>';
+  }
+  var SST_TERMO = ['Declaro sob minha responsabilidade a guarda e conservação dos equipamentos de proteção individual constantes nesta ficha-controle. Assumo também a responsabilidade de os devolver integralmente ou parcialmente, quando solicitado, ou por ocasião de eventual rescisão de contrato, na data do respectivo aviso de qualquer das partes. Também estou ciente que, na eventualidade de danificar ou extraviar o equipamento por ato doloso ou culposo, estarei sujeito ao desconto do valor em meu salário, conforme parágrafo único do art. 158 da CLT. Também me comprometo a utilizá-los de forma correta e de acordo com as instruções de treinamento referentes ao uso correto, guarda, conservação e higienização dos EPI´s, recebidas na presente data, fornecidas por profissional Técnico em Segurança do Trabalho. Também estou ciente que a não utilização dos mesmos em minhas atividades profissionais é ato faltoso e passível de punições legais e disciplinares de acordo com a Consolidação das Leis do Trabalho (CLT) - Capítulo V - Seção I - Art. 158, Norma Regulamentadora (NR) - NR-1 e NR-6, alínea 6.7, disciplinadas pela Portaria MTB Nº 3.214/78 e artigo 191, itens I e II da CLT e súmula Nº 80 do TST.',
+    'Além do referido treinamento, declaro ter recebido orientações sobre os danos da exposição ao ruído intenso, comprometo-me a requisitar a reposição dos EPI, caso haja necessidade, ou devido à periodicidade normal requerida.'];
+  function sstFichaHtml(c, entregas, tituloFuncao){
+    var d = sstDadosColab(c);
+    var linhas = entregas.map(function(x){ var q = +x.quantidade||1; return '<tr><td>'+fmtDate(x.data_entrega)+'</td><td>'+(q<10 ? '0'+q : q)+' pç</td><td class="d">'+esc(x.epi_nome)+'</td><td>'+esc(x.ca||'')+'</td><td></td></tr>'; });
+    var vazias = Math.max(3, 14 - linhas.length);
+    for(var i = 0; i<vazias; i++) linhas.push('<tr><td></td><td></td><td></td><td></td><td></td></tr>');
+    return '<table class="fcab"><tr><td class="logo"><img src="'+SST_LOGO+'" alt="Venko"></td><td class="ftit"><span style="white-space:nowrap">FICHA DE CONTROLE E ENTREGA DE EQUIPAMENTO</span><br>DE PROTEÇÃO INDIVIDUAL (EPI´s)</td></tr></table>'+
+      '<table class="dados"><tr><td colspan="2" style="border-top:0"><b>EMPRESA:</b> '+esc(SST_EMPRESA)+'</td><td style="border-top:0;width:27%"><b>CNPJ:</b> '+esc(SST_CNPJ)+'</td></tr>'+
+      '<tr><td style="width:42%;white-space:normal"><b>NOME:</b> '+esc(d.nome)+'</td><td style="white-space:normal"><b>FUNÇÃO:</b> '+esc(String(tituloFuncao||d.funcao).toUpperCase())+'</td><td><b>CPF:</b> '+esc(d.cpf || '_______________')+'</td></tr></table>'+
+      '<div class="termo"><h3>TERMO DE RESPONSABILIDADE</h3>'+SST_TERMO.map(function(t){ return '<p>'+esc(t)+'</p>'; }).join('')+'</div>'+
+      '<p style="margin:14px 0 0">'+esc(SST_CIDADE)+', ______/______/__________.</p>'+
+      '<div class="fass"><b>'+esc(d.nome)+'</b><br>Assinatura do funcionário</div>'+
+      '<table class="itens"><tr><th style="width:13%">DATA</th><th style="width:9%">Quant.</th><th>DESCRIÇÃO DO EQUIPAMENTO</th><th style="width:14%">Nº DO C.A.</th><th style="width:30%">ASSINATURA</th></tr>'+linhas.join('')+'</table>';
+  }
+  function sstRegistrarDoc(colabId, tipo, funcao){
+    return Promise.resolve(supabaseClient.from('sst_documentos').insert({ colaborador_id:colabId, tipo:tipo, funcao:funcao||null }).select().single()).then(function(res){
+      if(res.error){ toast('O documento saiu, mas não ficou registrado: '+sstErroMsg(res.error),'error'); return; }
+      state.sst.docs.unshift(res.data); sstAtualizarTelas();
+    });
+  }
+  function sstGerarOs(colabId){
+    var c = (state.colaboradores||[]).find(function(x){ return x.id===colabId; }); if(!c) return;
+    var m = sstModeloDe(c.funcao);
+    if(!m){ toast('Ainda não há modelo de OS para a função “'+(c.funcao||'sem função')+'”. Crie o modelo primeiro.','error'); sstModeloModal(c.funcao||'', null); return; }
+    if(!(state.colabPriv||{})[c.id]) toast('Este colaborador está sem CPF: a OS sai com o campo em branco.','info');
+    sstImprimir('OS - '+(c.nomeCompleto||c.nome), sstOsHtml(c, m));
+    sstRegistrarDoc(c.id, 'os', m.titulo);
+  }
+  function sstGerarFicha(colabId, soData){
+    var c = (state.colaboradores||[]).find(function(x){ return x.id===colabId; }); if(!c) return;
+    var es = (state.sst.entregas||[]).filter(function(x){ return x.colaborador_id===colabId && (!soData || x.data_entrega===soData); })
+      .sort(function(a, b){ return a.data_entrega.localeCompare(b.data_entrega) || String(a.criado_em).localeCompare(String(b.criado_em)); });
+    if(!es.length){ toast('Registre a entrega dos EPIs antes de gerar a ficha.','error'); return; }
+    if(!(state.colabPriv||{})[c.id]) toast('Este colaborador está sem CPF: a ficha sai com o campo em branco.','info');
+    var m = sstModeloDe(c.funcao);
+    sstImprimir('Ficha EPI - '+(c.nomeCompleto||c.nome), sstFichaHtml(c, es, m ? m.titulo : c.funcao));
+    sstRegistrarDoc(c.id, 'ficha_epi', m ? m.titulo : c.funcao);
+  }
+
+  // ---------- segurança do colaborador ----------
+  function sstColabModal(colabId){
+    if(!sstPode()) return;
+    var c = (state.colaboradores||[]).find(function(x){ return x.id===colabId; }); if(!c) return;
+    var antigo = document.getElementById('sstColabModal'); if(antigo) antigo.remove();
+    var wrap = document.createElement('div'); wrap.className = 'overlay'; wrap.id = 'sstColabModal';
+    wrap.innerHTML = '<div class="modal sst-modal" style="max-width:860px;width:calc(100vw - 32px);" role="dialog" aria-modal="true" aria-label="Segurança do trabalho"><div class="sst-corpo"></div></div>';
+    document.getElementById('modal-root').appendChild(wrap);
+    var corpo = wrap.querySelector('.sst-corpo');
+    var dataEnt = sstHoje(), marcados = {}, qtds = {};
+    var render = function(){
+      c = (state.colaboradores||[]).find(function(x){ return x.id===colabId; }) || c;
+      var cpf = (state.colabPriv||{})[c.id], m = sstModeloDe(c.funcao);
+      if(!state.sst.ok){ corpo.innerHTML = '<h3>Segurança do trabalho</h3><p class="serv-alerta">'+esc(state.sst.erro || 'Carregando…')+'</p><div class="row" style="margin-top:12px;"><button class="btn ghost" data-sst="fechar" type="button">Fechar</button></div>'; return; }
+      var ss = sstSituacao(c.id), porEnt = {}; ss.forEach(function(s){ porEnt[s.entrega.id] = s; });
+      var ents = (state.sst.entregas||[]).filter(function(x){ return x.colaborador_id===c.id; }).sort(function(a, b){ return b.data_entrega.localeCompare(a.data_entrega) || String(b.criado_em).localeCompare(String(a.criado_em)); });
+      var datas = []; ents.forEach(function(x){ if(datas.indexOf(x.data_entrega)===-1) datas.push(x.data_entrega); });
+      var docs = (state.sst.docs||[]).filter(function(x){ return x.colaborador_id===c.id; });
+      var episAtivos = (state.sst.epis||[]).filter(function(e){ return e.ativo!==false; });
+      corpo.innerHTML =
+        '<div class="sst-head"><div><h3 style="margin:0;">'+esc(c.nomeCompleto || c.nome)+'</h3>'+
+          '<div class="hint" style="margin:2px 0 0;">'+esc(c.funcao || 'Sem função')+(cpf ? ' · CPF '+esc(vkCpfFmt(cpf)) : '')+'</div></div>'+
+          '<button type="button" class="btn ghost sm" data-sst="fechar" aria-label="Fechar">✕</button></div>'+
+        (!cpf ? '<p class="serv-alerta" style="margin-top:10px;">Sem CPF cadastrado. Cadastre em “✎ Editar” para sair na OS e na ficha.</p>' : '')+
+        '<div class="sst-bloco"><h4>Documentos para assinar</h4>'+
+          '<p class="hint" style="margin:0 0 8px;">'+(m ? 'Modelo de OS: <b>'+esc(m.titulo)+'</b> · <a href="#" data-sst="modelo">editar modelo</a>' : 'Não há modelo de OS para “'+esc(c.funcao || 'sem função')+'”. <a href="#" data-sst="modelo">Criar modelo</a>')+'</p>'+
+          '<div class="sst-acoes"><button type="button" class="btn primary" data-sst="os"'+(m?'':' disabled')+'>📄 Gerar OS</button>'+
+          '<button type="button" class="btn primary" data-sst="ficha"'+(ents.length?'':' disabled')+'>📄 Gerar Ficha de EPI</button>'+
+          (datas.length>1 ? '<select id="sstFichaQuais" aria-label="Quais entregas entram na ficha"><option value="">Ficha com todas as entregas</option>'+datas.map(function(d){ return '<option value="'+d+'">Só as entregas de '+fmtDate(d)+'</option>'; }).join('')+'</select>' : '')+
+          '</div>'+
+          (docs.length ? '<div class="subtable-wrap" style="margin-top:10px;"><table class="readtable"><thead><tr><th>Documento</th><th>Gerado em</th><th>Assinado</th></tr></thead><tbody>'+
+            docs.slice(0, 12).map(function(dc){
+              return '<tr><td>'+(dc.tipo==='os' ? 'OS' : 'Ficha de EPI')+(dc.funcao ? ' · '+esc(dc.funcao) : '')+'</td><td>'+esc(fmtDataHoraAcesso ? fmtDataHoraAcesso(dc.gerado_em) : dc.gerado_em)+'</td><td>'+
+                (dc.assinado_path ? '<button type="button" class="btn ghost sm" data-sstverdoc="'+esc(dc.assinado_path)+'">Ver assinado</button>' : '<label class="btn ghost sm">Anexar assinado<input type="file" class="input-oculto" accept="application/pdf,image/*" data-sstanexar="'+dc.id+'"></label>')+'</td></tr>';
+            }).join('')+'</tbody></table></div>' : '<p class="hint" style="margin:8px 0 0;">Depois de assinado, anexe aqui a foto ou o PDF do papel.</p>')+
+        '</div>'+
+        '<div class="sst-bloco"><h4>EPIs entregues</h4>'+
+          (ents.length ? '<div class="subtable-wrap"><table class="readtable"><thead><tr><th>EPI</th><th>C.A.</th><th>Qtd</th><th>Entregue</th><th>Troca</th><th></th></tr></thead><tbody>'+
+            ents.map(function(x){
+              var s = porEnt[x.id];
+              var sit = x.devolvido_em ? '<span class="hint" style="margin:0;">Devolvido em '+fmtDate(x.devolvido_em)+'</span>' : (s ? sstStatusChip(s)+(s.caVencido ? ' <span class="chip rejected">C.A. vencido</span>' : '') : '<span class="hint" style="margin:0;">Substituído</span>');
+              return '<tr'+(x.devolvido_em || !s ? ' class="sst-velho"' : '')+'><td>'+esc(x.epi_nome)+'</td><td>'+esc(x.ca||'—')+'</td><td>'+esc(String(+x.quantidade||1))+'</td><td>'+fmtDate(x.data_entrega)+'</td><td>'+sit+'</td><td class="sst-tdacoes">'+
+                (!x.devolvido_em && s ? '<button type="button" class="btn ghost sm" data-ssttrocar="'+x.id+'" title="Registra hoje a entrega de um novo e dá baixa neste">Trocar</button><button type="button" class="btn ghost sm" data-sstdevolver="'+x.id+'">Devolvido</button>' : '')+
+                '<button type="button" class="btn ghost sm" data-sstapagar="'+x.id+'" title="Apagar este lançamento (lançado errado)" aria-label="Apagar">✕</button></td></tr>';
+            }).join('')+'</tbody></table></div>' : '<p class="hint" style="margin:0;">Nenhum EPI registrado ainda.</p>')+
+        '</div>'+
+        '<div class="sst-bloco"><h4>Registrar entrega</h4>'+
+          (episAtivos.length ? '<div class="field" style="max-width:200px;margin:0 0 8px;"><label for="sstData">Data da entrega</label><input type="date" id="sstData" value="'+esc(dataEnt)+'" max="'+sstHoje()+'"></div>'+
+            '<div class="sst-epis">'+episAtivos.map(function(e){
+              return '<label class="sst-epi'+(marcados[e.id]?' on':'')+'"><input type="checkbox" data-sstmarca="'+e.id+'"'+(marcados[e.id]?' checked':'')+'><span class="sst-epi-nome">'+esc(e.nome)+'<small>C.A. '+esc(e.ca||'—')+'</small></span>'+
+                '<input type="number" min="1" step="1" value="'+esc(String(qtds[e.id]||1))+'" data-sstqtd="'+e.id+'" aria-label="Quantidade de '+esc(e.nome)+'"></label>';
+            }).join('')+'</div>'+
+            '<div class="sst-acoes" style="margin-top:10px;"><button type="button" class="btn primary" data-sst="registrar">Registrar entrega</button><a href="#" data-sstver="catalogo" class="hint" style="margin:0;align-self:center;">Cadastrar outro EPI</a></div>'
+          : '<p class="hint" style="margin:0;">Cadastre os EPIs primeiro. <a href="#" data-sstver="catalogo">Abrir catálogo de EPIs</a></p>')+
+        '</div>';
+    };
+    wrap._render = render;
+    render();
+    wrap.addEventListener('change', function(e){
+      var t = e.target; if(!t) return;
+      if(t.id==='sstData'){ dataEnt = t.value; return; }
+      if(t.hasAttribute('data-sstmarca')){ marcados[t.getAttribute('data-sstmarca')] = t.checked; t.closest('.sst-epi').classList.toggle('on', t.checked); return; }
+      if(t.hasAttribute('data-sstqtd')){ qtds[t.getAttribute('data-sstqtd')] = Math.max(1, parseInt(t.value, 10)||1); return; }
+      if(t.hasAttribute('data-sstanexar')){ sstAnexarAssinado(t.getAttribute('data-sstanexar'), c.id, t.files && t.files[0]); t.value = ''; }
+    });
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap){ wrap.remove(); return; }
+      var b = e.target.closest && e.target.closest('[data-sst],[data-ssttrocar],[data-sstdevolver],[data-sstapagar],[data-sstverdoc]'); if(!b) return;
+      var acao = b.getAttribute('data-sst');
+      if(b.tagName==='A') e.preventDefault();
+      if(acao==='fechar'){ wrap.remove(); return; }
+      if(acao==='modelo'){ var m = sstModeloDe(c.funcao); sstModeloModal(m ? m.funcao : (c.funcao||''), m); return; }
+      if(acao==='os'){ sstGerarOs(c.id); return; }
+      if(acao==='ficha'){ var q = wrap.querySelector('#sstFichaQuais'); sstGerarFicha(c.id, q ? q.value : ''); return; }
+      if(acao==='registrar'){
+        var ids = Object.keys(marcados).filter(function(k){ return marcados[k]; });
+        if(!ids.length){ toast('Marque os EPIs entregues.','error'); return; }
+        if(!dataEnt || dataEnt > sstHoje()){ toast('Informe a data da entrega (hoje ou antes).','error'); return; }
+        var linhas = ids.map(function(id){ var ep = sstEpi(id); return { colaborador_id:c.id, epi_id:id, epi_nome:ep.nome, ca:ep.ca||null, quantidade:qtds[id]||1, data_entrega:dataEnt }; });
+        b.disabled = true;
+        Promise.resolve(supabaseClient.from('sst_epi_entregas').insert(linhas).select()).then(function(res){
+          b.disabled = false;
+          if(res.error){ toast('Erro: '+sstErroMsg(res.error),'error'); return; }
+          state.sst.entregas = state.sst.entregas.concat(res.data||[]); marcados = {}; qtds = {};
+          toast(linhas.length+' EPI(s) registrado(s). Gere a Ficha de EPI para assinatura.','ok'); sstAtualizarTelas();
+        }, function(err){ b.disabled = false; toast(sstErroMsg(err),'error'); });
+        return;
+      }
+      var idT = b.getAttribute('data-ssttrocar'), idD = b.getAttribute('data-sstdevolver'), idA = b.getAttribute('data-sstapagar'), path = b.getAttribute('data-sstverdoc');
+      if(path){ sstAbrirArquivo(path); return; }
+      var ent = (state.sst.entregas||[]).find(function(x){ return x.id===(idT||idD||idA); }); if(!ent) return;
+      if(idT){
+        var ep = ent.epi_id ? sstEpi(ent.epi_id) : null;
+        b.disabled = true;
+        Promise.resolve(supabaseClient.from('sst_epi_entregas').update({ devolvido_em:sstHoje(), obs:'Trocado em '+fmtDate(sstHoje()) }).eq('id', ent.id)).then(function(r1){
+          if(r1.error) throw r1.error;
+          return supabaseClient.from('sst_epi_entregas').insert({ colaborador_id:ent.colaborador_id, epi_id:ent.epi_id, epi_nome:ep ? ep.nome : ent.epi_nome, ca:ep ? (ep.ca||null) : ent.ca, quantidade:ent.quantidade, data_entrega:sstHoje() }).select().single();
+        }).then(function(r2){
+          if(r2.error) throw r2.error;
+          ent.devolvido_em = sstHoje(); state.sst.entregas.push(r2.data);
+          toast('Troca registrada: '+ent.epi_nome+' novo entregue hoje. Gere a ficha para assinatura.','ok'); sstAtualizarTelas();
+        }).catch(function(err){ b.disabled = false; toast('Erro: '+sstErroMsg(err),'error'); sstCarregar(true); });
+        return;
+      }
+      if(idD){
+        Promise.resolve(supabaseClient.from('sst_epi_entregas').update({ devolvido_em:sstHoje() }).eq('id', ent.id)).then(function(r){
+          if(r.error){ toast('Erro: '+sstErroMsg(r.error),'error'); return; }
+          ent.devolvido_em = sstHoje(); toast('Devolução registrada.','ok'); sstAtualizarTelas();
+        });
+        return;
+      }
+      if(idA){
+        confirmModal({ title:'Apagar lançamento', msg:'Apagar a entrega de “'+ent.epi_nome+'” de '+fmtDate(ent.data_entrega)+'? Use só se foi lançada por engano.', okLabel:'Apagar', danger:true }).then(function(ok){
+          if(!ok) return;
+          Promise.resolve(supabaseClient.from('sst_epi_entregas').delete().eq('id', ent.id)).then(function(r){
+            if(r.error){ toast('Erro: '+sstErroMsg(r.error),'error'); return; }
+            state.sst.entregas = state.sst.entregas.filter(function(x){ return x.id!==ent.id; }); toast('Lançamento apagado.','ok'); sstAtualizarTelas();
+          });
+        });
+      }
+    });
+    if(!state.sst.ok) sstCarregar(true);
+  }
+  function sstAbrirArquivo(path){
+    var w = window.open('', '_blank');
+    Promise.resolve(supabaseClient.storage.from('sst-docs').createSignedUrl(path, 300)).then(function(r){
+      if(r.error){ if(w) w.close(); toast('Não deu para abrir: '+sstErroMsg(r.error),'error'); return; }
+      if(w) w.location = r.data.signedUrl; else window.open(r.data.signedUrl, '_blank', 'noopener');
+    });
+  }
+  function sstAnexarAssinado(docId, colabId, file){
+    if(!file) return;
+    if(file.size > 10*1024*1024){ toast('Arquivo grande demais (máximo 10 MB).','error'); return; }
+    var tipoOk = /^(application\/pdf|image\/(jpeg|png|webp))$/.test(file.type||'');
+    var preparar = tipoOk && (file.type==='application/pdf' || file.size < 1500*1024) ? Promise.resolve(file) :
+      resizeImageFile(file, 2000, 0.8).then(function(du){ return fetch(du).then(function(r){ return r.blob(); }); });
+    toast('Enviando documento assinado…','info');
+    preparar.then(function(blob){
+      var ext = blob.type==='application/pdf' ? 'pdf' : (blob.type==='image/png' ? 'png' : (blob.type==='image/webp' ? 'webp' : 'jpg'));
+      var path = colabId+'/'+docId+'-'+Date.now()+'.'+ext;
+      return Promise.resolve(supabaseClient.storage.from('sst-docs').upload(path, blob, { contentType:blob.type, upsert:false })).then(function(up){
+        if(up.error) throw up.error;
+        return supabaseClient.from('sst_documentos').update({ assinado_path:path, assinado_em:new Date().toISOString() }).eq('id', docId).select().single();
+      });
+    }).then(function(res){
+      if(res.error) throw res.error;
+      state.sst.docs = state.sst.docs.map(function(d){ return d.id===docId ? res.data : d; });
+      toast('Documento assinado anexado.','ok'); sstAtualizarTelas();
+    }).catch(function(err){ toast('Não foi possível anexar: '+sstErroMsg(err),'error'); });
+  }
+
+  // ---------- modelo de OS ----------
+  function sstModeloModal(funcao, modelo){
+    if(!sstPode()) return;
+    var base = modelo || null, copia = false;
+    if(!base){ base = sstModeloDe('Servente') || (state.sst.modelos||[])[0] || null; copia = !!base; }
+    var ct = (base && base.conteudo) || {};
+    var riscos = (ct.riscos||[]).map(function(r){ return { tipo:r.tipo||'', descricao:r.descricao||'', medidas:r.medidas||'' }; });
+    var wrap = document.createElement('div'); wrap.className = 'overlay';
+    var ta = function(id, label, val, rows, dica){ return '<div class="field" style="margin-top:10px;"><label for="'+id+'">'+label+'</label><textarea id="'+id+'" rows="'+(rows||4)+'">'+esc(val||'')+'</textarea>'+(dica ? '<p class="hint" style="margin:3px 0 0;">'+dica+'</p>' : '')+'</div>'; };
+    var riscosHtml = function(){ return riscos.map(function(r, i){
+      return '<div class="sst-risco" data-i="'+i+'"><div class="sst-risco-top"><input type="text" data-rk="tipo" value="'+esc(r.tipo)+'" placeholder="Ex.: Risco Físico" aria-label="Tipo de risco"><button type="button" class="btn ghost sm" data-rdel="'+i+'" aria-label="Remover risco">✕</button></div>'+
+        '<textarea rows="3" data-rk="descricao" placeholder="Descrição do risco">'+esc(r.descricao)+'</textarea><textarea rows="2" data-rk="medidas" placeholder="Medidas de controle">'+esc(r.medidas)+'</textarea></div>'; }).join(''); };
+    wrap.innerHTML = '<div class="modal sst-modal" style="max-width:860px;width:calc(100vw - 32px);"><h3>'+(modelo ? 'Modelo de OS' : 'Novo modelo de OS')+'</h3>'+
+      (copia ? '<p class="serv-alerta">Texto copiado do modelo “'+esc(base.titulo)+'”. Revise as atividades e os riscos desta função antes de usar.</p>' : '')+
+      '<div class="grid2"><div class="field"><label for="smFuncao">Função no cadastro</label><input type="text" id="smFuncao" value="'+esc(modelo ? modelo.funcao : funcao)+'"'+(modelo?' readonly':'')+' maxlength="60"></div>'+
+      '<div class="field"><label for="smTitulo">Como sai na OS e na ficha</label><input type="text" id="smTitulo" value="'+esc(modelo ? modelo.titulo : String(funcao||'').toUpperCase())+'" maxlength="80"></div></div>'+
+      ta('smAtiv', 'Atividades do colaborador', (ct.atividades||[]).join('\n\n'), 8, 'Um parágrafo por bloco; deixe uma linha em branco entre eles.')+
+      ta('smRIntro', 'Risco e avaliação (introdução)', ct.riscos_intro, 2)+
+      '<div class="field" style="margin-top:10px;"><label>Riscos</label><div id="smRiscos">'+riscosHtml()+'</div><button type="button" class="btn ghost sm" data-radd="1" style="margin-top:6px;">+ Adicionar risco</button></div>'+
+      ta('smObrig', 'Obrigações de segurança', (ct.obrigacoes||[]).join('\n\n'), 4)+
+      '<div class="grid2">'+ta('smEpis', 'EPIs (um por linha)', (ct.epis||[]).join('\n'), 7)+ta('smEpcs', 'EPCs (um por linha)', (ct.epcs||[]).join('\n'), 7)+'</div>'+
+      ta('smPen', 'Penalidades', ct.penalidades, 2)+ta('smAcid', 'Procedimento em caso de acidentes', ct.acidentes, 2)+
+      '<div class="row" style="margin-top:14px;"><button class="btn ghost" data-act="cancel" type="button">Cancelar</button><button class="btn primary" data-act="ok" type="button">Salvar modelo</button></div></div>';
+    document.getElementById('modal-root').appendChild(wrap);
+    var lerRiscos = function(){ wrap.querySelectorAll('.sst-risco').forEach(function(el){ var i = +el.getAttribute('data-i'); el.querySelectorAll('[data-rk]').forEach(function(f){ riscos[i][f.getAttribute('data-rk')] = f.value; }); }); };
+    var paras = function(v){ return String(v||'').split(/\n\s*\n/).map(function(t){ return t.replace(/\s*\n\s*/g, ' ').trim(); }).filter(Boolean); };
+    var linhas = function(v){ return String(v||'').split('\n').map(function(t){ return t.trim(); }).filter(Boolean); };
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap){ wrap.remove(); return; }
+      var t = e.target;
+      if(t.hasAttribute && t.hasAttribute('data-radd')){ lerRiscos(); riscos.push({ tipo:'', descricao:'', medidas:'' }); wrap.querySelector('#smRiscos').innerHTML = riscosHtml(); return; }
+      if(t.hasAttribute && t.hasAttribute('data-rdel')){ lerRiscos(); riscos.splice(+t.getAttribute('data-rdel'), 1); wrap.querySelector('#smRiscos').innerHTML = riscosHtml(); return; }
+      var act = t.getAttribute && t.getAttribute('data-act');
+      if(act==='cancel'){ wrap.remove(); return; }
+      if(act!=='ok') return;
+      lerRiscos();
+      var fun = wrap.querySelector('#smFuncao').value.replace(/ +/g, ' ').trim(), tit = wrap.querySelector('#smTitulo').value.replace(/ +/g, ' ').trim();
+      if(!fun || !tit){ toast('Informe a função e como ela sai no documento.','error'); return; }
+      var conteudo = { atividades:paras(wrap.querySelector('#smAtiv').value), riscos_intro:wrap.querySelector('#smRIntro').value.trim(),
+        riscos:riscos.filter(function(r){ return r.tipo.trim() || r.descricao.trim(); }).map(function(r){ return { tipo:r.tipo.trim(), descricao:r.descricao.trim(), medidas:r.medidas.trim() }; }),
+        obrigacoes:paras(wrap.querySelector('#smObrig').value), epis:linhas(wrap.querySelector('#smEpis').value), epcs:linhas(wrap.querySelector('#smEpcs').value),
+        penalidades:wrap.querySelector('#smPen').value.trim(), acidentes:wrap.querySelector('#smAcid').value.trim() };
+      if(!conteudo.atividades.length){ toast('Escreva as atividades do colaborador.','error'); return; }
+      if(!modelo && sstModeloDe(fun)){ toast('Já existe um modelo para “'+fun+'”.','error'); return; }
+      t.disabled = true;
+      var linha = { funcao:fun, titulo:tit, conteudo:conteudo, atualizado_em:new Date().toISOString() };
+      var q = modelo ? supabaseClient.from('sst_os_modelos').update(linha).eq('id', modelo.id).select().single() : supabaseClient.from('sst_os_modelos').insert(linha).select().single();
+      Promise.resolve(q).then(function(res){
+        if(res.error){ t.disabled = false; toast('Erro: '+sstErroMsg(res.error),'error'); return; }
+        state.sst.modelos = (state.sst.modelos||[]).filter(function(x){ return x.id!==res.data.id; }).concat([res.data]);
+        wrap.remove(); toast('Modelo de OS salvo.','ok'); sstAtualizarTelas();
+      }, function(err){ t.disabled = false; toast(sstErroMsg(err),'error'); });
+    });
+  }
+
+  // ---------- central: para trocar / catálogo / modelos ----------
+  function sstCentralModal(aba){
+    if(!sstPode()) return;
+    var antigo = document.getElementById('sstCentral'); if(antigo) antigo.remove();
+    var wrap = document.createElement('div'); wrap.className = 'overlay'; wrap.id = 'sstCentral';
+    wrap.innerHTML = '<div class="modal sst-modal" style="max-width:860px;width:calc(100vw - 32px);" role="dialog" aria-modal="true" aria-label="EPIs e OS"><div class="sst-corpo"></div></div>';
+    document.getElementById('modal-root').appendChild(wrap);
+    var corpo = wrap.querySelector('.sst-corpo'); aba = aba || 'trocar';
+    var render = function(){
+      var cab = '<div class="sst-head"><h3 style="margin:0;">🦺 EPIs e OS</h3><button type="button" class="btn ghost sm" data-sc="fechar" aria-label="Fechar">✕</button></div>'+
+        '<div class="aj-abas" style="margin-top:10px;">'+[['trocar','Para trocar'],['catalogo','Catálogo de EPIs'],['modelos','Modelos de OS']].map(function(a){ return '<button type="button" class="btn ghost sm'+(aba===a[0]?' ativo':'')+'" data-scaba="'+a[0]+'">'+a[1]+'</button>'; }).join('')+'</div>';
+      if(!state.sst.ok){ corpo.innerHTML = cab+'<p class="serv-alerta">'+esc(state.sst.erro || 'Carregando…')+'</p>'; return; }
+      var h = '';
+      if(aba==='trocar'){
+        var p = sstPendencias();
+        h = p.length ? '<div class="subtable-wrap"><table class="readtable"><thead><tr><th>Colaborador</th><th>EPI</th><th>Entregue</th><th>Situação</th><th></th></tr></thead><tbody>'+
+          p.map(function(x){ return '<tr><td>'+esc(x.colab.nome)+'</td><td>'+esc(x.s.entrega.epi_nome)+'</td><td>'+fmtDate(x.s.entrega.data_entrega)+'</td><td>'+(x.s.status==='ok'||x.s.status==='sem_prazo' ? '' : sstStatusChip(x.s))+(x.s.caVencido ? ' <span class="chip rejected">C.A. vencido</span>' : '')+'</td><td><button type="button" class="btn ghost sm" data-sccolab="'+x.colab.id+'">Abrir</button></td></tr>'; }).join('')+
+          '</tbody></table></div>' : '<p class="hint">Nenhuma troca pendente. Os avisos aparecem '+SST_AVISO_DIAS+' dias antes do prazo de troca de cada EPI.</p>';
+      } else if(aba==='catalogo'){
+        h = '<p class="hint" style="margin:0 0 8px;">“Troca a cada” define quando o sistema avisa para trocar o EPI. Deixe em branco se não tiver prazo fixo.</p>'+
+          '<div class="subtable-wrap"><table class="readtable sst-cat"><thead><tr><th>EPI</th><th>C.A.</th><th>Validade do C.A.</th><th>Troca a cada (dias)</th><th>Ativo</th><th></th></tr></thead><tbody>'+
+          (state.sst.epis||[]).map(function(e){ return '<tr data-epi="'+e.id+'"><td><input type="text" data-f="nome" value="'+esc(e.nome)+'" maxlength="120" aria-label="Nome"></td><td><input type="text" data-f="ca" value="'+esc(e.ca||'')+'" maxlength="20" aria-label="C.A."></td><td><input type="date" data-f="ca_validade" value="'+esc(e.ca_validade||'')+'" aria-label="Validade do C.A."></td><td><input type="number" min="1" max="3650" data-f="troca_dias" value="'+esc(e.troca_dias==null?'':String(e.troca_dias))+'" aria-label="Troca a cada (dias)"></td><td><input type="checkbox" data-f="ativo"'+(e.ativo!==false?' checked':'')+' aria-label="Ativo"></td><td><button type="button" class="btn ghost sm" data-scsalvar="'+e.id+'">Salvar</button></td></tr>'; }).join('')+
+          '<tr data-epi=""><td><input type="text" data-f="nome" placeholder="Novo EPI" maxlength="120" aria-label="Nome do novo EPI"></td><td><input type="text" data-f="ca" maxlength="20" aria-label="C.A."></td><td><input type="date" data-f="ca_validade" aria-label="Validade do C.A."></td><td><input type="number" min="1" max="3650" data-f="troca_dias" aria-label="Troca a cada (dias)"></td><td><input type="checkbox" data-f="ativo" checked aria-label="Ativo"></td><td><button type="button" class="btn primary sm" data-scsalvar="">+ Adicionar</button></td></tr>'+
+          '</tbody></table></div>';
+      } else {
+        var funcs = [];
+        (state.colaboradores||[]).forEach(function(c){ if(c.ativo!==false && c.funcao && !funcs.some(function(f){ return rdoNorm(f)===rdoNorm(c.funcao); })) funcs.push(c.funcao); });
+        var sem = funcs.filter(function(f){ return !sstModeloDe(f); });
+        h = ((state.sst.modelos||[]).length ? '<div class="subtable-wrap"><table class="readtable"><thead><tr><th>Função</th><th>Sai no documento como</th><th></th></tr></thead><tbody>'+
+          state.sst.modelos.map(function(m){ return '<tr><td>'+esc(m.funcao)+'</td><td><b>'+esc(m.titulo)+'</b></td><td><button type="button" class="btn ghost sm" data-scmodelo="'+m.id+'">Editar</button></td></tr>'; }).join('')+'</tbody></table></div>' : '<p class="hint">Nenhum modelo ainda.</p>')+
+          (sem.length ? '<h4 style="margin:14px 0 6px;">Funções sem modelo de OS</h4><div class="sst-acoes">'+sem.map(function(f){ return '<button type="button" class="btn ghost sm" data-scnovo="'+esc(f)+'">+ '+esc(f)+'</button>'; }).join('')+'</div>' : '')+
+          '<div class="sst-acoes" style="margin-top:12px;"><button type="button" class="btn ghost sm" data-scnovo="">+ Outra função</button></div>';
+      }
+      corpo.innerHTML = cab + h;
+    };
+    wrap._render = render; render();
+    wrap.addEventListener('click', function(e){
+      if(e.target===wrap){ wrap.remove(); return; }
+      var b = e.target.closest && e.target.closest('button'); if(!b) return;
+      if(b.getAttribute('data-sc')==='fechar'){ wrap.remove(); return; }
+      if(b.hasAttribute('data-scaba')){ aba = b.getAttribute('data-scaba'); render(); return; }
+      if(b.hasAttribute('data-sccolab')){ sstColabModal(b.getAttribute('data-sccolab')); return; }
+      if(b.hasAttribute('data-scmodelo')){ var m = (state.sst.modelos||[]).find(function(x){ return x.id===b.getAttribute('data-scmodelo'); }); if(m) sstModeloModal(m.funcao, m); return; }
+      if(b.hasAttribute('data-scnovo')){ sstModeloModal(b.getAttribute('data-scnovo'), null); return; }
+      if(b.hasAttribute('data-scsalvar')){
+        var id = b.getAttribute('data-scsalvar'), tr = b.closest('tr'), v = function(f){ return tr.querySelector('[data-f="'+f+'"]'); };
+        var nome = v('nome').value.replace(/ +/g, ' ').trim(), td = v('troca_dias').value;
+        if(nome.length<2){ toast('Informe o nome do EPI.','error'); return; }
+        if(td && !(+td>=1 && +td<=3650)){ toast('Troca a cada: use de 1 a 3650 dias.','error'); return; }
+        var linha = { nome:nome, ca:v('ca').value.trim() || null, ca_validade:v('ca_validade').value || null, troca_dias:td ? Math.round(+td) : null, ativo:v('ativo').checked, atualizado_em:new Date().toISOString() };
+        b.disabled = true;
+        var q = id ? supabaseClient.from('sst_epis').update(linha).eq('id', id).select().single() : supabaseClient.from('sst_epis').insert(linha).select().single();
+        Promise.resolve(q).then(function(res){
+          b.disabled = false;
+          if(res.error){ toast('Erro: '+(/duplicate|unique/i.test(res.error.message||'') ? 'já existe um EPI com esse nome.' : sstErroMsg(res.error)),'error'); return; }
+          state.sst.epis = (state.sst.epis||[]).filter(function(x){ return x.id!==res.data.id; }).concat([res.data]).sort(function(a, c){ return String(a.nome).localeCompare(String(c.nome), 'pt-BR'); });
+          toast(id ? 'EPI atualizado.' : 'EPI cadastrado.','ok'); sstAtualizarTelas();
+        }, function(err){ b.disabled = false; toast(sstErroMsg(err),'error'); });
+      }
+    });
+    if(!state.sst.ok) sstCarregar(true);
+  }
+
   /* ---------------- colaboradores view (cadastro) ---------------- */
   function colabObraOptionsHtml(sel){
     return '<option value="">Todas as obras</option>' + (state.obras||[]).slice().sort(function(a, b){ return String(a.nome||'').localeCompare(String(b.nome||''), 'pt-BR'); })
@@ -9436,6 +9915,7 @@
   function renderColaboradorList(){
     var list = document.getElementById('colaboradorList');
     if(!list) return;
+    sstBannerRender();
     if(state.colaboradores.length===0){ list.innerHTML = '<p class="empty-hint">Nenhum colaborador cadastrado ainda.</p>'; colabFiltroAtualizar(0, 0); return; }
     var ordered = state.colaboradores.slice().sort(function(a,b){ return (a.nome||'').localeCompare(b.nome||''); });
     // v59: busca por nome/nome completo/função e filtro por obra
@@ -9453,10 +9933,11 @@
       var depto = state.departamentos.find(function(d){ return d.id===c.departamentoId; });
       return '<div class="obra-card" data-id="'+c.id+'">'+
         '<div class="info"><b>'+esc(c.nome)+(!c.ativo?'<span class="tag-example" style="color:var(--status-rejected);border-color:var(--status-rejected);">inativo</span>':'')+'</b>'+
-          '<div class="meta">'+esc(c.funcao||'Sem função')+(c.nomeCompleto ? ' · '+esc(c.nomeCompleto) : '')+(pontoVeCpf() && (state.colabPriv||{})[c.id] ? ' · CPF '+esc(vkCpfFmt(state.colabPriv[c.id])) : '')+'</div>'+
+          '<div class="meta">'+esc(c.funcao||'Sem função')+(c.nomeCompleto ? ' · '+esc(c.nomeCompleto) : '')+(pontoVeCpf() && (state.colabPriv||{})[c.id] ? ' · CPF '+esc(vkCpfFmt(state.colabPriv[c.id])) : '')+sstColabChip(c.id)+'</div>'+
         '</div>'+
         '<div class="obra-actions">'+
           '<button class="btn ghost sm" data-dados-colab="'+c.id+'" aria-label="Editar '+esc(c.nome)+'">✎ Editar</button>'+
+          (sstPode() ? '<button class="btn ghost sm" data-sst-colab="'+c.id+'" aria-label="Segurança do trabalho de '+esc(c.nome)+'">🦺 Segurança</button>' : '')+
           '<select class="colab-obra-sel" data-colab-obra="'+c.id+'" aria-label="Obra de '+esc(c.nome)+'">'+colabObraOptionsHtml(c.obraId)+'</select>'+
           '<button class="btn ghost sm" data-toggle-colab="'+c.id+'">'+(c.ativo?'Marcar inativo':'Reativar')+'</button>'+
           (ehAdmin() ? '<button class="btn danger sm" data-del-colab="'+c.id+'">Excluir</button>' : '')+
@@ -9483,6 +9964,9 @@
     });
     list.querySelectorAll('[data-dados-colab]').forEach(function(b){
       b.addEventListener('click', function(){ colabDadosModal(b.getAttribute('data-dados-colab')); });
+    });
+    list.querySelectorAll('[data-sst-colab]').forEach(function(b){
+      b.addEventListener('click', function(){ sstColabModal(b.getAttribute('data-sst-colab')); });
     });
     list.querySelectorAll('[data-del-colab]').forEach(function(b){
       b.addEventListener('click', function(){
