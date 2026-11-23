@@ -1362,6 +1362,7 @@
       <div style="display:flex;justify-content:flex-end;margin:-6px 0 12px;">
         <button class="btn ghost sm" id="btnExportCdm" type="button" style="display:none">⬇ Medição (Excel / CDM)</button>
       </div>
+      <div id="rdoEsquecidosAviso"></div>
       <div class="table-wrap">
         <table class="rdo-list">
           <thead>
@@ -5843,6 +5844,7 @@
     document.getElementById('fBusca').addEventListener('input', function(e){ f.busca=e.target.value; renderRdoTable(); });
     document.getElementById('fClear').addEventListener('click', function(){
       state.filters = { obraId:'', dataIni:'', dataFim:'', responsavel:'', status:'', busca:'' };
+      state.verEsquecidos = false;
       renderFilters(); renderRdoTable();
     });
     var fTrashBtn = document.getElementById('fTrash');
@@ -5855,9 +5857,21 @@
     }
   }
 
+  // v84: rascunho parado há mais de 30 dias (sem edição) sai da lista do Painel e vai para "esquecidos".
+  // Nada é apagado e os valores (medição/painel da TV) não mudam.
+  var RDO_ESQUECIDO_DIAS = 30;
+  function rdoDiasParado(r){
+    var t = Date.parse(r.updatedAt || r.createdAt || '');
+    return isNaN(t) ? 0 : Math.floor((Date.now() - t)/86400000);
+  }
+  function rdoEsquecido(r){
+    return !!r && r.status==='rascunho' && !r.deletedAt && String(r.id).indexOf('pending-')!==0 && rdoDiasParado(r) > RDO_ESQUECIDO_DIAS;
+  }
   function filteredRdos(){
     var f = state.filters;
     return state.rdos.concat(state.pendingRdos||[]).filter(function(r){
+      if(state.verEsquecidos){ if(!rdoEsquecido(r)) return false; }
+      else if(f.status!=='rascunho' && rdoEsquecido(r)) return false;
       if(f.obraId && r.obraId!==f.obraId) return false;
       if(f.dataIni && r.data < f.dataIni) return false;
       if(f.dataFim && r.data > f.dataFim) return false;
@@ -5875,8 +5889,21 @@
     });
   }
 
+  function rdoEsquecidosAvisoRender(){
+    var el = document.getElementById('rdoEsquecidosAviso'); if(!el) return;
+    if(state.showingTrash){ el.innerHTML = ''; return; }
+    var f = state.filters;
+    var n = state.rdos.filter(function(r){ return rdoEsquecido(r) && (!f.obraId || r.obraId===f.obraId); }).length;
+    if(!n){ if(state.verEsquecidos) state.verEsquecidos = false; el.innerHTML = ''; return; }
+    el.innerHTML = state.verEsquecidos
+      ? '<div class="admin-aviso"><div><b>Rascunhos esquecidos ('+n+')</b> — parados há mais de '+RDO_ESQUECIDO_DIAS+' dias sem ninguém mexer. Abra para terminar e enviar, ou use 🗑 para mandar para a lixeira. Eles continuam contando na medição enquanto existirem.</div><button type="button" class="btn ghost sm" data-esquecidos="0">← Voltar para a lista</button></div>'
+      : '<div class="admin-aviso"><div>📝 <b>'+n+' rascunho(s) esquecido(s)</b> parado(s) há mais de '+RDO_ESQUECIDO_DIAS+' dias não aparecem na lista.</div><button type="button" class="btn ghost sm" data-esquecidos="1">Ver esquecidos</button></div>';
+    var b = el.querySelector('[data-esquecidos]');
+    if(b) b.addEventListener('click', function(){ state.verEsquecidos = b.getAttribute('data-esquecidos')==='1'; renderRdoTable(); });
+  }
   function renderRdoTable(){
     var body = document.getElementById('rdoTableBody');
+    rdoEsquecidosAvisoRender();
     if(state.showingTrash){
       var trashRows = state.rdosExcluidas||[];
       if(trashRows.length===0){
@@ -5905,7 +5932,7 @@
     var rows = filteredRdos();
     var canGestao = obrasGestaoCanAccess();
     if(rows.length===0){
-      body.innerHTML = '<tr class="empty-row"><td colspan="7">Nenhuma RDO encontrada para esses filtros.</td></tr>';
+      body.innerHTML = '<tr class="empty-row"><td colspan="7">'+(state.verEsquecidos ? 'Nenhum rascunho esquecido com esses filtros.' : 'Nenhuma RDO encontrada para esses filtros.')+'</td></tr>';
       return;
     }
     body.innerHTML = rows.map(function(r){
@@ -5915,7 +5942,7 @@
       var isPending = String(r.id).indexOf('pending-')===0;
       return '<tr data-id="'+r.id+'">'+
         '<td class="mono-num" data-label="Data">'+fmtDate(r.data)+'</td>'+
-        '<td data-label="Obra">'+esc(r.obraNome)+(r.exemplo?'<span class="tag-example">exemplo</span>':'')+'</td>'+
+        '<td data-label="Obra">'+esc(r.obraNome)+(r.exemplo?'<span class="tag-example">exemplo</span>':'')+(state.verEsquecidos ? '<div class="hint" style="margin:2px 0 0;font-size:12px;">rascunho parado há '+rdoDiasParado(r)+' dias</div>' : '')+'</td>'+
         '<td data-label="Responsável">'+esc(r.responsavel||'—')+'</td>'+
         '<td data-label="Clima">'+esc(climaTxt)+'</td>'+
         '<td data-label="Ocorrências">'+occText+'</td>'+
