@@ -1293,6 +1293,119 @@
   @media (min-width:681px){
     .topbar.tabs-linha .tabs{order:10;flex:1 1 100%;margin-left:0;flex-wrap:wrap;overflow:visible;justify-content:center;}
   }
+
+  /* ---------- v85: menu lateral ---------- */
+  :root{ --side-w:248px; --side-mini:76px; }
+  .nav-ico{width:20px;height:20px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  #app .topbar{position:fixed;top:0;left:0;bottom:0;width:var(--side-w);z-index:60;display:flex;flex-direction:column;flex-wrap:nowrap;align-items:stretch;gap:0;padding:18px 12px 12px;border-bottom:none;border-right:1px solid var(--line);overflow-y:auto;overflow-x:hidden;background:var(--surface);box-sizing:border-box;}
+  .premium #app .topbar{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:none;box-shadow:1px 0 0 var(--pm-hair), 10px 0 30px -24px rgba(0,0,0,.35);}
+  #app .topbar .brand{display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:auto;padding:0 8px 14px;margin-bottom:6px;border-bottom:1px solid var(--line);}
+  #app .topbar .brand-logo{height:42px;}
+  body.nav-aberto #ajFab{display:none;}
+  #app .topbar .brand-tag{border-left:none;padding-left:0;font-size:10px;letter-spacing:.1em;}
+  #app .topbar .tabs{display:flex;flex-direction:column;gap:2px;margin:0;padding:0;flex:1 0 auto;width:auto;overflow:visible;border-radius:0;}
+  #app .nav-sec{display:flex;flex-direction:column;gap:2px;padding:10px 0 4px;}
+  #app .nav-sec:not(:has(> .tab-btn:not([style*="none"]))){display:none;}
+  #app .nav-tit{font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--steel);padding:0 12px 4px;white-space:nowrap;}
+  #app .topbar .tab-btn{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:9px 12px;border-radius:10px;font-size:13.5px;font-weight:600;white-space:nowrap;color:var(--ink-soft);}
+  #app .topbar .tab-btn:hover{background:var(--surface-2);color:var(--ink);}
+  #app .topbar .tab-btn.active{background:var(--pm-btn-dark, var(--ink-fixed));color:#F7DE4E;box-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 4px 12px -6px rgba(0,0,0,.6);}
+  #app .topbar .tab-btn:focus-visible{outline:2px solid var(--focus, #E8B400);outline-offset:1px;}
+  #app .nav-txt{overflow:hidden;text-overflow:ellipsis;}
+  #app .topbar .user-box{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 0;padding:12px 8px 0;border-left:none;border-top:1px solid var(--line);width:auto;justify-content:flex-start;}
+  #app .topbar .user-box .who{flex:1 1 120px;min-width:0;}
+  #app .topbar .user-box .who b{display:flex;flex-wrap:wrap;align-items:center;gap:4px;}
+  #app .topbar .user-box .btn{flex:1 1 auto;}
+  #app .side-rodape{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 8px 2px;}
+  #app .side-rodape .theme-toggle{margin:0;}
+  .nav-mini-btn{border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);width:36px;height:36px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}
+  .nav-mini-btn:hover{background:var(--surface-2);color:var(--ink);}
+  .nav-mini-btn svg,.mob-menu svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  #app{padding-left:var(--side-w);}
+  .mob-bar,.nav-fundo{display:none;}
+  /* recolhido: só os ícones */
+  body.nav-mini #app{padding-left:var(--side-mini);}
+  body.nav-mini #app .topbar{width:var(--side-mini);padding-left:10px;padding-right:10px;}
+  body.nav-mini #app .topbar .brand-tag,body.nav-mini #app .nav-txt,body.nav-mini #app .topbar .user-box .who,body.nav-mini #app .topbar .user-box .btn,body.nav-mini #app .topbar #btnInstallApp{display:none;}
+  body.nav-mini #app .nav-tit{font-size:0;padding:0;height:1px;margin:4px 10px;background:var(--line);}
+  body.nav-mini #app .topbar .tab-btn{justify-content:center;padding:10px 0;}
+  body.nav-mini #app .topbar .brand{align-items:center;padding:0 0 12px;}
+  body.nav-mini #app .topbar .brand-logo{height:auto;width:100%;max-width:52px;object-fit:contain;}
+  body.nav-mini #app .topbar .user-box{justify-content:center;padding:12px 0 0;}
+  body.nav-mini #app .side-rodape{flex-direction:column;padding:12px 0 2px;}
+  body.nav-mini .nav-mini-btn svg{transform:rotate(180deg);}
+  /* tablet e celular: menu abre por cima */
+  @media (max-width:1024px){
+    #app,body.nav-mini #app{padding-left:0;}
+    #app .topbar,body.nav-mini #app .topbar{width:min(300px, 86vw);padding:18px 12px 12px;transform:translateX(-105%);transition:transform .22s ease;z-index:90;}
+    body.nav-mini #app .topbar .brand-tag,body.nav-mini #app .nav-txt,body.nav-mini #app .topbar .user-box .who,body.nav-mini #app .topbar .user-box .btn{display:revert;}
+    body.nav-mini #app .nav-tit{font-size:10.5px;height:auto;margin:0;background:none;padding:0 12px 4px;}
+    body.nav-mini #app .topbar .tab-btn{justify-content:flex-start;padding:9px 12px;}
+    body.nav-mini #app .topbar .brand{align-items:flex-start;padding:0 8px 14px;}
+    body.nav-mini #app .topbar .brand-logo{height:42px;width:auto;max-width:none;}
+    body.nav-mini #app .side-rodape{flex-direction:row;padding:12px 8px 2px;}
+    body.nav-aberto #app .topbar{transform:none;box-shadow:0 20px 60px -20px rgba(0,0,0,.55);}
+    #app .nav-mini-btn{display:none;}
+    #app .topbar .tab-btn{padding:11px 12px;font-size:14px;}
+    .mob-bar{display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--line);}
+    .premium #app .mob-bar{background:var(--pm-glass, var(--surface));-webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px);}
+    .mob-bar .brand-logo{height:26px;width:auto;}
+    .mob-bar .notif-btn{margin-left:auto;}
+    .mob-menu{border:1px solid var(--line);background:var(--surface);color:var(--ink);width:40px;height:40px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;}
+    body.nav-aberto .nav-fundo{display:block;position:fixed;inset:0;z-index:80;background:rgba(20,19,15,.45);}
+    body.nav-aberto{overflow:hidden;}
+  }
+
+  /* ---------- v85: menu lateral escuro (visual premium) ---------- */
+  #app .topbar, .premium #app .topbar, .mob-bar, .premium #app .mob-bar{
+    --sb-ink:#ECEAE3; --sb-mut:#9A968C; --sb-tit:#6F6C65; --sb-line:rgba(255,255,255,.07); --sb-hover:rgba(255,255,255,.055); --sb-y:#F7DE4E;
+  }
+  #app .topbar, .premium #app .topbar{
+    background:
+      radial-gradient(420px 220px at 0% 0%, rgba(247,222,78,.10), transparent 60%),
+      linear-gradient(180deg, #19191C 0%, #121214 100%);
+    color:var(--sb-ink);border-right:1px solid #000;box-shadow:inset -1px 0 0 rgba(255,255,255,.04), 12px 0 40px -28px rgba(0,0,0,.6);
+    scrollbar-color:rgba(255,255,255,.15) transparent;
+  }
+  #app .topbar .brand{border-bottom:1px solid var(--sb-line);padding:4px 10px 16px;gap:8px;}
+  #app .topbar .brand-logo{height:26px;border-radius:0;}
+  #app .topbar .brand-tag{color:var(--sb-mut);font-size:9px;letter-spacing:.12em;white-space:nowrap;}
+  #app .nav-tit{color:var(--sb-tit);font-size:10px;letter-spacing:.2em;padding:6px 14px 6px;}
+  #app .topbar .tab-btn, .premium #app .topbar .tab-btn{position:relative;color:#C9C6BE;font-weight:500;letter-spacing:.01em;border:none;background:transparent;box-shadow:none;transition:background .18s,color .18s;}
+  #app .topbar .tab-btn .nav-ico{color:#8E8B83;transition:color .18s, transform .18s;}
+  #app .topbar .tab-btn:hover, .premium #app .topbar .tab-btn:hover{background:var(--sb-hover);color:#fff;}
+  #app .topbar .tab-btn:hover .nav-ico{color:var(--sb-ink);}
+  #app .topbar .tab-btn.active, .premium #app .topbar .tab-btn.active{
+    background:linear-gradient(90deg, rgba(247,222,78,.17), rgba(247,222,78,.035) 75%, transparent);
+    color:#FFF6C9;font-weight:650;box-shadow:inset 0 0 0 1px rgba(247,222,78,.10);
+  }
+  #app .topbar .tab-btn.active .nav-ico{color:var(--sb-y);}
+  #app .topbar .tab-btn.active::before{content:"";position:absolute;left:-12px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--sb-y);box-shadow:0 0 12px rgba(247,222,78,.7);}
+  #app .topbar .tab-btn:focus-visible{outline:2px solid var(--sb-y);outline-offset:1px;}
+  #app .topbar .user-box{border-top:1px solid var(--sb-line);gap:10px;}
+  #app .topbar .ub-avatar{width:38px;height:38px;border-radius:12px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;letter-spacing:.04em;color:#1A1A1C;background:linear-gradient(135deg,#FBE77A,#E9BE16);box-shadow:0 6px 16px -8px rgba(247,222,78,.8);}
+  #app .topbar .user-box .who b{color:#F4F2EC;font-size:13px;}
+  #app .topbar .user-box .who span{color:var(--sb-mut);}
+  #app .topbar .tag-admin{background:rgba(247,222,78,.14);color:var(--sb-y);border-color:transparent;}
+  #app .topbar .notif-btn, .premium #app .topbar .notif-btn, #app .side-rodape .theme-toggle, .premium #app .side-rodape .theme-toggle, #app .nav-mini-btn{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);color:var(--sb-ink);box-shadow:none;}
+  #app .topbar .notif-btn:hover, #app .side-rodape .theme-toggle:hover, #app .nav-mini-btn:hover{background:rgba(255,255,255,.10);transform:none;}
+  #app .topbar .user-box .btn, .premium #app .topbar .user-box .btn{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);color:#E6E3DB;box-shadow:none;}
+  #app .topbar .user-box .btn:hover{background:rgba(255,255,255,.09);color:#fff;}
+  #app .topbar #btnInstallApp{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.10);color:var(--sb-ink);}
+  #app .side-rodape{border-top:none;}
+  body.nav-mini #app .nav-tit{background:var(--sb-line);}
+  body.nav-mini #app .topbar .tab-btn.active::before{left:-10px;}
+  body.nav-mini #app .topbar .brand-logo{width:27px;max-width:27px;object-fit:cover;object-position:left center;height:24px;}
+  @media (max-width:1024px){
+    .mob-bar, .premium #app .mob-bar{background:linear-gradient(180deg,#19191C,#141416);border-bottom:1px solid #000;-webkit-backdrop-filter:none;backdrop-filter:none;}
+    .mob-bar .brand-logo{height:22px;}
+    .mob-menu{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.10);color:#ECEAE3;}
+    .mob-bar .notif-btn, .premium #app .mob-bar .notif-btn{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.10);color:#ECEAE3;box-shadow:none;}
+    #app .topbar .tab-btn.active::before{left:-12px;}
+    body.nav-mini #app .topbar .brand-logo{height:26px;max-width:none;object-fit:contain;}
+  }
+  @media (prefers-reduced-motion: reduce){ #app .topbar{transition:none;} }
+  @media print{ #app{padding-left:0 !important;} #app .topbar,.mob-bar,.nav-fundo{display:none !important;} }
 </style>
 <script>
   (function(){
@@ -1320,30 +1433,47 @@
 </div>
 
 <div id="app" style="display:none">
-  <header class="topbar">
-    <button type="button" id="btnThemeToggle" class="theme-toggle" title="Alternar modo claro/escuro" aria-label="Alternar modo claro/escuro">☀️</button>
+  <div class="mob-bar" id="mobBar">
+    <button type="button" class="mob-menu" id="btnNavMenu" aria-label="Abrir menu" aria-expanded="false" aria-controls="sideNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <img class="brand-logo" id="mobLogo" alt="Venko">
+    <button type="button" class="notif-btn" id="btnNotifMob" aria-label="Avisos" title="Avisos">🔔<span class="notif-badge" id="notifBadgeMob" hidden></span></button>
+  </div>
+  <div class="nav-fundo" id="navFundo"></div>
+  <header class="topbar" id="sideNav">
     <div class="brand">
       <img class="brand-logo" id="brandLogo" alt="Venko">
       <span class="brand-tag">RDO · Relatório Diário de Obra</span>
-      <button type="button" id="btnInstallApp" class="btn ghost sm" style="display:none;margin-left:10px;">📲 Instalar app</button>
+      <button type="button" id="btnInstallApp" class="btn ghost sm" style="display:none;">📲 Instalar app</button>
     </div>
-    <nav class="tabs" id="tabs">
-      <button class="tab-btn active" data-view="dashboard">Painel</button>
-      <button class="tab-btn" data-view="novo">Nova RDO</button>
-      <button class="tab-btn" data-view="clientes" id="tabClientes">Clientes</button>
-      <button class="tab-btn" data-view="obras" id="tabObras">Obras</button>
-      <button class="tab-btn" data-view="mapa" id="tabMapa" style="display:none">Mapeamento</button>
-      <button class="tab-btn" data-view="equipamentos">Equipamentos</button>
-      <button class="tab-btn" data-view="colaboradores">Colaboradores</button>
-      <button class="tab-btn" data-view="ponto" id="tabPonto" style="display:none">Ponto</button>
-      <button class="tab-btn" data-view="equipes" style="display:none">Equipes</button>
-      <button class="tab-btn" data-view="financeiro" id="tabFinanceiro" style="display:none">Financeiro</button>
-      <button class="tab-btn" data-view="tabelaprecos" id="tabTabelaPrecos" style="display:none">Tabela de Preços</button>
-      <button class="tab-btn" data-view="planejamento" id="tabPlanejamento" style="display:none">Planejamento</button>
-      <button class="tab-btn" data-view="users" id="tabUsers" style="display:none">Usuários</button>
-      <button class="tab-btn" data-view="ajuda" id="tabAjuda" style="display:none">Central de Ajuda</button>
+    <nav class="tabs" id="tabs" aria-label="Menu principal">
+      <div class="nav-sec"><div class="nav-tit">Obras</div>
+        <button class="tab-btn active" data-view="dashboard" title="Painel"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span class="nav-txt">Painel</span></button>
+        <button class="tab-btn" data-view="novo" title="Nova RDO"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9 14h6"/></svg><span class="nav-txt">Nova RDO</span></button>
+        <button class="tab-btn" data-view="obras" id="tabObras" title="Obras"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><rect x="5" y="10" width="6.5" height="11" rx="1"/><rect x="11.5" y="4" width="7.5" height="17" rx="1"/><path d="M8 14h.5M8 17.5h.5M15 8h1M15 11.5h1M15 15h1"/></svg><span class="nav-txt">Obras</span></button>
+        <button class="tab-btn" data-view="mapa" id="tabMapa" style="display:none" title="Mapeamento"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5z"/><path d="M9 4v13.5M15 6.5V20"/></svg><span class="nav-txt">Mapeamento</span></button>
+        <button class="tab-btn" data-view="planejamento" id="tabPlanejamento" style="display:none" title="Planejamento"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="m9 15.5 2 2 4-4"/></svg><span class="nav-txt">Planejamento</span></button>
+      </div>
+      <div class="nav-sec"><div class="nav-tit">Cadastros</div>
+        <button class="tab-btn" data-view="clientes" id="tabClientes" title="Clientes"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"/><path d="M3 13h18"/></svg><span class="nav-txt">Clientes</span></button>
+        <button class="tab-btn" data-view="colaboradores" title="Colaboradores"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18 14.3a6.5 6.5 0 0 1 3.5 5.7"/></svg><span class="nav-txt">Colaboradores</span></button>
+        <button class="tab-btn" data-view="equipamentos" title="Equipamentos"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 6h11v10h-11z"/><path d="M13.5 10h4l3.5 3.5V16h-7.5"/><circle cx="6.5" cy="17.5" r="2"/><circle cx="17" cy="17.5" r="2"/></svg><span class="nav-txt">Equipamentos</span></button>
+        <button class="tab-btn" data-view="equipes" style="display:none" title="Equipes"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18 14.3a6.5 6.5 0 0 1 3.5 5.7"/></svg><span class="nav-txt">Equipes</span></button>
+      </div>
+      <div class="nav-sec"><div class="nav-tit">Gestão</div>
+        <button class="tab-btn" data-view="ponto" id="tabPonto" style="display:none" title="Ponto"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></svg><span class="nav-txt">Ponto</span></button>
+        <button class="tab-btn" data-view="financeiro" id="tabFinanceiro" style="display:none" title="Financeiro"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"/><path d="M16 7.5c0-1.9-1.8-3-4-3s-4 1.1-4 3 1.8 2.6 4 3 4 1.1 4 3-1.8 3-4 3-4-1.1-4-3"/></svg><span class="nav-txt">Financeiro</span></button>
+        <button class="tab-btn" data-view="tabelaprecos" id="tabTabelaPrecos" style="display:none" title="Tabela de Preços"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg><span class="nav-txt">Tabela de Preços</span></button>
+        <button class="tab-btn" data-view="users" id="tabUsers" style="display:none" title="Usuários"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.2 7.5 9.5 4.3-1.3 7.5-4.9 7.5-9.5V6z"/><circle cx="12" cy="10" r="2.5"/><path d="M8.3 16.2a4 4 0 0 1 7.4 0"/></svg><span class="nav-txt">Usuários</span></button>
+      </div>
+      <div class="nav-sec"><div class="nav-tit">Ajuda</div>
+        <button class="tab-btn" data-view="ajuda" id="tabAjuda" style="display:none" title="Central de Ajuda"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .9-1 1.6v.6"/><path d="M12 17.2h.01"/></svg><span class="nav-txt">Central de Ajuda</span></button>
+      </div>
     </nav>
     <div class="user-box" id="userBox"></div>
+    <div class="side-rodape">
+      <button type="button" id="btnThemeToggle" class="theme-toggle" title="Alternar modo claro/escuro" aria-label="Alternar modo claro/escuro">☀️</button>
+      <button type="button" class="nav-mini-btn" id="btnNavMini" title="Recolher menu" aria-label="Recolher menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg></button>
+    </div>
   </header>
 
   <main id="main">
@@ -1745,7 +1875,9 @@
   function normalizeLogin(v){ return String(v||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
   function toAuthEmail(login){ return normalizeLogin(login) + '@' + LOGIN_DOMAIN; }
 
-  document.getElementById('brandLogo').src = LOGO_DATA;
+  var LOGO_MENU = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAARgAAABDCAMAAABwbuo+AAAAkFBMVEXp5uDx7unx8Ory1C21tbX21Sz42C3w7uj+/HDytB/52S39+699fX3/r6//fwn/AAD/qlX/e3u4uByxsWN/fwCxsf//AP8AAP9/f/9///+s1dUA/wAA//9/AAB//wC/fz+//z/32EX256Xw7ukAAADz8uv31i3+/v3u6+b08uz+4y/z8ezw7efv7Ofx8en//wB1x6KeAAAAMHRSTlMQnGEaBGKf1QIGzQUCAwIBAwIDAwIDAQECAgYBAQICBASFsfcA9/0DLdD9sm5PMAHYjtzMAAAP8klEQVR42q1ch2KjuhKl2YDtxEl2b339IUVgU/7/797MSEKjgk1yn7LZ9WIM4mjKmSJnx9PnOo6tWIS4ivL4yQ6WeDAeKlMwsr7v53mGv/F/Qpx7Pubk6Hv8qICzK3cSXgiOqSy8jRL4Vj8VY5+JMx3yZiE2Rpb1NLk+y+AiVaavJV6y9Lz0hDOcAt0gYxB83o7logCGkh/8PIomeWd8uHGQdtxx2nOOBwZ3ND2GSdAMJn7iMNx7mjsbFcy0z/VZHX2M0J+ncSzwT6HSUxMZXnoYcCZDPmZ0Ozi3H/MHc4PT81kstMQeMJ+3g2gBhtJHS7xurImY2FW7GS6Xy33jnpEohKfnvfCfVJ3dNTtpkaHPdfQBJVRqxVThXbfX66DG4fnU6BYhMCAdrSjF8eYdTOsSqBLMubNDDpmqFDvwaMhhRiXo4WzzAfqHHjQYVXaX5v26kznpAz61uU6fBEZkg7s0vJgEykyfdwRoekrmHykLEtsAGAChDYG5HdufS1JgZnZvWeCS3PGVvgvOILkkeIa+e7+eQ1dAkZhDkVHVnZ6F/sg7SoiDn9Y3pUmTNEjT33WP1iDLzYHkpDr/SSJgjh/v/xaHCK23pCLnsjZow6XxkeZa2tk8GQTMJL0VQ2jyTHHtUATDKlXyjodIhowy5eI9MbF50PCbZRpJO3K9JptSbFBD2ReRKt1OJSpTcBCPJW6v7kyTSI/nultXpduag1wlppChKMtB+cA0+JDrAwEwoIFq0JJmRCi2MFmx3p9OKkQFN9MyyVUs1iY9dVidSygxAMzy+q/AyBzbZUkAU9iHxyvmmahEX7tHfCQ4qMhVBXON3xl93QB9G6TTnHsljAGxIlSlVqz2LpkrwFfl24jwidHDwLJlpwCZg1ja0Pp+JkXm98LND5/0Qqq0Q4/0rV98VbITq30rw2AgicnYEbzO/ZfUivnySYZ+7vYAY3QPRCYL7AlSmSXSpeM/mgRVGJyIo+EHcQWJ2Q2MsTEyVPRRVOFt5ANgzpEbUxmXMfwMWphxn78069yLrDxF0rGoNvJLyXWRDGMiCvOw9/bgTV5EarJgZTjLa8iiOGDUE2DUuYLLSv6QEwpMtndm2kKO8JHDLeJ4TUKXXiMbN67WjUzDC1rNvbdHt6xEehVHDgyxuW6/xKhA94zAiFnK3ciQY8qa8hSojQBditF6izTpLle+pPmEPrbr5sAsKkbUPDWrOWnjrGWXKlVZALcmy5MM78UojAxMDOpSFknHSVxbEVme0C0hO3NOs8tnuv1u5lsbiQmBkdpjOZH5KjBKe0bmkjK62OjdKeB0XejEEZhyCUE4XMulPEUcr/EMnHrht0KPKNBq5IbFdqnFcfbQmKQxFhiSYyYynhSCu/7zKTCF7KQLNBBlrY+S30LmxVSYMU3FlA8dn7aUY/YWuyCMCgJd+vR16UL0U65TQJ9kqfgW6XaCi85diUuVUiUr/R4wHm15CAwKjGRsDaw1EUbl6TgEo0G2Qs25vz5j9ipC6TiBwCwxWmWsSWvsZ9cY0jNFDuM+bA54t5ggeZNpGxO7Ss081beAIeLPyZrsF2UvwgS8oBhBD3LmxsavUtUBX11CIwOWNtYloDc/Pds/Mm7Lg2K4Ew26Jb7A9I83KvPEVQIYI2xOZL4IjKaYAe8JWCIpPs/7KGHjE6fuAEyzhC7oWLZvkV/iRuac8QgXfgr7IDqhpsSjQWuEhioFjDQKsF7wC8DAZc+5s6Oaw+AyXETf8bAu4JCkbUrVLAkiSWICtdGsJdSlw+J0aaEIxoUDkF+6eEFcpt4bHBf4dUJLR+w0xKbE4EWLi0FmPzCaYa6RIJ0OOlkRS5y5nkiTCLTCryElVrUCA6Im1GtI5w7XRrSngPyCaDFNYs8ktU/6ykgBE7CyLwODLkEbCucXjUoqL1Ki4Emd+VT8mNhIDIhM5LBF0yT80sLY5V16K1AxfX2mS/bNGBiXKpDFDmDIiFROYCpySS586zB94IBhJiYxwYzzcAPMEpHfq4rROkL5wMyh8liUrNmNQGEy9Wg48haqkvf6buzjA2B0PubFGQqlcn4tnTsz6HJdTQJTBUqAxrJN+SWR4HhLCl1t5Jk0/PZYjao0MDL3UKoLSio/BSa/8CiFR49kYVZywYFZ9TRMhwYSI8prFBotZczxVmAAhzt/CqZJtHLWL7MCk/bg+PuSXiPgiF6AQCkR9czGYGrTPuPvv1S5DHIHfxEYtSQCybeQ4zkjc7YE12jSeh8sW9zrWhd0Br9mZOldsZ4dAuOF5hLgfn9mfCXmjt+tiTGccz03V81fBCbmeJ/l0rZRsUCYSFIpT+xzDJ3sxQdpSz4bFYJutvIVAFN4xRhLf58Z35VBifMlD5L9whnmPcAUMTAfsS6J8iMgfreTzm8qUwzwsuDK2J6chdzcljGKMKqLSgKj+GWtJjxz1yNTFxnoIg9gvgdME9G5E1axQ/Orya8peEkvqeYKKg8yq5pgDHZagR8ohJ+40raTR9cpiRkNoReKV5t0xkdtAJPvBiahS5DHC8MCMMmNp0k6UuZxja9jyWKfs4mRKlGy1oUrNSrdY2DkCoyOktiZuZfU6Z/yGC/Wd8AsezjeifySn9mVTMvD6H5DbDaAmVwBcVUupZ4BY+6uiPRKl24YesUl+TkwVFuIgIlrbJD+blPp4LX+KS2RUGuctCsZvgGMDmBWEMhS6zTfPmBcmKjD0BxnpdRXgOlrmVClBJ37SKSw3vEKIzcxXlLJM59fBsaWC93sLheeDN8GRudhbI2bmgY4x94LTGxjruLtmIim22OitOIyDlpkeZw01923VakQEAq7hNKa41Q7JAakmJV5ifVn/xdgRCL9DaXaJTbJrzYLbkVWWVk2sZr8rsQU1E412gIzXSj3exvSwCjB8m+GK8zKL2fuAWYe1kyVA2ZJJDghXgrbHiCPd1bT6pMYj1D+/aOahFwju7XTI/ZKwuR51pWv1Q6vpBxrlaunP5+/DkztJ6o2gMEsb6qI7VfHvUozK9HGOXE36ZctrwQ6+cLTRYT7OZYY5UlMprxML8nMTOTsi8D0QwIY8SOSDsqJH6J4yZSsjV/KVaimMipo8Y4hzPYpJdKqBMC8cd9AGQ2Vlhhzf5JYz81Tk80v7YG3ge2VGJkA5jVOcGJOvI2iS4rtbf2RkZgAGPjnnkP/IAwo3cAv1g5yeDlvZUAKU4Hxi005K+pziWHAaA7DUxZ9ebydDk5m9qtSZHwT5BfrS+HB2+mHTnqY8pDfs8FVicLjMJ+ZrUnWB8CEEZPjRoHE2E8FvBD1D2YNLVBr9fQvARPTuWOrXhNZT2xlc41em6qExITn8mxpRT2WGGoW8OhvNjy2MXBpr7Orq1VpPMXHV4GRSYlJFAtijgcCOspVkqctYPDv3itSYP5ZmWbPR8BUfILYFzEGwFQug2d4TM8rSVBhsPRrbXfyUpvdVhA5JWIleqc9JsqyUafMu2kcwN+6V5vAoGu4PMqFbwBDqX7Jw866ewyMjZLMKYOyon9oG79u+lhiJpkyvqliAXQ+g5GJTHJvmyG9CDZWpflJ4W1Dlc6u+is7rwdUA/NigLE8ypUQ9ZH/lky8F6smrD6pOwrUbmDaBMe7LjHHsyskO98nRcaXpVzjotIDG6MpXappwgNmbYvNXVIMz/jPya3sh7a/F69vSKtSDMwou7TEvJaJ0ChGq7EZHZbsDYGRmvpftqttm8BgcSbu8kkCo3v5JttDYVpXX+PmFTK+krnzhCxfkokqGmXsl4DJxLqkChOR3MMu7hCYLNWE+8TGuF7lp8DorEcuWTgg6/MhzJO4LqdEgZBNLZd+Ud+9s5THCJhGxOTXRmzjJjAuFwyJA/rFcaF629+tyGyoEqaOi13AEPWevO4GWZR+e8KPxXWYbvUSx30SPjBx6hc40lsquiz85O2mu44l5tdM/eoUKikxriFRyucSM+QcQgghDlHlMGoW5v03vBrfybQqQdU+7pUvY/MLulTT1prQtAexErUIFdTSNdkx5jSmzPbHyAQwsEKTTOwTSXglvxkAOIy/jEBSm8UiLXnNKigcZ36M1nUeMOJnxFrK5vUadgIfxHsuUxs/AmDSgSTPMYxbnQGLuif3ImDl4yXds2uEuEzVlZWm64zrRBvA+juXUWw14+/+SKQZmuUaFd7I5Uc7aETcGb4JDJZ2/E5lD2dlElZfAUYz8agHtYT+BA0MI4GyzidbPZ5gI+BU5B3XXZiNB0yiIQRKtYliATKNhKLubpnHpOVF+Y0XfgU8q1MuG+3aebPLG95tXuJQuCGgfZVLlEv9rs0+ACZUG6qYRPHSb2gdenEW3wKGsrlzsC0n8KHprnH5EBjMQZyjiI+CbD8AN3vJXAbN9pI6YIYAmCURL7XqI8w9tCKrTTfCdyQGz5keA5OtvWx7VUmXLpu4Qxkdk09kov6tqDcZ7uP3u74tiaRMlBMHYESfiUS48eXdJ4w5hJF6ngTmTxdERvqJFj2qEsIyLovXAd1JvjVSrkZXslz4GGxbThULmkQ3dPuTdfZ9R2J0EtsDxg+8lErUqIAiXDaB0f1LcfbkhhsXeWJQBnZ93T7JysO4u5SP16WNd+mUr6kG+msEDGuDkHskpvL3RIZb2y53GVIVvcNNhcBIa2FQt5s4E1k2ZiNX97jlYE1NdgNs/fO1oUx0nbWp5qomFRwiS9q5y8KmJIPyPL+YtxPWqtJVA5MgxQMavUtKZA64xzzLrZF9tmi0SFUATEqX2ibRXJXYCgj1W0y+yV02Jtdb/6TsNlTJ9HX4+0RoF63wgJH2BwSmIV1qT/E+z7/9oXfWPi0I6v6vOfoqhbjx+VT+GrV1bgCjQl79UJWCJDb5WhU0rJgdwtIHRg0yRgY4jHaTUfIaReZs97rIHWqO2S8RfmdEE7kgYDJNoussAcxFZDv3K+lKmp9wLKgbxisq3KWHC8ZKF7sT2weGOIy2eCjfkTk4m1YKKZ/udDONRSEwqU3XTciIYV/XP5eUkfmR79Skgb7eYg5q16l95YG7TqZrzEZ2U8ZvYv7+x5lul8sdW2lN7B19y8gS0DkiSEEDPejXj5TImI1cj7oTDdm8N6ZPcj0GJSq+X+JMiYkxVJm72fnim2T4IQk0TjJqq8Tam8JNvvfNCa0vhmkm7xYBEyZlKKXx5i3C7Za2MUg+dnwdCDL7Qp0ptKvXoxDO8mpzYzu01m+DICGfTVOFhz0RMrbDX2FC4BYCQ91ZY/14bvU4m6p3/L00Id4Egrfd63Rol+vGNgEFOZfHAwq2IyiS7sGd7dlFlqwpKMjgQHMw5KPuuP8rE+9mv5ovlEFBBDzT4Rilq/SXfGBSaHQJIpMmwhmM8KJfuVkMTOiDNGcBenDAcTweoAlCXDdLIju2nqzM0OeHiQxxpo9Dk7nSb5sNBgXBSwMeCjfM+Z8FPW9LmOvpdDzijG1L+7t6vi/GvPgfmkuvLoeqJpYAAAAASUVORK5CYII=';   // v85: logo claro para o menu escuro
+  document.getElementById('brandLogo').src = LOGO_MENU;
+  (function(){ var m = document.getElementById('mobLogo'); if(m) m.src = LOGO_MENU; })();
   document.getElementById('loginLogo').src = LOGO_DATA;
 
   function toast(msg, kind){
@@ -2000,36 +2132,23 @@
   }
   (function(){ var b = document.getElementById('btnFeriados'); if(b) b.addEventListener('click', feriadosAbrir); })();
 
-  // v80/v81: se os botões do menu não cabem ao lado do logo, passam para uma linha própria (nada fica escondido).
-  // v81: a conta é feita com a largura natural de cada parte, sem tirar/pôr a classe para medir —
-  // antes isso fazia o topo ficar alternando (a tela "tremia").
+  // v85: menu lateral. No computador fica fixo (pode recolher só com os ícones);
+  // no tablet/celular abre por cima com o botão ☰.
   (function(){
-    var top = document.querySelector('.topbar'), tabs = top && top.querySelector('.tabs');
-    if(!top || !tabs) return;
-    var px = function(v){ return parseFloat(v) || 0; };
-    var visivel = function(el){ return el.offsetParent !== null || getComputedStyle(el).position === 'fixed'; };
-    var natural = function(el){
-      var cs = getComputedStyle(el), kids = Array.prototype.filter.call(el.children, visivel);
-      var w = kids.reduce(function(t, k){ return t + k.getBoundingClientRect().width; }, 0) + px(cs.columnGap) * Math.max(0, kids.length - 1);
-      return w + px(cs.paddingLeft) + px(cs.paddingRight) + px(cs.borderLeftWidth) + px(cs.borderRightWidth);
-    };
-    var pendente = false;
-    var ajusta = function(){
-      pendente = false;
-      var deve = false;
-      if(window.innerWidth > 680){
-        var cs = getComputedStyle(top), gap = px(cs.columnGap);
-        var outros = Array.prototype.filter.call(top.children, function(el){ return el !== tabs && visivel(el); });
-        var ocupado = outros.reduce(function(t, el){ return t + (el.children.length ? natural(el) : el.getBoundingClientRect().width) + (el.classList.contains('user-box') ? 14 : 0); }, 0);
-        var livre = top.clientWidth - px(cs.paddingLeft) - px(cs.paddingRight) - ocupado - gap * outros.length - 8;   // 8 = sobra de segurança
-        deve = natural(tabs) > livre;
-      }
-      if(top.classList.contains('tabs-linha') !== deve) top.classList.toggle('tabs-linha', deve);   // só mexe quando a decisão muda
-    };
-    var agenda = function(){ if(!pendente){ pendente = true; requestAnimationFrame(ajusta); } };
-    window.addEventListener('resize', agenda);
-    if(window.MutationObserver) new MutationObserver(agenda).observe(tabs, { attributes:true, subtree:true, childList:true, attributeFilter:['style','hidden'] });
-    ajusta(); setTimeout(ajusta, 800); setTimeout(ajusta, 3000);
+    var body = document.body, btn = document.getElementById('btnNavMenu'), fundo = document.getElementById('navFundo');
+    var mini = document.getElementById('btnNavMini'), side = document.getElementById('sideNav');
+    var abrir = function(on){ body.classList.toggle('nav-aberto', !!on); if(btn) btn.setAttribute('aria-expanded', on ? 'true' : 'false'); };
+    window.vkMenuAbrir = abrir;
+    if(btn) btn.addEventListener('click', function(){ abrir(!body.classList.contains('nav-aberto')); });
+    if(fundo) fundo.addEventListener('click', function(){ abrir(false); });
+    if(side) side.addEventListener('click', function(e){ if(e.target.closest && e.target.closest('.tab-btn, #btnChangePass, #btnLogout, #btnNotif')) abrir(false); });
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape' && body.classList.contains('nav-aberto')) abrir(false); });
+    window.addEventListener('resize', function(){ if(window.innerWidth > 1024 && body.classList.contains('nav-aberto')) abrir(false); });
+    var marcaMini = function(on){ body.classList.toggle('nav-mini', on); if(mini){ mini.title = on ? 'Abrir menu' : 'Recolher menu'; mini.setAttribute('aria-label', mini.title); } };
+    try{ marcaMini(localStorage.getItem('vkNavMini')==='1'); }catch(e){}
+    if(mini) mini.addEventListener('click', function(){ var on = !body.classList.contains('nav-mini'); marcaMini(on); try{ localStorage.setItem('vkNavMini', on ? '1' : '0'); }catch(e){} setTimeout(function(){ if(typeof leafletMapInstance!=='undefined' && leafletMapInstance) leafletMapInstance.invalidateSize(); }, 250); });
+    var bm = document.getElementById('btnNotifMob');
+    if(bm) bm.addEventListener('click', function(e){ e.stopPropagation(); if(typeof notifAbrir==='function') notifAbrir(); });
   })();
 
   // serviços lançados no mês atual cujo item está sem preço na planilha (ou saiu dela): entram como R$ 0
@@ -3353,6 +3472,7 @@
     var b = document.getElementById('notifBadge'); if(!b) return;
     var n = Math.max(state.avisos.naoLidas || 0, notifNaoLidas().length);
     b.textContent = n>9 ? '9+' : String(n); b.hidden = !n;
+    var bmb = document.getElementById('notifBadgeMob'); if(bmb){ bmb.textContent = b.textContent; bmb.hidden = !n; }
     var bt = document.getElementById('btnNotif'); if(bt) bt.setAttribute('aria-label', n ? 'Avisos: '+n+' não lido(s)' : 'Avisos');
   }
   function notifQuando(iso){ try{ return new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }); }catch(e){ return ''; } }
@@ -3576,7 +3696,9 @@
     if(!box) return;
     var u = state.currentUser;
     if(!u){ box.innerHTML=''; return; }
-    box.innerHTML = '<div class="who"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+'</b><span>'+esc(u.cargo||u.login)+'</span></div>'+
+    var iniciais = String(u.nome||u.login||'?').trim().split(/\s+/).filter(Boolean);
+    iniciais = ((iniciais[0]||'?').charAt(0) + (iniciais.length>1 ? iniciais[iniciais.length-1].charAt(0) : '')).toUpperCase();
+    box.innerHTML = '<span class="ub-avatar" aria-hidden="true">'+esc(iniciais)+'</span><div class="who"><b>'+esc(u.nome)+(u.is_admin?'<span class="tag-admin">Admin</span>':'')+'</b><span>'+esc(u.cargo||u.login)+'</span></div>'+
       '<button type="button" class="notif-btn" id="btnNotif" aria-label="Avisos" title="Avisos">🔔<span class="notif-badge" id="notifBadge" hidden></span></button>'+
       '<button type="button" class="btn ghost sm" id="btnChangePass">Trocar senha</button>'+
       '<button type="button" class="btn ghost sm" id="btnLogout">Sair</button>';
@@ -15566,6 +15688,7 @@
       var el = ajAchar(p.alvo);
       if(!el && tentativas++<16){ setTimeout(procurar, 250); return; }
       if(!el){ tr.naoAchou = true; ajTourDesenhar(); ajTourPosicionar(); return; }
+      if(window.innerWidth<=1024 && el.closest && el.closest('#sideNav') && window.vkMenuAbrir) window.vkMenuAbrir(true);
       tr.alvo = el;
       try{ el.scrollIntoView({ block:'center', inline:'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }catch(e){ el.scrollIntoView(); }
       if(p.acao==='clique'){
