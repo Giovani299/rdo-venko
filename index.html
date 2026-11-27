@@ -2238,7 +2238,7 @@
     showingTrash: false,
     profiles: [],
     currentUser: null,
-    filters: { obraId:'', dataIni:'', dataFim:'', responsavel:'', status:'', busca:'' },
+    filters: { obraId:'', dataIni:'', dataFim:'', responsavel:'', status:'', busca:'', mes:'atual' },
     editId: null,
     detailId: null,
     photos: [],          // {dataUrl}
@@ -5931,6 +5931,18 @@
     return '<div class="kpi '+extra+'"><div class="n">'+n+'</div><div class="l">'+esc(label)+'</div></div>';
   }
 
+  // v87: o Painel mostra só os RDOs do mês (o atual por padrão); dá para escolher outro mês ou "Todos os meses".
+  function painelMesAtual(){ var d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+  function painelMesFiltro(){ var m = state.filters.mes; return m==='atual' || m==null ? painelMesAtual() : m; }
+  function painelMesNome(k){ var p = String(k).split('-'); var n = MESES_PT[+p[1]-1] || k; return n.charAt(0).toUpperCase()+n.slice(1)+' de '+p[0]; }
+  function painelMesesOpts(){
+    var atual = painelMesAtual(), ks = {}; ks[atual] = 1;
+    state.rdos.concat(state.pendingRdos||[]).forEach(function(r){ if(r && r.data) ks[String(r.data).slice(0,7)] = 1; });
+    var sel = painelMesFiltro();
+    if(sel) ks[sel] = 1;
+    return Object.keys(ks).sort().reverse().map(function(k){ return '<option value="'+k+'"'+(sel===k?' selected':'')+'>'+painelMesNome(k)+(k===atual?' (este mês)':'')+'</option>'; }).join('')+
+      '<option value=""'+(sel===''?' selected':'')+'>Todos os meses</option>';
+  }
   function renderFilters(){
     var canGestao = obrasGestaoCanAccess();
     var f = state.filters;
@@ -5941,6 +5953,7 @@
       return '<option value="'+k+'"'+(f.status===k?' selected':'')+'>'+STATUS_LABEL[k]+'</option>';
     }).join('');
     document.getElementById('filterBar').innerHTML =
+      '<div class="field"><label>Mês</label><select id="fMes">'+painelMesesOpts()+'</select></div>'+
       '<div class="field"><label>Obra</label><select id="fObra">'+obraOpts+'</select></div>'+
       '<div class="field"><label>De</label><div class="date-wrap"><input type="date" id="fDe" value="'+esc(f.dataIni)+'"><span class="date-ph" data-for="fDe">dd/mm/aaaa</span></div></div>'+
       '<div class="field"><label>Até</label><div class="date-wrap"><input type="date" id="fAte" value="'+esc(f.dataFim)+'"><span class="date-ph" data-for="fAte">dd/mm/aaaa</span></div></div>'+
@@ -5952,6 +5965,7 @@
 
     var btnCdm = document.getElementById('btnExportCdm');
     if(btnCdm) btnCdm.style.display = cdmCanAccess() ? '' : 'none';
+    document.getElementById('fMes').addEventListener('change', function(e){ f.mes = e.target.value===painelMesAtual() ? 'atual' : e.target.value; renderRdoTable(); });
     document.getElementById('fObra').addEventListener('change', function(e){ f.obraId=e.target.value; renderRdoTable(); });
     document.getElementById('fDe').addEventListener('change', function(e){ f.dataIni=e.target.value; renderRdoTable(); });
     document.getElementById('fAte').addEventListener('change', function(e){ f.dataFim=e.target.value; renderRdoTable(); });
@@ -5961,7 +5975,7 @@
     document.getElementById('fStatus').addEventListener('change', function(e){ f.status=e.target.value; renderRdoTable(); });
     document.getElementById('fBusca').addEventListener('input', function(e){ f.busca=e.target.value; renderRdoTable(); });
     document.getElementById('fClear').addEventListener('click', function(){
-      state.filters = { obraId:'', dataIni:'', dataFim:'', responsavel:'', status:'', busca:'' };
+      state.filters = { obraId:'', dataIni:'', dataFim:'', responsavel:'', status:'', busca:'', mes:'atual' };
       state.verEsquecidos = false;
       renderFilters(); renderRdoTable();
     });
@@ -5988,6 +6002,8 @@
   function filteredRdos(){
     var f = state.filters;
     return state.rdos.concat(state.pendingRdos||[]).filter(function(r){
+      var mesF = painelMesFiltro();
+      if(mesF && !f.dataIni && !f.dataFim && String(r.data||'').slice(0,7)!==mesF) return false;
       if(state.verEsquecidos){ if(!rdoEsquecido(r)) return false; }
       else if(f.status!=='rascunho' && rdoEsquecido(r)) return false;
       if(f.obraId && r.obraId!==f.obraId) return false;
@@ -6043,7 +6059,8 @@
     var rows = filteredRdos();
     var canGestao = obrasGestaoCanAccess();
     if(rows.length===0){
-      body.innerHTML = '<tr class="empty-row"><td colspan="7">'+(state.verEsquecidos ? 'Nenhum rascunho esquecido com esses filtros.' : 'Nenhuma RDO encontrada para esses filtros.')+'</td></tr>';
+      var mesV = painelMesFiltro(), soMes = mesV && !state.filters.dataIni && !state.filters.dataFim;
+      body.innerHTML = '<tr class="empty-row"><td colspan="7">'+(soMes ? 'Nenhuma RDO em '+painelMesNome(mesV).toLowerCase()+' com esses filtros. Escolha outro mês no filtro "Mês".' : 'Nenhuma RDO encontrada para esses filtros.')+'</td></tr>';
       return;
     }
     body.innerHTML = rows.map(function(r){
